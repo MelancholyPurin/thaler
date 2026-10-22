@@ -26,7 +26,7 @@ import (
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations/*.up.sql
 var migrationFS embed.FS
 
 var (
@@ -87,41 +87,75 @@ func Open(ctx context.Context, path string) (*Store, error) {
 // Close releases the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-// migrate applies migrations/NNNN_name.sql files in order. The schema version
-// is kept in SQLite's user_version pragma, and each migration runs in its own
-// transaction.
+// migrate applies migrations/YYYYMMDD_name.up.sql files in name order. Applied
+// migrations are recorded by file name in schema_migrations, so a migration
+// that lands on a branch with an earlier date than one already applied is still
+// picked up. Each migration runs in its own transaction.
 func (s *Store) migrate(ctx context.Context) error {
-	var current int
-	if err := s.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&current); err != nil {
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		name       TEXT PRIMARY KEY,
+		applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+	)`); err != nil {
 		return err
 	}
 	entries, err := fs.ReadDir(migrationFS, "migrations")
 	if err != nil {
 		return err
 	}
-	type migration struct {
-		version int
-		file    string
-	}
-	var migrations []migration
+	var files []string
 	for _, e := range entries {
-		prefix, _, ok := strings.Cut(e.Name(), "_")
-		n, convErr := strconv.Atoi(prefix)
-		if !ok || convErr != nil {
-			return fmt.Errorf("bad migration file name %q (want NNNN_name.sql)", e.Name())
+		date, _, ok := strings.Cut(e.Name(), "_")
+		if _, convErr := strconv.Atoi(date); !ok || convErr != nil || len(date) != 8 || !strings.HasSuffix(e.Name(), ".up.sql") {
+			return fmt.Errorf("bad migration file name %q (want YYYYMMDD_name.up.sql)", e.Name())
 		}
-		migrations = append(migrations, migration{version: n, file: e.Name()})
+		files = append(files, e.Name())
 	}
-	sort.Slice(migrations, func(i, j int) bool { return migrations[i].version < migrations[j].version })
+	sort.Strings(files)
 
-	if n := len(migrations); n > 0 && current > migrations[n-1].version {
-		return fmt.Errorf("database schema version %d is newer than this build understands (%d); update thaler", current, migrations[n-1].version)
+	// Databases created before schema_migrations existed tracked their version
+	// in PRAGMA user_version; the only migration then was the initial schema.
+	var legacy int
+	if err := s.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&legacy); err != nil {
+		return err
 	}
-	for _, m := range migrations {
-		if m.version <= current {
+	if legacy > 0 && len(files) > 0 {
+		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)`, files[0]); err != nil {
+			return err
+		}
+	}
+
+	applied := map[string]bool{}
+	rows, err := s.db.QueryContext(ctx, `SELECT name FROM schema_migrations`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		applied[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	known := map[string]bool{}
+	for _, f := range files {
+		known[f] = true
+	}
+	for name := range applied {
+		if !known[name] {
+			return fmt.Errorf("database has migration %s that this build does not know; update thaler", name)
+		}
+	}
+
+	for _, f := range files {
+		if applied[f] {
 			continue
 		}
-		body, err := migrationFS.ReadFile("migrations/" + m.file)
+		body, err := migrationFS.ReadFile("migrations/" + f)
 		if err != nil {
 			return err
 		}
@@ -131,14 +165,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("migration %s: %w", m.file, err)
+			return fmt.Errorf("migration %s: %w", f, err)
 		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (name) VALUES (?)`, f); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("migration %s: %w", m.file, err)
+			return fmt.Errorf("migration %s: %w", f, err)
 		}
 		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("migration %s: %w", m.file, err)
+			return fmt.Errorf("migration %s: %w", f, err)
 		}
 	}
 	return nil

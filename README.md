@@ -176,11 +176,11 @@ internal/config/      config.toml loading and default paths
 internal/tui/         Bubble Tea interface: panel layer, lists, fuzzy search, category picker, detail pane
 ```
 
-The schema lives in `internal/store/migrations/`. Add `0002_*.sql` for changes; the version is tracked in SQLite's `user_version`.
+The schema lives in `internal/store/migrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
 
 ## Decisions worth knowing
 
-- **No sqlc, no goose (yet).** Queries are plain SQL in `store.go` and migrations are plain `NNNN_name.sql` files tracked in SQLite's `user_version`, so moving to sqlc/goose later is mechanical.
+- **No sqlc, no goose (yet).** Queries are plain SQL in `store.go` and migrations are plain `YYYYMMDD_name.up.sql` files tracked in a `schema_migrations` table, so moving to sqlc/goose later is mechanical.
 - **One database connection.** Fine for a single-user CLI. The TUI queries the database directly from its update loop (milliseconds on a local file); anything slow would need to move into background commands and this pool setting revisited.
 - **Recategorizing re-books the category leg only.** A transaction's category is its single Income/Expenses/Equity posting; the amount, date and your own account never change. Transactions with no such posting or several (transfers, FX conversions) are refused.
 - **Backups are plain SQLite files.** Encryption (age) is not implemented; keep them on an encrypted disk for now.

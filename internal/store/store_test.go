@@ -569,3 +569,30 @@ func TestDeleteReplaceRestore(t *testing.T) {
 		t.Error("editing an unknown transaction must fail")
 	}
 }
+
+func TestMigrateAdoptsLegacyUserVersion(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Recreate the pre-schema_migrations state: schema present, version in the pragma.
+	if _, err := s.db.ExecContext(ctx, `DROP TABLE schema_migrations`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.ExecContext(ctx, `PRAGMA user_version = 1`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	s, err = Open(ctx, path)
+	if err != nil {
+		t.Fatalf("reopening a legacy database: %v", err)
+	}
+	defer s.Close()
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("schema_migrations rows = %d, err %v; want 1", n, err)
+	}
+}
