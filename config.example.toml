@@ -1,0 +1,62 @@
+# Copy this file to ~/.config/thaler/config.toml (or pass --config PATH).
+# Unknown keys are rejected, so a typo cannot silently disable a rule.
+
+# ---------------------------------------------------------------------------
+# Categorisation rules for `thaler cli import`.
+#
+# Rules are checked top to bottom; the first match wins. A rule needs exactly
+# one of `contains` (case-insensitive substring) or `regex` (case-insensitive
+# regular expression), matched against "payee + purpose + booking text".
+# Categories that do not exist yet are created on import.
+# ---------------------------------------------------------------------------
+
+[[rule]]
+contains = "REWE"
+category = "Expenses:Groceries"
+
+[[rule]]
+regex = "b(ä|ae)ckerei|edeka|lidl|aldi"
+category = "Expenses:Groceries"
+
+[[rule]]
+contains = "Hausverwaltung"
+category = "Expenses:Rent"
+
+[[rule]]
+contains = "Gehalt"
+category = "Income:Salary"
+
+[[rule]]
+contains = "ENTGELTABSCHLUSS"
+category = "Expenses:BankFees"
+
+# A transfer to your own savings account: the category can be any account,
+# including an Assets account (it must exist already: thaler cli account add ...).
+# [[rule]]
+# contains = "Umbuchung Sparen"
+# category = "Assets:Sparkasse-Savings"
+
+# ---------------------------------------------------------------------------
+# Custom CSV profile, only needed for banks other than the built-in
+# `sparkasse` profile. Use it with: thaler cli import --profile mybank FILE ...
+# Header names are matched ignoring case; ä/ö/ü/ß count as ae/oe/ue/ss.
+# Dates use DD, MM, YY, YYYY.
+# ---------------------------------------------------------------------------
+
+# [[profile]]
+# name = "mybank"
+# delimiter = ","                 # single character, default ";"
+# encoding = "utf-8"              # "auto" (default), "utf-8" or "windows-1252"
+# decimal_separator = "."         # "," or "."; leave out to detect per amount
+# date_formats = ["YYYY-MM-DD"]
+# skip_column = "Status"          # ignore rows whose Status contains "pending"
+# skip_contains = "pending"
+#
+# [profile.columns]
+# date = ["Date"]
+# payee = ["Description"]
+# purpose = ["Reference"]
+# iban = ["IBAN"]
+# booking_text = ["Type"]
+# amount = ["Amount"]
+# currency = ["Currency"]

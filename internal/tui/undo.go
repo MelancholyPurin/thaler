@@ -1,0 +1,78 @@
+package tui
+
+import (
+	"fmt"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/melancholypurin/thaler/internal/store"
+)
+
+// undoOp reverses one change made in this session.
+type undoOp struct {
+	label string
+	run   func() error
+}
+
+// undoLast reverses the most recent change.
+func (m *Model) undoLast() {
+	if len(m.undo) == 0 {
+		m.setStatus("nothing to undo", true)
+		return
+	}
+	op := m.undo[len(m.undo)-1]
+	m.undo = m.undo[:len(m.undo)-1]
+	if err := op.run(); err != nil {
+		m.setStatus("undo failed: "+err.Error(), true)
+		return
+	}
+	if err := m.reload(); err != nil {
+		m.setStatus(err.Error(), true)
+		return
+	}
+	m.applyFilter(true)
+	m.setStatus("Undid "+op.label, false)
+}
+
+// confirmDelete asks before deleting the selected transaction.
+func (m *Model) confirmDelete() {
+	r, ok := m.selected()
+	if !ok {
+		return
+	}
+	m.confirmTx = r.tx
+	m.mode = modeConfirm
+}
+
+func (m *Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "enter":
+		m.mode = modeList
+		m.deleteTx(m.confirmTx)
+	case "n", "N", "esc":
+		m.mode = modeList
+	}
+	return m, nil
+}
+
+func (m *Model) deleteTx(tx store.TxView) {
+	old, err := tx.NewTransaction()
+	if err != nil {
+		m.setStatus(err.Error(), true)
+		return
+	}
+	if err := m.st.DeleteTransaction(m.ctx, tx.ID); err != nil {
+		m.setStatus(err.Error(), true)
+		return
+	}
+	m.undo = append(m.undo, undoOp{
+		label: fmt.Sprintf("deleting #%d", tx.ID),
+		run:   func() error { return m.st.RestoreTransaction(m.ctx, tx.ID, old) },
+	})
+	if err := m.reload(); err != nil {
+		m.setStatus(err.Error(), true)
+		return
+	}
+	m.applyFilter(true)
+	m.setStatus(fmt.Sprintf("Deleted #%d  (z to undo)", tx.ID), false)
+}

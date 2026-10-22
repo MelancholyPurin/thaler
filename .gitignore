@@ -1,0 +1,15 @@
+# build output
+/thaler
+/fin
+/bin/
+/dist/
+*.test
+.DS_Store
+
+# never commit financial data
+*.db
+*.db-wal
+*.db-shm
+*.csv
+!internal/importer/testdata/*.csv
+config.toml

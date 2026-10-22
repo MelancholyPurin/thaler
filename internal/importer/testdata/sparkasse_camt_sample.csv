@@ -1,0 +1,7 @@
+"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"
+"DE00200505501234567890";"01.10.26";"01.10.26";"GEHALT/RENTE";"Gehalt Oktober 2026";"";"";"NOTPROVIDED";"";"";"";"Muster GmbH";"DE00123456780000000000";"TESTDEFFXXX";"2.450,00";"EUR";"Umsatz gebucht"
+"DE00200505501234567890";"02.10.26";"02.10.26";"KARTENZAHLUNG";"Baeckerei Schmidt//Hamburg/DE   2026-10-01T07:45:10 KFN 1 VJ 2912";"";"";"";"";"";"";"Bäckerei Schmidt";"";"";"-3,20";"EUR";"Umsatz gebucht"
+"DE00200505501234567890";"02.10.26";"02.10.26";"KARTENZAHLUNG";"Baeckerei Schmidt//Hamburg/DE   2026-10-01T07:45:10 KFN 1 VJ 2912";"";"";"";"";"";"";"Bäckerei Schmidt";"";"";"-3,20";"EUR";"Umsatz gebucht"
+"DE00200505501234567890";"05.10.26";"05.10.26";"LASTSCHRIFT";"Miete Oktober";"DE98ZZZ09999999999";"MREF123";"";"";"";"";"Hausverwaltung Nord";"DE00987654320000000000";"TESTDEFFXXX";"-1.150,00";"EUR";"Umsatz gebucht"
+"DE00200505501234567890";"06.10.26";"";"KARTENZAHLUNG";"REWE Markt GmbH//Hamburg/DE";"";"";"";"";"";"";"REWE Markt GmbH";"";"";"-23,47";"EUR";"Umsatz vorgemerkt"
+"DE00200505501234567890";"07.10.2026";"07.10.2026";"ENTGELTABSCHLUSS";"Abrechnung 30.09.2026 Entgelte";"";"";"";"";"";"";"";"";"";"-4,90";"EUR";"Umsatz gebucht"
