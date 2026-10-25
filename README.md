@@ -104,9 +104,10 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `↑` `↓` / `j` `k`, `g` `G`, `PgUp` `PgDn` | move in the focused panel (on Budget: pick the month) |
 | `enter` | open the next panel (Home, Accounts) / categorize (Transactions) |
 | `a` | add a transaction (see below) |
+| `i` | import a bank export (see below) |
 | `c` | categorize the selected transaction |
 | `e` / `d` | edit / delete the selected transaction (delete asks first) |
-| `z` | undo the last change made in this session: add, edit, delete or categorize, repeatable |
+| `z` | undo the last change made in this session: add, edit, delete, categorize or import, repeatable |
 | `/` | fuzzy search over date, payee, description, category and amount (every word must match; `esc` clears) |
 | `u` | show only uncategorized / all |
 | `?` | key reference popup |
@@ -123,6 +124,15 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 - **Payee:** typing the start of a known payee highlights it, and Enter completes it. `↑` drops the suggestion if you meant something new.
 - **Category:** the category that payee went to last time is offered first (marked "same payee"), then categories of the right kind by how often you use them. Type to filter, or type a full new name such as `Expenses:Gifts`. The last entry, "decide later", books it as uncategorized.
 - **Date** defaults to today: `y` is yesterday, `-2` is two days ago, or type `2026-10-20` / `20.10.2026`. `tab` moves between fields, `ctrl+s` saves from anywhere and `esc` cancels. Mistakes are reported in the form and nothing is written.
+
+**Importing a bank export** works from the interface too. Press `i`:
+
+- **File:** the CSV files in `~/Downloads` are listed, newest first, so the export you just downloaded is already highlighted. Type a few letters to narrow the list, or paste or drag a file path into the field. Type or drop a *folder* path (say `~/Desktop`) to list that folder's CSV files instead. To list a different folder every time, set `import_dir = "~/Documents/bank-exports"` in `config.toml`.
+- **Account** (default: the one selected in the Accounts panel) and **profile** (default: `sparkasse`, or one from `config.toml`) are changed with `tab` and `←` `→`.
+- `enter` shows a **review** and writes nothing: how many rows are new, how many were imported before, how many no rule matched, and each row with the category the rules chose. A second `enter` imports. If some rows cannot be read, they are listed and `y` imports the rest.
+- Afterwards the account's uncategorized rows are shown, ready for `c`, and `z` takes the whole import back.
+
+Rules and profiles are read from `config.toml` each time you press `i`, so you can edit them in another window and import again.
 
 In the category picker the category you last used for the same payee comes first (marked "same payee"), then the categories of the matching kind (income for money in, expenses for money out), most used first. Type to filter, or type a full new name such as `Expenses:Gifts` to create it. Transfers and split transactions are shown but cannot be recategorized there.
 

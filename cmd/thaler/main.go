@@ -46,16 +46,22 @@ func (a *app) config() (*config.Config, error) {
 	if a.cfg != nil {
 		return a.cfg, nil
 	}
-	path, explicit := a.cfgFlag, a.cfgFlag != ""
-	if !explicit {
-		path = config.DefaultConfigPath()
-	}
-	c, err := config.Load(path, explicit)
+	c, err := a.loadConfig()
 	if err != nil {
 		return nil, err
 	}
 	a.cfg = c
 	return c, nil
+}
+
+// loadConfig reads the config file afresh. The TUI uses it so that rules edited
+// while it is open apply to the next import.
+func (a *app) loadConfig() (*config.Config, error) {
+	path, explicit := a.cfgFlag, a.cfgFlag != ""
+	if !explicit {
+		path = config.DefaultConfigPath()
+	}
+	return config.Load(path, explicit)
 }
 
 func (a *app) close() {

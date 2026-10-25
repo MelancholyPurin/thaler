@@ -33,6 +33,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.formPopup())
 	case modeConfirm:
 		screen = m.centerPopup(screen, m.confirmPopup())
+	case modeImport:
+		screen = m.centerPopup(screen, m.importPopup())
 	}
 	return screen
 }
@@ -188,7 +190,7 @@ func (m *Model) transactionsPanel(l layout) string {
 	if len(m.view) == 0 {
 		switch {
 		case len(m.rows) == 0:
-			lines = []string{dim.Render("No transactions yet."), dim.Render("thaler cli import --account ACCOUNT FILE")}
+			lines = []string{dim.Render("No transactions yet."), dim.Render("i imports a bank export · a adds one by hand")}
 		case m.period != "" && !m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
 			lines = []string{dim.Render("No transactions in " + periodLabel(m.period) + "."), dim.Render("[ ] change month · T all time")}
 		case m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
@@ -277,11 +279,11 @@ func (m *Model) ledgerHint() string {
 	var hint string
 	switch m.focus {
 	case paneHome:
-		hint = "a add · enter transactions · 2 accounts · ? help · q quit"
+		hint = "a add · i import · enter transactions · 2 accounts · ? help · q quit"
 	case paneAccounts:
 		hint = "↑/↓ pick account · a add to it · enter transactions · ? help · q quit"
 	default:
-		hint = "a add · c categorize · e edit · d delete · z undo · / search · ? help · q quit"
+		hint = "a add · i import · c categorize · e edit · d delete · z undo · / search · ? help · q quit"
 	}
 	return hint
 }
@@ -334,6 +336,7 @@ func (m *Model) helpPopup() string {
 		{"PgUp PgDn  g G", "page, top, bottom"},
 		{"enter", "open the next panel / categorize"},
 		{"a", "add a transaction (to the selected account)"},
+		{"i", "import a bank export (CSV) into an account"},
 		{"c  e  d", "categorize / edit / delete the selected transaction"},
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},

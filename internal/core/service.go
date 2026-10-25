@@ -455,7 +455,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 
 	err = s.repo.inTx(ctx, func(q queries) error {
 		for i, nt := range txs {
-			_, err := storeTransaction(ctx, q, nt, 0, &res.Created)
+			id, err := storeTransaction(ctx, q, nt, 0, &res.Created)
 			if errors.Is(err, ErrDuplicate) {
 				res.Duplicates++
 				continue
@@ -464,6 +464,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 				return fmt.Errorf("transaction %d (%s %s): %w", i+1, nt.Date.Format(ledger.DateLayout), nt.Payee, err)
 			}
 			res.Inserted++
+			res.IDs = append(res.IDs, id)
 		}
 		return nil
 	})

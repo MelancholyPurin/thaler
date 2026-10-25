@@ -2,6 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -33,6 +38,10 @@ func TestFuzzyScore(t *testing.T) {
 	if !matchAll("rewe 23", "2026-10-01 REWE Markt -23,47") || matchAll("rewe lidl", "REWE Markt") {
 		t.Error("matchAll must require every term")
 	}
+}
+
+func testConfig() (*config.Config, error) {
+	return &config.Config{Rules: []importer.Rule{{Contains: "rewe", Category: "Expenses:Groceries"}}}, nil
 }
 
 // newModel builds a model on an in-memory store with a few transactions:
@@ -78,7 +87,7 @@ func newModel(t *testing.T) (*Model, *core.Local) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := newWithClock(ctx, st, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,5 +629,320 @@ func TestViewFitsTerminal(t *testing.T) {
 		press(m, "x", "/", "r")
 		check("search", size[0], size[1])
 		press(m, "esc")
+	}
+}
+
+// ---- import ------------------------------------------------------------------
+
+// exportCSV is a Sparkasse-style export: one groceries row the test rules
+// know, two they do not, and one pending row that must be ignored.
+const exportCSV = `Buchungstag;Verwendungszweck;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info
+02.10.26;Einkauf;REWE Markt;-23,47;EUR;Umsatz gebucht
+03.10.26;;Mystery Shop;-5,00;EUR;Umsatz gebucht
+04.10.26;Gehalt;Arbeitgeber;1.000,00;EUR;Umsatz gebucht
+05.10.26;;Pending Shop;-9,99;EUR;Umsatz vorgemerkt
+`
+
+// writeExport puts a CSV file in a fresh folder and points the model's
+// downloads folder at it.
+func writeExport(t *testing.T, m *Model, name, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.downloads = dir
+	return filepath.Join(dir, name)
+}
+
+func txCount(t *testing.T, st core.Service) int {
+	t.Helper()
+	txs, err := st.ListTransactions(ctx, core.TxFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(txs)
+}
+
+func TestImportFlow(t *testing.T) {
+	m, st := newModel(t)
+	writeExport(t, m, "umsaetze.csv", exportCSV)
+	before := txCount(t, st)
+
+	press(m, "i")
+	if m.mode != modeImport {
+		t.Fatalf("i should open the import popup, mode = %v", m.mode)
+	}
+	view := m.View()
+	for _, want := range []string{"Import a bank export", "umsaetze.csv", "Assets:Bank", "sparkasse"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("choose step is missing %q:\n%s", want, view)
+		}
+	}
+
+	press(m, "enter") // the newest download is already highlighted
+	view = m.View()
+	for _, want := range []string{"3 new", "0 already imported", "2 uncategorized", "1 pending ignored", "Groceries", "REWE Markt"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("review step is missing %q:\n%s", want, view)
+		}
+	}
+	if got := txCount(t, st); got != before {
+		t.Fatalf("reviewing wrote %d transactions", got-before)
+	}
+
+	press(m, "enter")
+	if m.mode != modeList || m.imp != nil {
+		t.Fatalf("confirming should close the popup, mode = %v", m.mode)
+	}
+	if got := txCount(t, st); got != before+3 {
+		t.Fatalf("transactions = %d, want %d", got, before+3)
+	}
+	if !strings.HasPrefix(m.status, "Imported 3 into Bank") || !strings.Contains(m.status, "2 need a category") {
+		t.Errorf("status = %q", m.status)
+	}
+	if m.focus != paneTransactions || m.scopeAccount() != "Assets:Bank" || !m.onlyUncat {
+		t.Errorf("should show the uncategorized rows of the account: focus %v, scope %q, onlyUncat %v", m.focus, m.scopeAccount(), m.onlyUncat)
+	}
+	if _, cat, _ := txByPayee(t, st, "REWE Markt").Legs(); cat.Account != "Expenses:Groceries" {
+		t.Errorf("the rule should have categorised REWE, got %s", cat.Account)
+	}
+
+	press(m, "z")
+	if got := txCount(t, st); got != before {
+		t.Errorf("undo left %d imported transactions", got-before)
+	}
+	if !strings.Contains(m.status, "the import of 3 transactions") {
+		t.Errorf("status after undo = %q", m.status)
+	}
+}
+
+func TestImportAgainFindsNothingNew(t *testing.T) {
+	m, st := newModel(t)
+	writeExport(t, m, "umsaetze.csv", exportCSV)
+	press(m, "i", "enter", "enter")
+	imported := txCount(t, st)
+	undos := len(m.undo)
+
+	press(m, "i", "enter")
+	if view := m.View(); !strings.Contains(view, "0 new") || !strings.Contains(view, "3 already imported") {
+		t.Errorf("second review:\n%s", view)
+	}
+	press(m, "enter")
+	if m.mode != modeList || !strings.Contains(m.status, "Nothing new") {
+		t.Errorf("mode %v, status %q", m.mode, m.status)
+	}
+	if txCount(t, st) != imported || len(m.undo) != undos {
+		t.Error("importing a file twice must change nothing and leave nothing to undo")
+	}
+}
+
+func TestImportWithProblems(t *testing.T) {
+	m, st := newModel(t)
+	writeExport(t, m, "umsaetze.csv", exportCSV+"07.10.26;;Broken;abc;EUR;Umsatz gebucht\n")
+	before := txCount(t, st)
+
+	press(m, "i", "enter")
+	if view := m.View(); !strings.Contains(view, "1 with problems") || !strings.Contains(view, "line 6") {
+		t.Errorf("review should list the broken row:\n%s", view)
+	}
+	press(m, "enter")
+	if m.mode != modeImport || txCount(t, st) != before || !strings.Contains(m.imp.err, "press y") {
+		t.Fatalf("enter must not import past problems: mode %v, err %q", m.mode, m.imp.err)
+	}
+	press(m, "y")
+	if m.mode != modeList || txCount(t, st) != before+3 {
+		t.Errorf("y should import the readable rows: mode %v, imported %d", m.mode, txCount(t, st)-before)
+	}
+}
+
+func TestImportTypedPathAndCancel(t *testing.T) {
+	m, st := newModel(t)
+	path := writeExport(t, m, "my export.csv", exportCSV)
+	m.downloads = t.TempDir() // nothing to pick from: the path has to be typed
+	before := txCount(t, st)
+
+	press(m, "i", "enter")
+	if m.mode != modeImport || m.imp.step != stepChoose || !strings.Contains(m.imp.err, "choose a CSV file") {
+		t.Fatalf("without a file enter must complain: step %v, err %q", m.imp.step, m.imp.err)
+	}
+	// A dropped file arrives with its spaces escaped.
+	typeText(m, strings.ReplaceAll(path, " ", `\ `))
+	press(m, "enter")
+	if m.imp.step != stepReview || m.imp.res.Inserted != 3 {
+		t.Fatalf("typed path: step %v, err %q", m.imp.step, m.imp.err)
+	}
+	press(m, "esc")
+	if m.imp.step != stepChoose {
+		t.Error("esc in the review should go back to the file")
+	}
+	press(m, "esc")
+	if m.mode != modeList || txCount(t, st) != before {
+		t.Errorf("cancelling must write nothing: mode %v", m.mode)
+	}
+
+	press(m, "i")
+	typeText(m, "/no/such/file.csv")
+	press(m, "enter")
+	if !strings.Contains(m.imp.err, "no such file") {
+		t.Errorf("err = %q", m.imp.err)
+	}
+}
+
+func TestImportPicksAccountAndWidensPeriod(t *testing.T) {
+	m, st := newModel(t)
+	writeExport(t, m, "older.csv", "Buchungstag;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info\n15.09.26;Bakery;-3,00;EUR;Umsatz gebucht\n")
+
+	press(m, "2", "down", "down") // Assets:Savings in the Accounts panel
+	press(m, "i")
+	if !strings.Contains(m.View(), "Assets:Savings") {
+		t.Fatalf("the selected account should be the default:\n%s", m.View())
+	}
+	press(m, "enter", "enter")
+	if m.period != "" {
+		t.Errorf("a September row is outside October; period = %q, want all time", m.period)
+	}
+	if m.scopeAccount() != "Assets:Savings" {
+		t.Errorf("scope = %q", m.scopeAccount())
+	}
+	tx := txByPayee(t, st, "Bakery")
+	if src, _, _ := tx.Legs(); src.Account != "Assets:Savings" {
+		t.Errorf("imported into %s", src.Account)
+	}
+}
+
+func TestImportNeedsAGoodConfig(t *testing.T) {
+	m, _ := newModel(t)
+	m.loadConfig = func() (*config.Config, error) { return nil, errors.New("config.toml: unknown key(s): [rule.typo]") }
+	press(m, "i")
+	if m.mode != modeList || !m.statusIsError || !strings.Contains(m.status, "unknown key") {
+		t.Errorf("a broken config must be reported, not ignored: mode %v, status %q", m.mode, m.status)
+	}
+}
+
+func TestCleanPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	for in, want := range map[string]string{
+		"/tmp/a.csv":           "/tmp/a.csv",
+		"  /tmp/a.csv \n":      "/tmp/a.csv",
+		`/tmp/my\ export.csv`:  "/tmp/my export.csv",
+		`"/tmp/my export.csv"`: "/tmp/my export.csv",
+		`'/tmp/my export.csv'`: "/tmp/my export.csv",
+		"~/Downloads/a.csv":    filepath.Join(home, "Downloads/a.csv"),
+		"umsaetze":             "umsaetze",
+	} {
+		if got := cleanPath(in); got != want {
+			t.Errorf("cleanPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// emptyModel is a model on a ledger that has one account and nothing else.
+func emptyModel(t *testing.T) (*Model, *core.Local) {
+	t.Helper()
+	st, err := core.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if _, err := st.AddAccount(ctx, "Assets:Bank", "EUR"); err != nil {
+		t.Fatal(err)
+	}
+	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	return m, st
+}
+
+// Undoing an import, or deleting the last transaction, leaves the list empty
+// while the view still points into the old rows. That must not crash.
+func TestEmptyingTheLedgerKeepsTheListUsable(t *testing.T) {
+	m, st := emptyModel(t)
+	writeExport(t, m, "umsaetze.csv", exportCSV)
+	press(m, "i", "enter", "enter", "z")
+	if txCount(t, st) != 0 || len(m.rows) != 0 {
+		t.Fatalf("undo should empty the ledger: %d transactions", txCount(t, st))
+	}
+	if !strings.Contains(m.status, "Undid the import") {
+		t.Errorf("status = %q", m.status)
+	}
+
+	press(m, "u") // the import left "only uncategorized" on
+	press(m, "a")
+	typeText(m, "5")
+	press(m, "enter")
+	typeText(m, "Bakery")
+	press(m, "enter", "enter")
+	if txCount(t, st) != 1 {
+		t.Fatalf("adding a transaction: %d stored (mode %v, status %q)", txCount(t, st), m.mode, m.status)
+	}
+	press(m, "3", "d", "y")
+	if txCount(t, st) != 0 || len(m.view) != 0 {
+		t.Errorf("deleting the only transaction: %d stored, %d listed", txCount(t, st), len(m.view))
+	}
+	_ = m.View()
+}
+
+func TestImportFolderFromConfig(t *testing.T) {
+	m, st := newModel(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "bank"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "bank", "konto.csv"), []byte(exportCSV), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.downloads = t.TempDir() // empty: only the configured folder has a file
+	m.loadConfig = func() (*config.Config, error) { return &config.Config{ImportDir: "~/bank"}, nil }
+
+	press(m, "i")
+	if view := m.View(); !strings.Contains(view, "konto.csv") || !strings.Contains(view, "~/bank") {
+		t.Fatalf("the configured folder should be listed:\n%s", view)
+	}
+	before := txCount(t, st)
+	press(m, "enter", "enter")
+	if txCount(t, st) != before+3 {
+		t.Errorf("imported %d, want 3", txCount(t, st)-before)
+	}
+}
+
+func TestImportBrowsesATypedFolder(t *testing.T) {
+	m, st := newModel(t)
+	other := t.TempDir()
+	for name, content := range map[string]string{"alt.csv": exportCSV, "notes.txt": "not a bank export"} {
+		if err := os.WriteFile(filepath.Join(other, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	empty := t.TempDir()
+	m.downloads = t.TempDir()
+
+	press(m, "i")
+	typeText(m, empty)
+	if view := m.View(); !strings.Contains(view, "No CSV files in") {
+		t.Errorf("an empty folder should say so:\n%s", view)
+	}
+	press(m, "enter")
+	if !strings.Contains(m.imp.err, "choose a CSV file") {
+		t.Errorf("enter on an empty folder must not try to read the folder: err %q", m.imp.err)
+	}
+
+	m.imp.file.SetValue(other + "/")
+	m.imp.refreshFiles()
+	view := m.View()
+	if !strings.Contains(view, "alt.csv") || strings.Contains(view, "notes.txt") {
+		t.Fatalf("the typed folder's CSV files should be listed:\n%s", view)
+	}
+	before := txCount(t, st)
+	press(m, "enter") // the highlighted file, not the folder
+	if m.imp.step != stepReview || m.imp.res.Inserted != 3 {
+		t.Fatalf("step %v, err %q", m.imp.step, m.imp.err)
+	}
+	press(m, "enter")
+	if txCount(t, st) != before+3 {
+		t.Errorf("imported %d, want 3", txCount(t, st)-before)
 	}
 }

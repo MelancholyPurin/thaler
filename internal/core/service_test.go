@@ -668,6 +668,9 @@ func TestImport(t *testing.T) {
 	if len(res.Rows) != 0 {
 		t.Error("only a dry run lists rows")
 	}
+	if len(res.IDs) != 5 || len(preview.IDs) != 0 {
+		t.Errorf("ids = %v (dry run %v); want one per new transaction, none in a dry run", res.IDs, preview.IDs)
+	}
 	if len(res.Created) != 3 { // Income:Salary, Expenses:Groceries, Expenses:Uncategorized
 		t.Errorf("created = %v", res.Created)
 	}
