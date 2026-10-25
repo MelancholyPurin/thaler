@@ -136,15 +136,6 @@ func (m *Model) focusField(field formField) tea.Cmd {
 	return nil
 }
 
-// wasZero reports whether the transaction being edited is booked as 0.00.
-func (f *form) wasZero() bool {
-	if f.editing == 0 {
-		return false
-	}
-	source, _, ok := f.old.Legs()
-	return ok && source.Amount.Minor == 0
-}
-
 func (f *form) isIncome() bool { return strings.HasPrefix(strings.TrimSpace(f.amount.Value()), "+") }
 
 // refreshForm recomputes the suggestions from what has been typed.
@@ -307,10 +298,9 @@ func (m *Model) saveForm() {
 		fail("amount: %v", err)
 		return
 	}
-	// Banks book zero amounts (card verifications), and those must stay
-	// editable; but a zero cannot be typed into a new entry, and a real amount
-	// cannot be edited down to zero.
-	if amount.Minor == 0 && !f.wasZero() {
+	// Banks book zero amounts (card verifications) and may correct a charge to
+	// zero, so an edit may be zero; a new entry typed by hand may not.
+	if amount.Minor == 0 && f.editing == 0 {
 		fail("amount must be greater than zero")
 		return
 	}

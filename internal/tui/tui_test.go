@@ -1345,7 +1345,7 @@ func TestEditingAZeroAmountTransaction(t *testing.T) {
 	}
 }
 
-func TestZeroAmountStaysRefusedElsewhere(t *testing.T) {
+func TestZeroAmountOnlyRefusedForNewEntries(t *testing.T) {
 	m, st, _ := zeroModel(t)
 
 	// Not for a new entry.
@@ -1357,17 +1357,24 @@ func TestZeroAmountStaysRefusedElsewhere(t *testing.T) {
 	}
 	press(m, "esc")
 
-	// Not by editing a real amount down to zero.
+	if txs, _ := st.ListTransactions(ctx, core.TxFilter{}); len(txs) != 2 {
+		t.Errorf("%d transactions, want 2", len(txs))
+	}
+
+	// Editing a real amount down to zero is fine: banks correct charges to zero.
 	selectPayee(t, m, "Bakery")
 	press(m, "e")
 	m.form.amount.SetValue("0")
 	m.Update(keyCtrlS)
-	if m.mode != modeForm || !strings.Contains(m.form.err, "greater than zero") {
-		t.Errorf("editing 3.20 down to 0: mode %v, err %q", m.mode, m.form.err)
+	if m.mode != modeList {
+		t.Fatalf("editing 3.20 down to 0: %q", m.form.err)
 	}
-	press(m, "esc")
-	if txs, _ := st.ListTransactions(ctx, core.TxFilter{}); len(txs) != 2 {
-		t.Errorf("%d transactions, want 2", len(txs))
+	if tx := txByPayee(t, st, "Bakery"); tx.Postings[0].Amount.Minor != 0 {
+		t.Errorf("amount = %d, want 0", tx.Postings[0].Amount.Minor)
+	}
+	press(m, "z")
+	if tx := txByPayee(t, st, "Bakery"); tx.Postings[0].Amount.Minor != -320 {
+		t.Errorf("undo left amount %d, want -320", tx.Postings[0].Amount.Minor)
 	}
 
 	// A zero transaction can be given a real amount.
