@@ -1,150 +1,406 @@
 package config
 
 import (
-	"github.com/melancholypurin/thaler/internal/importer"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/melancholypurin/thaler/internal/importer"
 )
 
-func TestLoadImportDir(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	body := "import_dir = \"~/Documents/bank\"\n\n[[rule]]\ncontains = \"REWE\"\ncategory = \"Expenses:Groceries\"\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
+func errText(err error, path string) string {
+	if err == nil {
+		return ""
 	}
-	c, err := Load(path, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.ImportDir != "~/Documents/bank" || len(c.Rules) != 1 {
-		t.Errorf("config = %+v", c)
-	}
+	return strings.ReplaceAll(err.Error(), path, "{path}")
+}
 
-	// A typo must be reported, not ignored.
-	if err := os.WriteFile(path, []byte("import_folder = \"/tmp\"\n"), 0o600); err != nil {
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
-	}
-	if _, err := Load(path, true); err == nil {
-		t.Error("an unknown key must be rejected")
 	}
 }
 
-func TestEnsureCreatesAnInertConfig(t *testing.T) {
-	example, err := os.ReadFile("../../config.example.toml")
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), "thaler", "config.toml") // the folder does not exist yet
-	if err := Ensure(path, string(example)); err != nil {
-		t.Fatal(err)
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("stat = %v, %v; want a private file", info, err)
-	}
-	// The sample rules are there to read, but switched off.
-	c, err := Load(path, true)
-	if err != nil {
-		t.Fatalf("the generated file must load: %v", err)
-	}
-	if len(c.Rules) != 0 || len(c.Profiles) != 0 || c.ImportDir != "" {
-		t.Errorf("a new config must change nothing, got %+v", c)
-	}
-	body, _ := os.ReadFile(path)
-	if !strings.Contains(string(body), `# contains = "REWE"`) || !strings.Contains(string(body), "# Created by Thaler") {
-		t.Errorf("the sample rules should be kept as comments:\n%s", body)
-	}
+	return string(b)
+}
 
-	// An existing file is never touched.
-	if err := os.WriteFile(path, []byte("import_dir = \"/x\"\n"), 0o600); err != nil {
-		t.Fatal(err)
+func Test_Load(t *testing.T) {
+	tcs := []struct {
+		name      string
+		file      *string // nil: there is no file
+		mustExist bool
+		want      Config
+		wantErr   string // {path} stands for the file
+	}{
+		{
+			name: "the import folder and a rule",
+			file: ptr("import_dir = \"~/Documents/bank\"\n\n[[rule]]\ncontains = \"REWE\"\ncategory = \"Expenses:Groceries\"\n"),
+			want: Config{ImportDir: "~/Documents/bank", Rules: []importer.Rule{{Contains: "REWE", Category: "Expenses:Groceries"}}},
+		},
+		{
+			name: "a regex rule and a bank profile",
+			file: ptr(`[[rule]]
+regex = "b(ä|ae)ckerei"
+category = "Expenses:Bakery"
+
+[[profile]]
+name = "mybank"
+delimiter = ","
+[profile.columns]
+date = ["Date"]
+amount = ["Amount"]
+`),
+			want: Config{
+				Rules:    []importer.Rule{{Regex: "b(ä|ae)ckerei", Category: "Expenses:Bakery"}},
+				Profiles: []importer.Profile{{Name: "mybank", Delimiter: ",", Columns: importer.Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}}},
+			},
+		},
+		{name: "an empty file", file: ptr("")},
+		{name: "no file, and none is needed", file: nil},
+		{name: "no file, but one was asked for", file: nil, mustExist: true, wantErr: "reading {path}: open {path}: no such file or directory"},
+		{name: "a typo in a key is not ignored", file: ptr("import_folder = \"/tmp\"\n"), wantErr: "{path}: unknown key(s): [import_folder]"},
+		{name: "a syntax error", file: ptr("rule = ["), wantErr: "reading {path}: toml: line 1 (last key \"rule\"): unexpected EOF; expected value"},
 	}
-	if err := Ensure(path, string(example)); err != nil {
-		t.Fatal(err)
-	}
-	if c, err := Load(path, true); err != nil || c.ImportDir != "/x" {
-		t.Errorf("Ensure overwrote an existing config: %+v, %v", c, err)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if tc.file != nil {
+				writeFile(t, path, *tc.file)
+			}
+
+			// when
+			got, err := Load(path, tc.mustExist)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err, path)); diff != "" {
+				t.Fatalf("error mismatch (-want +got):\n%s", diff)
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.want, *got); diff != "" {
+				t.Errorf("config mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestAppendRuleKeepsEverythingElse(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	original := "# my rules, carefully ordered\nimport_dir = \"/x\"\n\n[[rule]]\ncontains = \"REWE\"   # the big one\ncategory = \"Expenses:Groceries\""
-	if err := os.WriteFile(path, []byte(original), 0o600); err != nil { // no newline at the end on purpose
-		t.Fatal(err)
-	}
-	if err := AppendRule(path, "", importer.Rule{Contains: "  Lidl ", Category: "Expenses:Groceries"}); err != nil {
-		t.Fatal(err)
-	}
-	body, _ := os.ReadFile(path)
-	if !strings.HasPrefix(string(body), original+"\n") {
-		t.Errorf("the existing text must be untouched, got:\n%s", body)
-	}
-	c, err := Load(path, true)
-	if err != nil {
-		t.Fatalf("the result must still load: %v\n%s", err, body)
-	}
-	if len(c.Rules) != 2 || c.Rules[0].Contains != "REWE" || c.Rules[1].Contains != "Lidl" || c.Rules[1].Category != "Expenses:Groceries" || c.ImportDir != "/x" {
-		t.Errorf("config = %+v; the new rule must come last", c)
-	}
+func ptr(s string) *string { return &s }
 
-	// Several in a row stay in order.
-	for _, name := range []string{"Aldi", "Edeka"} {
-		if err := AppendRule(path, "", importer.Rule{Contains: name, Category: "Expenses:Groceries"}); err != nil {
-			t.Fatal(err)
-		}
+func Test_Ensure(t *testing.T) {
+	const header = "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n"
+	tcs := []struct {
+		name     string
+		existing *string // the file before; nil: none, and its folder does not exist either
+		example  string
+		want     string // the file after
+		wantErr  string
+	}{
+		{
+			name:    "creates the folder and the file, with the sample switched off",
+			example: "# sample\n[[rule]]\ncontains = \"X\"\ncategory = \"Expenses:X\"\n",
+			want:    header + "# sample\n# [[rule]]\n# contains = \"X\"\n# category = \"Expenses:X\"\n",
+		},
+		{
+			name:    "an empty example still gets the header",
+			example: "",
+			want:    header,
+		},
+		{
+			name:     "an existing file is never touched",
+			existing: ptr("import_dir = \"/x\"\n"),
+			example:  "[[rule]]\n",
+			want:     "import_dir = \"/x\"\n",
+		},
+		{
+			name:     "an existing empty file is left empty",
+			existing: ptr(""),
+			example:  "[[rule]]\n",
+			want:     "",
+		},
 	}
-	if c, _ := Load(path, true); len(c.Rules) != 4 || c.Rules[3].Contains != "Edeka" {
-		t.Errorf("rules = %+v", c.Rules)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			path := filepath.Join(t.TempDir(), "thaler", "config.toml")
+			if tc.existing != nil {
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, path, *tc.existing)
+			}
+
+			// when
+			err := Ensure(path, tc.example)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err, path)); diff != "" {
+				t.Fatalf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, readFile(t, path)); diff != "" {
+				t.Errorf("file mismatch (-want +got):\n%s", diff)
+			}
+			if tc.existing == nil {
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if diff := cmp.Diff(fs.FileMode(0o600), info.Mode().Perm()); diff != "" {
+					t.Errorf("a private file is expected (-want +got):\n%s", diff)
+				}
+			}
+		})
 	}
 }
 
-func TestAppendRuleEscapesWhateverTheBankSends(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.toml")
-	for _, text := range []string{
-		`O'Reilly "Books" & Co`, `C:\Temp\x`, "Bäckerei Müller – Straße", "tab\there", "ctrl\x01char", "ends with a backslash \\", "[[rule]] fake",
-	} {
-		if err := AppendRule(path, "", importer.Rule{Contains: text, Category: "Expenses:Misc"}); err != nil {
-			t.Fatal(err)
-		}
+// The example that ships with Thaler must be inert once Ensure has written it:
+// a new user's config may not change anything until they switch a line on.
+func Test_Ensure_withTheShippedExample(t *testing.T) {
+	type observed struct {
+		LoadError string
+		Config    Config
+		Samples   []string // which of the example's active lines survive as comments
 	}
-	c, err := Load(path, true)
-	if err != nil {
-		body, _ := os.ReadFile(path)
-		t.Fatalf("the file must stay valid TOML: %v\n%s", err, body)
+	tcs := []struct {
+		name string
+		want observed
+	}{
+		{
+			name: "written and read back it changes nothing, and keeps the samples as comments",
+			want: observed{Samples: []string{`# contains = "REWE"`, `# category = "Expenses:Groceries"`, `# [[rule]]`}},
+		},
 	}
-	if len(c.Rules) != 7 {
-		t.Fatalf("%d rules, want 7", len(c.Rules))
-	}
-	for i, want := range []string{`O'Reilly "Books" & Co`, `C:\Temp\x`, "Bäckerei Müller – Straße", "tab\there", "ctrl\x01char", "ends with a backslash \\", "[[rule]] fake"} {
-		if c.Rules[i].Contains != want {
-			t.Errorf("rule %d = %q, want %q", i, c.Rules[i].Contains, want)
-		}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			example, err := os.ReadFile("../../config.example.toml")
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "config.toml")
+
+			// when
+			if err := Ensure(path, string(example)); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := Load(path, true)
+
+			// then
+			got := observed{LoadError: errText(err, path)}
+			if loaded != nil {
+				got.Config = *loaded
+			}
+			body := readFile(t, path)
+			for _, want := range tc.want.Samples {
+				if strings.Contains(body, want) {
+					got.Samples = append(got.Samples, want)
+				}
+			}
+			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestAppendRuleCreatesAndRefuses(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "new", "config.toml")
-	if err := AppendRule(path, "# sample\n[[rule]]\ncontains = \"X\"\ncategory = \"Expenses:X\"\n", importer.Rule{Contains: "Lidl", Category: "Expenses:Groceries"}); err != nil {
-		t.Fatal(err)
+func Test_commentOut(t *testing.T) {
+	tcs := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "comments and blank lines stay as they are", in: "# a\n\n  # b\n", want: "# a\n\n  # b\n"},
+		{name: "active lines are switched off", in: "key = 1\n[[rule]]\n", want: "# key = 1\n# [[rule]]\n"},
+		{name: "indentation is kept after the marker", in: "  key = 1\n", want: "#   key = 1\n"},
+		{name: "a mix", in: "# sample\n[[rule]]\n\ncontains = \"x\"\n", want: "# sample\n# [[rule]]\n\n# contains = \"x\"\n"},
 	}
-	c, err := Load(path, true)
-	if err != nil || len(c.Rules) != 1 || c.Rules[0].Contains != "Lidl" {
-		t.Errorf("a new file starts from the template with its samples switched off: %+v, %v", c, err)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			got := commentOut(tc.in)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
-	for name, r := range map[string]importer.Rule{
-		"no text":     {Category: "Expenses:X"},
-		"blank text":  {Contains: "  ", Category: "Expenses:X"},
-		"no category": {Contains: "x"},
-		"a regex":     {Regex: "x", Category: "Expenses:X"},
-	} {
-		if err := AppendRule(path, "", r); err == nil {
-			t.Errorf("%s: want an error", name)
-		}
+}
+
+func Test_tomlString(t *testing.T) {
+	tcs := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain", in: "REWE", want: `"REWE"`},
+		{name: "empty", in: "", want: `""`},
+		{name: "quotes", in: `O'Reilly "Books"`, want: `"O'Reilly \"Books\""`},
+		{name: "backslashes", in: `C:\Temp\x`, want: `"C:\\Temp\\x"`},
+		{name: "a trailing backslash", in: `ends\`, want: `"ends\\"`},
+		{name: "umlauts and dashes are kept as they are", in: "Bäckerei Müller – Straße", want: `"Bäckerei Müller – Straße"`},
+		{name: "a tab", in: "a\tb", want: `"a\tb"`},
+		{name: "a newline", in: "a\nb", want: `"a\nb"`},
+		{name: "a control character", in: "a\x01b", want: `"a\u0001b"`},
+		{name: "a delete character", in: "a\x7fb", want: `"a\u007Fb"`},
+		{name: "text that looks like a table header", in: "[[rule]] fake", want: `"[[rule]] fake"`},
 	}
-	if c, _ := Load(path, true); len(c.Rules) != 1 {
-		t.Error("a refused rule must write nothing")
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			got := tomlString(tc.in)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_AppendRule(t *testing.T) {
+	groceries := func(contains string) importer.Rule {
+		return importer.Rule{Contains: contains, Category: "Expenses:Groceries"}
+	}
+	tcs := []struct {
+		name      string
+		existing  *string // nil: no file yet
+		example   string
+		rule      importer.Rule
+		want      string // the file after
+		wantRules []importer.Rule
+		wantErr   string
+	}{
+		{
+			name:      "appended after text that does not end in a newline, leaving it as it was",
+			existing:  ptr("# mine\n[[rule]]\ncontains = \"REWE\"   # the big one\ncategory = \"Expenses:Groceries\""),
+			rule:      groceries("  Lidl "),
+			want:      "# mine\n[[rule]]\ncontains = \"REWE\"   # the big one\ncategory = \"Expenses:Groceries\"\n\n[[rule]]\ncontains = \"Lidl\"\ncategory = \"Expenses:Groceries\"\n",
+			wantRules: []importer.Rule{groceries("REWE"), groceries("Lidl")},
+		},
+		{
+			name:      "appended after text that ends in a newline",
+			existing:  ptr("import_dir = \"/x\"\n"),
+			rule:      groceries("Aldi"),
+			want:      "import_dir = \"/x\"\n\n[[rule]]\ncontains = \"Aldi\"\ncategory = \"Expenses:Groceries\"\n",
+			wantRules: []importer.Rule{groceries("Aldi")},
+		},
+		{
+			name:      "an empty file",
+			existing:  ptr(""),
+			rule:      groceries("Aldi"),
+			want:      "\n[[rule]]\ncontains = \"Aldi\"\ncategory = \"Expenses:Groceries\"\n",
+			wantRules: []importer.Rule{groceries("Aldi")},
+		},
+		{
+			name:      "no file yet: it starts from the example, switched off",
+			example:   "# sample\n[[rule]]\ncontains = \"X\"\ncategory = \"Expenses:X\"\n",
+			rule:      groceries("Edeka"),
+			want:      "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n# sample\n# [[rule]]\n# contains = \"X\"\n# category = \"Expenses:X\"\n\n[[rule]]\ncontains = \"Edeka\"\ncategory = \"Expenses:Groceries\"\n",
+			wantRules: []importer.Rule{groceries("Edeka")},
+		},
+		{
+			name:      "text the bank sends is escaped and read back unchanged",
+			existing:  ptr(""),
+			rule:      importer.Rule{Contains: `O'Reilly "Books" & Co\`, Category: "Expenses:Misc"},
+			want:      "\n[[rule]]\ncontains = \"O'Reilly \\\"Books\\\" & Co\\\\\"\ncategory = \"Expenses:Misc\"\n",
+			wantRules: []importer.Rule{{Contains: `O'Reilly "Books" & Co\`, Category: "Expenses:Misc"}},
+		},
+		{
+			name:      "umlauts, tabs and control characters survive",
+			existing:  ptr(""),
+			rule:      importer.Rule{Contains: "Bäckerei\tMüller\x01", Category: "Expenses:Misc"},
+			want:      "\n[[rule]]\ncontains = \"Bäckerei\\tMüller\\u0001\"\ncategory = \"Expenses:Misc\"\n",
+			wantRules: []importer.Rule{{Contains: "Bäckerei\tMüller\x01", Category: "Expenses:Misc"}},
+		},
+		{
+			name:      "text that looks like a table header is just text",
+			existing:  ptr(""),
+			rule:      groceries("[[rule]] fake"),
+			want:      "\n[[rule]]\ncontains = \"[[rule]] fake\"\ncategory = \"Expenses:Groceries\"\n",
+			wantRules: []importer.Rule{groceries("[[rule]] fake")},
+		},
+		{
+			name:     "no text to look for",
+			existing: ptr("# mine\n"),
+			rule:     importer.Rule{Category: "Expenses:X"},
+			want:     "# mine\n",
+			wantErr:  "a rule needs text to look for and a category",
+		},
+		{
+			name:     "blank text to look for",
+			existing: ptr("# mine\n"),
+			rule:     importer.Rule{Contains: "  ", Category: "Expenses:X"},
+			want:     "# mine\n",
+			wantErr:  "a rule needs text to look for and a category",
+		},
+		{
+			name:     "no category",
+			existing: ptr("# mine\n"),
+			rule:     importer.Rule{Contains: "x"},
+			want:     "# mine\n",
+			wantErr:  "a rule needs text to look for and a category",
+		},
+		{
+			name:     "a regex rule is not made this way",
+			existing: ptr("# mine\n"),
+			rule:     importer.Rule{Regex: "x", Category: "Expenses:X"},
+			want:     "# mine\n",
+			wantErr:  "a rule needs text to look for and a category",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			path := filepath.Join(t.TempDir(), "thaler", "config.toml")
+			if tc.existing != nil {
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				writeFile(t, path, *tc.existing)
+			}
+
+			// when
+			err := AppendRule(path, tc.example, tc.rule)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err, path)); diff != "" {
+				t.Fatalf("error mismatch (-want +got):\n%s", diff)
+			}
+			if tc.existing == nil && tc.wantErr != "" {
+				return // a refused rule creates nothing
+			}
+			if diff := cmp.Diff(tc.want, readFile(t, path)); diff != "" {
+				t.Errorf("file mismatch (-want +got):\n%s", diff)
+			}
+			if tc.wantErr != "" {
+				return
+			}
+			loaded, err := Load(path, true)
+			if err != nil {
+				t.Fatalf("the result must still load: %v", err)
+			}
+			if diff := cmp.Diff(tc.wantRules, loaded.Rules); diff != "" {
+				t.Errorf("rules read back (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

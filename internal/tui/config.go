@@ -23,12 +23,13 @@ func (m *Model) editConfig() tea.Cmd {
 		m.setStatus("no config file location is known", true)
 		return nil
 	}
-	if err := config.Ensure(m.opts.ConfigPath, m.opts.ConfigTemplate); err != nil {
+	// Find the editor first: with none, nothing should be created.
+	cmd, err := editorCommand(os.Getenv, exec.LookPath, m.opts.ConfigPath)
+	if err != nil {
 		m.setStatus(err.Error(), true)
 		return nil
 	}
-	cmd, err := editorCommand(os.Getenv, exec.LookPath, m.opts.ConfigPath)
-	if err != nil {
+	if err := config.Ensure(m.opts.ConfigPath, m.opts.ConfigTemplate); err != nil {
 		m.setStatus(err.Error(), true)
 		return nil
 	}

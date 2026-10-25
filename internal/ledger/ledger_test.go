@@ -2,99 +2,18 @@ package ledger
 
 import (
 	"math/big"
-	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-func TestParseAmount(t *testing.T) {
-	ok := []struct {
-		in   string
-		cur  Currency
-		sep  byte
-		want int64
-	}{
-		{"12.50", "EUR", 0, 1250},
-		{"-12,50", "EUR", 0, -1250},
-		{"1.234,56", "EUR", 0, 123456},
-		{"1,234.56", "EUR", 0, 123456},
-		{"1.234.567", "EUR", 0, 123456700},
-		{"+3", "EUR", 0, 300},
-		{"−5.5", "EUR", 0, -550},
-		{".5", "EUR", 0, 50},
-		{"12.500", "EUR", 0, 1250},
-		{"1 000,50", "EUR", 0, 100050},
-		{"1000", "JPY", 0, 1000},
-		{"2.450,00", "EUR", ',', 245000},
-		{"2,450.00", "MXN", '.', 245000},
-		{"-0", "USD", 0, 0},
-		{"1.5", "KWD", 0, 1500},
+// errText is the message of err, or "" for nil, so that a failure is compared
+// by what it says.
+func errText(err error) string {
+	if err == nil {
+		return ""
 	}
-	for _, tc := range ok {
-		got, err := ParseAmount(tc.in, tc.cur, tc.sep)
-		if err != nil {
-			t.Errorf("ParseAmount(%q): unexpected error %v", tc.in, err)
-			continue
-		}
-		if got.Minor != tc.want || got.Currency != tc.cur {
-			t.Errorf("ParseAmount(%q) = %+v, want %d %s", tc.in, got, tc.want, tc.cur)
-		}
-	}
-
-	bad := []struct {
-		in  string
-		cur Currency
-		sep byte
-	}{
-		{"", "EUR", 0},
-		{"abc", "EUR", 0},
-		{"-", "EUR", 0},
-		{"--5", "EUR", 0},
-		{"1,234", "EUR", 0},   // ambiguous: would be 3 decimals
-		{"12.345", "EUR", 0},  // too many decimals
-		{"1,2,3", "EUR", ','}, // two decimal separators
-		{"12.5.5", "EUR", 0},  // inconsistent grouping
-		{"12.5", "EUR", ','},  // '.' as thousands separator must group in threes
-		{"1.2345,00", "EUR", ','},
-		{"1.50", "JPY", 0},
-		{"99999999999999999999", "EUR", 0},
-	}
-	for _, tc := range bad {
-		if got, err := ParseAmount(tc.in, tc.cur, tc.sep); err == nil {
-			t.Errorf("ParseAmount(%q, %s, %q) = %+v, want error", tc.in, tc.cur, tc.sep, got)
-		}
-	}
-}
-
-func TestMoneyDecimal(t *testing.T) {
-	cases := []struct {
-		m    Money
-		want string
-	}{
-		{Money{-1250, "EUR"}, "-12.50"},
-		{Money{5, "EUR"}, "0.05"},
-		{Money{-5, "USD"}, "-0.05"},
-		{Money{0, "MXN"}, "0.00"},
-		{Money{1234, "JPY"}, "1234"},
-		{Money{1500, "KWD"}, "1.500"},
-	}
-	for _, tc := range cases {
-		if got := tc.m.Decimal(); got != tc.want {
-			t.Errorf("%+v.Decimal() = %q, want %q", tc.m, got, tc.want)
-		}
-	}
-	if got := (Money{-1250, "EUR"}).String(); got != "-12.50 EUR" {
-		t.Errorf("String() = %q", got)
-	}
-}
-
-func TestMoneyAdd(t *testing.T) {
-	sum, err := Money{100, "EUR"}.Add(Money{-30, "EUR"})
-	if err != nil || sum.Minor != 70 {
-		t.Fatalf("Add = %+v, %v", sum, err)
-	}
-	if _, err := (Money{1, "EUR"}).Add(Money{1, "USD"}); err == nil {
-		t.Fatal("expected currency mismatch error")
-	}
+	return err.Error()
 }
 
 func mustRate(t *testing.T, s string) *big.Rat {
@@ -106,142 +25,493 @@ func mustRate(t *testing.T, s string) *big.Rat {
 	return r
 }
 
-func TestConvert(t *testing.T) {
-	cases := []struct {
+func Test_ParseAmount(t *testing.T) {
+	tcs := []struct {
+		name    string
+		in      string
+		cur     Currency
+		sep     byte
+		want    Money
+		wantErr string
+	}{
+		{name: "plain", in: "12.50", cur: "EUR", want: Money{1250, "EUR"}},
+		{name: "comma decimal and sign", in: "-12,50", cur: "EUR", want: Money{-1250, "EUR"}},
+		{name: "german grouping", in: "1.234,56", cur: "EUR", want: Money{123456, "EUR"}},
+		{name: "english grouping", in: "1,234.56", cur: "EUR", want: Money{123456, "EUR"}},
+		{name: "grouping without decimals", in: "1.234.567", cur: "EUR", want: Money{123456700, "EUR"}},
+		{name: "explicit plus", in: "+3", cur: "EUR", want: Money{300, "EUR"}},
+		{name: "unicode minus", in: "−5.5", cur: "EUR", want: Money{-550, "EUR"}},
+		{name: "no integer part", in: ".5", cur: "EUR", want: Money{50, "EUR"}},
+		{name: "trailing zero beyond the exponent", in: "12.500", cur: "EUR", want: Money{1250, "EUR"}},
+		{name: "space as thousands separator", in: "1 000,50", cur: "EUR", want: Money{100050, "EUR"}},
+		{name: "currency without decimals", in: "1000", cur: "JPY", want: Money{1000, "JPY"}},
+		{name: "forced comma decimal", in: "2.450,00", cur: "EUR", sep: ',', want: Money{245000, "EUR"}},
+		{name: "forced dot decimal", in: "2,450.00", cur: "MXN", sep: '.', want: Money{245000, "MXN"}},
+		{name: "negative zero", in: "-0", cur: "USD", want: Money{0, "USD"}},
+		{name: "three decimals", in: "1.5", cur: "KWD", want: Money{1500, "KWD"}},
+
+		{name: "empty", in: "", cur: "EUR", wantErr: `invalid amount ""`},
+		{name: "letters", in: "abc", cur: "EUR", wantErr: `invalid amount "abc"`},
+		{name: "only a sign", in: "-", cur: "EUR", wantErr: `invalid amount "-"`},
+		{name: "two signs", in: "--5", cur: "EUR", wantErr: `invalid amount "--5"`},
+		{name: "ambiguous comma", in: "1,234", cur: "EUR", wantErr: `invalid amount "1,234": EUR has at most 2 decimal places`},
+		{name: "too many decimals", in: "12.345", cur: "EUR", wantErr: `invalid amount "12.345": EUR has at most 2 decimal places`},
+		{name: "two decimal separators", in: "1,2,3", cur: "EUR", sep: ',', wantErr: `invalid amount "1,2,3": more than one decimal separator`},
+		{name: "inconsistent grouping", in: "12.5.5", cur: "EUR", wantErr: `invalid amount "12.5.5": inconsistent thousands separators`},
+		{name: "dot as thousands must group in threes", in: "12.5", cur: "EUR", sep: ',', wantErr: `invalid amount "12.5": inconsistent thousands separators`},
+		{name: "four digits after a thousands separator", in: "1.2345,00", cur: "EUR", sep: ',', wantErr: `invalid amount "1.2345,00": inconsistent thousands separators`},
+		{name: "decimals in a currency without any", in: "1.50", cur: "JPY", wantErr: `invalid amount "1.50": JPY has at most 0 decimal places`},
+		{name: "overflow", in: "99999999999999999999", cur: "EUR", wantErr: `amount "99999999999999999999" is too large`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in, tc.cur and tc.sep
+
+			// when
+			got, err := ParseAmount(tc.in, tc.cur, tc.sep)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("amount mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Money_Decimal(t *testing.T) {
+	tcs := []struct {
+		name string
+		m    Money
+		want string
+	}{
+		{name: "negative", m: Money{-1250, "EUR"}, want: "-12.50"},
+		{name: "cents only", m: Money{5, "EUR"}, want: "0.05"},
+		{name: "negative cents only", m: Money{-5, "USD"}, want: "-0.05"},
+		{name: "zero", m: Money{0, "MXN"}, want: "0.00"},
+		{name: "no decimals", m: Money{1234, "JPY"}, want: "1234"},
+		{name: "three decimals", m: Money{1500, "KWD"}, want: "1.500"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.m
+
+			// when
+			got := tc.m.Decimal()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Money_String(t *testing.T) {
+	tcs := []struct {
+		name string
+		m    Money
+		want string
+	}{
+		{name: "negative", m: Money{-1250, "EUR"}, want: "-12.50 EUR"},
+		{name: "positive", m: Money{5, "USD"}, want: "0.05 USD"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.m
+
+			// when
+			got := tc.m.String()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Money_Add(t *testing.T) {
+	tcs := []struct {
+		name    string
+		a, b    Money
+		want    Money
+		wantErr string
+	}{
+		{name: "same currency", a: Money{100, "EUR"}, b: Money{-30, "EUR"}, want: Money{70, "EUR"}},
+		{name: "different currencies", a: Money{1, "EUR"}, b: Money{1, "USD"}, wantErr: "currency mismatch: EUR vs USD"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.a and tc.b
+
+			// when
+			got, err := tc.a.Add(tc.b)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("sum mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Convert(t *testing.T) {
+	tcs := []struct {
+		name string
 		m    Money
 		to   Currency
 		rate string
-		want int64
+		want Money
 	}{
-		{Money{10000, "EUR"}, "USD", "1.0850", 10850},
-		{Money{1, "EUR"}, "USD", "0.5", 1},   // half rounds away from zero
-		{Money{-1, "EUR"}, "USD", "0.5", -1}, // ... in both directions
-		{Money{1, "EUR"}, "USD", "0.49", 0},
-		{Money{1000, "EUR"}, "JPY", "160", 1600}, // 10.00 EUR -> 1600 JPY
-		{Money{1000, "USD"}, "MXN", "18.5", 18500},
+		{name: "euro to dollar", m: Money{10000, "EUR"}, to: "USD", rate: "1.0850", want: Money{10850, "USD"}},
+		{name: "half rounds away from zero", m: Money{1, "EUR"}, to: "USD", rate: "0.5", want: Money{1, "USD"}},
+		{name: "half rounds away from zero when negative", m: Money{-1, "EUR"}, to: "USD", rate: "0.5", want: Money{-1, "USD"}},
+		{name: "below half rounds down", m: Money{1, "EUR"}, to: "USD", rate: "0.49", want: Money{0, "USD"}},
+		{name: "into a currency without decimals", m: Money{1000, "EUR"}, to: "JPY", rate: "160", want: Money{1600, "JPY"}},
+		{name: "between two decimal currencies", m: Money{1000, "USD"}, to: "MXN", rate: "18.5", want: Money{18500, "MXN"}},
+		{name: "same currency ignores the rate", m: Money{42, "EUR"}, to: "EUR", rate: "2", want: Money{42, "EUR"}},
 	}
-	for _, tc := range cases {
-		got := Convert(tc.m, tc.to, mustRate(t, tc.rate))
-		if got.Minor != tc.want || got.Currency != tc.to {
-			t.Errorf("Convert(%v -> %s @ %s) = %v, want %d", tc.m, tc.to, tc.rate, got, tc.want)
-		}
-	}
-	same := Convert(Money{42, "EUR"}, "EUR", mustRate(t, "2"))
-	if same.Minor != 42 {
-		t.Errorf("same-currency convert changed the amount: %v", same)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			rate := mustRate(t, tc.rate)
+
+			// when
+			got := Convert(tc.m, tc.to, rate)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestParseRate(t *testing.T) {
-	if _, norm, err := ParseRate(" 1,0850 "); err != nil || norm != "1.0850" {
-		t.Errorf("ParseRate comma: %q, %v", norm, err)
+func Test_ParseRate(t *testing.T) {
+	type parsed struct {
+		Rat        string // the exact value, as a fraction
+		Normalized string
 	}
-	for _, in := range []string{"", "0", "-1", "abc", "1.2.3", "1e3", "."} {
-		if _, _, err := ParseRate(in); err == nil {
-			t.Errorf("ParseRate(%q): expected error", in)
-		}
+	tcs := []struct {
+		name    string
+		in      string
+		want    parsed
+		wantErr string
+	}{
+		{name: "comma and spaces", in: " 1,0850 ", want: parsed{"217/200", "1.0850"}},
+		{name: "plain", in: "0.92", want: parsed{"23/25", "0.92"}},
+		{name: "integer", in: "160", want: parsed{"160", "160"}},
+		{name: "empty", in: "", wantErr: `invalid rate "": use a positive decimal number such as 0.92`},
+		{name: "zero", in: "0", wantErr: `invalid rate "0": must be greater than zero`},
+		{name: "negative", in: "-1", wantErr: `invalid rate "-1": use a positive decimal number such as 0.92`},
+		{name: "letters", in: "abc", wantErr: `invalid rate "abc": use a positive decimal number such as 0.92`},
+		{name: "two dots", in: "1.2.3", wantErr: `invalid rate "1.2.3": use a positive decimal number such as 0.92`},
+		{name: "exponent", in: "1e3", wantErr: `invalid rate "1e3": use a positive decimal number such as 0.92`},
+		{name: "only a dot", in: ".", wantErr: `invalid rate ".": use a positive decimal number such as 0.92`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			rat, normalized, err := ParseRate(tc.in)
+
+			// then
+			var got parsed
+			if rat != nil {
+				got = parsed{rat.RatString(), normalized}
+			}
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("rate mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestRateBook(t *testing.T) {
-	book := NewRateBook([]RateEntry{
+func testRateBook(t *testing.T) *RateBook {
+	t.Helper()
+	return NewRateBook([]RateEntry{
 		{"2026-01-01", "USD", "EUR", mustRate(t, "0.90")},
 		{"2026-10-01", "USD", "EUR", mustRate(t, "0.92")},
 		{"2026-09-01", "MXN", "EUR", mustRate(t, "0.05")},
 	})
+}
 
-	check := func(from, to Currency, date string, want *big.Rat) {
-		t.Helper()
-		got, ok := book.Lookup(from, to, date)
-		if want == nil {
+func Test_RateBook_Lookup(t *testing.T) {
+	type found struct {
+		Rat string // as a fraction, "" when there is none
+		OK  bool
+	}
+	tcs := []struct {
+		name     string
+		from, to Currency
+		date     string
+		want     found
+	}{
+		{name: "latest entry on or before", from: "USD", to: "EUR", date: "2026-10-21", want: found{"23/25", true}},
+		{name: "an older entry applies earlier", from: "USD", to: "EUR", date: "2026-06-01", want: found{"9/10", true}},
+		{name: "before any entry", from: "USD", to: "EUR", date: "2025-12-31", want: found{}},
+		{name: "inverse", from: "EUR", to: "USD", date: "2026-10-21", want: found{"25/23", true}},
+		{name: "via the euro", from: "USD", to: "MXN", date: "2026-10-21", want: found{"92/5", true}},
+		{name: "and back", from: "MXN", to: "USD", date: "2026-10-21", want: found{"5/92", true}},
+		{name: "identity needs no entry", from: "USD", to: "USD", date: "2020-01-01", want: found{"1", true}},
+		{name: "unknown currency", from: "USD", to: "GBP", date: "2026-10-21", want: found{}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			book := testRateBook(t)
+
+			// when
+			rat, ok := book.Lookup(tc.from, tc.to, tc.date)
+
+			// then
+			got := found{OK: ok}
 			if ok {
-				t.Errorf("Lookup(%s,%s,%s) = %v, want not found", from, to, date, got)
+				got.Rat = rat.RatString()
 			}
-			return
-		}
-		if !ok || got.Cmp(want) != 0 {
-			t.Errorf("Lookup(%s,%s,%s) = %v (%v), want %v", from, to, date, got, ok, want)
-		}
-	}
-
-	check("USD", "EUR", "2026-10-21", big.NewRat(23, 25)) // latest entry on or before
-	check("USD", "EUR", "2026-06-01", big.NewRat(9, 10))  // older entry applies earlier
-	check("USD", "EUR", "2025-12-31", nil)                // before any entry
-	check("EUR", "USD", "2026-10-21", big.NewRat(25, 23)) // inverse
-	check("USD", "MXN", "2026-10-21", big.NewRat(92, 5))  // via EUR: 0.92 * (1/0.05)
-	check("MXN", "USD", "2026-10-21", big.NewRat(5, 92))  // and back
-	check("USD", "USD", "2020-01-01", big.NewRat(1, 1))   // identity needs no entry
-	check("USD", "GBP", "2026-10-21", nil)                // unknown currency
-
-	got, ok := book.Convert(Money{10000, "USD"}, "EUR", "2026-10-21")
-	if !ok || got.Minor != 9200 {
-		t.Errorf("Convert = %v, %v", got, ok)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestCheckBalanced(t *testing.T) {
-	good := [][]Posting{
-		{{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1250, "EUR"}}},
-		{{"Assets:Bank", Money{-10000, "EUR"}}, {"Equity:Conversions", Money{10000, "EUR"}},
-			{"Equity:Conversions", Money{-10850, "USD"}}, {"Assets:Cash", Money{10850, "USD"}}},
-		{{"Assets:Bank", Money{-1000, "EUR"}}, {"Expenses:A", Money{600, "EUR"}}, {"Expenses:B", Money{400, "EUR"}}},
-		{{"Assets:Bank", Money{0, "EUR"}}, {"Expenses:Uncategorized", Money{0, "EUR"}}}, // bank verification charge
+func Test_RateBook_Convert(t *testing.T) {
+	type converted struct {
+		Money Money
+		OK    bool
 	}
-	for i, ps := range good {
-		if err := CheckBalanced(ps); err != nil {
-			t.Errorf("good[%d]: %v", i, err)
-		}
+	tcs := []struct {
+		name string
+		m    Money
+		to   Currency
+		date string
+		want converted
+	}{
+		{name: "with the latest rate", m: Money{10000, "USD"}, to: "EUR", date: "2026-10-21", want: converted{Money{9200, "EUR"}, true}},
+		{name: "with an older rate", m: Money{10000, "USD"}, to: "EUR", date: "2026-06-01", want: converted{Money{9000, "EUR"}, true}},
+		{name: "no rate known", m: Money{10000, "USD"}, to: "GBP", date: "2026-10-21", want: converted{}},
 	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			book := testRateBook(t)
 
-	bad := map[string][]Posting{
-		"one posting":                         {{"Assets:Bank", Money{100, "EUR"}}},
-		"unbalanced":                          {{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1200, "EUR"}}},
-		"mixed currencies without conversion": {{"Assets:Bank", Money{-1000, "EUR"}}, {"Assets:Cash", Money{1000, "USD"}}},
-		"no currency":                         {{"Assets:Bank", Money{-1, ""}}, {"Expenses:Food", Money{1, ""}}},
-		"no account":                          {{"", Money{-1, "EUR"}}, {"Expenses:Food", Money{1, "EUR"}}},
-	}
-	for name, ps := range bad {
-		if err := CheckBalanced(ps); err == nil {
-			t.Errorf("%s: expected error", name)
-		}
-	}
+			// when
+			m, ok := book.Convert(tc.m, tc.to, tc.date)
 
-	err := CheckBalanced(bad["unbalanced"])
-	if err == nil || !strings.Contains(err.Error(), "EUR is off by -0.50") {
-		t.Errorf("error should name the currency and the difference, got %v", err)
+			// then
+			if diff := cmp.Diff(tc.want, converted{m, ok}); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestAccountNames(t *testing.T) {
-	for _, n := range []string{"Assets:Sparkasse", "Assets:Cash-USD", "Expenses:Groceries:Bio_Markt", "Equity:Conversions", "Income:Gehalt", "Expenses:Bäckerei"} {
-		if err := ValidateAccountName(n); err != nil {
-			t.Errorf("ValidateAccountName(%q): %v", n, err)
-		}
+func Test_CheckBalanced(t *testing.T) {
+	tcs := []struct {
+		name     string
+		postings []Posting
+		wantErr  string
+	}{
+		{
+			name:     "an expense",
+			postings: []Posting{{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1250, "EUR"}}},
+		},
+		{
+			name: "a conversion balances each currency on its own",
+			postings: []Posting{
+				{"Assets:Bank", Money{-10000, "EUR"}}, {"Equity:Conversions", Money{10000, "EUR"}},
+				{"Equity:Conversions", Money{-10850, "USD"}}, {"Assets:Cash", Money{10850, "USD"}},
+			},
+		},
+		{
+			name:     "a split",
+			postings: []Posting{{"Assets:Bank", Money{-1000, "EUR"}}, {"Expenses:A", Money{600, "EUR"}}, {"Expenses:B", Money{400, "EUR"}}},
+		},
+		{
+			name:     "a bank verification charge of zero",
+			postings: []Posting{{"Assets:Bank", Money{0, "EUR"}}, {"Expenses:Uncategorized", Money{0, "EUR"}}},
+		},
+		{
+			name:     "one posting",
+			postings: []Posting{{"Assets:Bank", Money{100, "EUR"}}},
+			wantErr:  "a transaction needs at least two postings",
+		},
+		{
+			name:     "unbalanced",
+			postings: []Posting{{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1200, "EUR"}}},
+			wantErr:  "postings do not balance: EUR is off by -0.50",
+		},
+		{
+			name:     "mixed currencies without a conversion",
+			postings: []Posting{{"Assets:Bank", Money{-1000, "EUR"}}, {"Assets:Cash", Money{1000, "USD"}}},
+			wantErr:  "postings do not balance: EUR is off by -10.00, USD is off by 10.00",
+		},
+		{
+			name:     "no currency",
+			postings: []Posting{{"Assets:Bank", Money{-1, ""}}, {"Expenses:Food", Money{1, ""}}},
+			wantErr:  "posting to Assets:Bank has no currency",
+		},
+		{
+			name:     "no account",
+			postings: []Posting{{"", Money{-1, "EUR"}}, {"Expenses:Food", Money{1, "EUR"}}},
+			wantErr:  "posting without an account",
+		},
 	}
-	for _, n := range []string{"", "Sparkasse", "assets:bank", "Assets:", "Assets::Bank", "Assets:Bank Account", "Expenses:Food&Drink", "Assets:-Bank"} {
-		if err := ValidateAccountName(n); err == nil {
-			t.Errorf("ValidateAccountName(%q): expected error", n)
-		}
-	}
-	typ, err := TypeOf("Liabilities:Visa")
-	if err != nil || typ != Liabilities || !typ.NeedsCurrency() {
-		t.Errorf("TypeOf = %v, %v", typ, err)
-	}
-	if Expenses.NeedsCurrency() {
-		t.Error("expense accounts must be multi-currency")
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.postings
+
+			// when
+			err := CheckBalanced(tc.postings)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestParseDate(t *testing.T) {
-	for _, in := range []string{"2026-10-21", "21.10.2026", " 2026-10-21 "} {
-		d, err := ParseDate(in)
-		if err != nil || d.Format(DateLayout) != "2026-10-21" {
-			t.Errorf("ParseDate(%q) = %v, %v", in, d, err)
-		}
+func Test_ValidateAccountName(t *testing.T) {
+	const noType = ` must start with one of Assets, Liabilities, Income, Expenses, Equity`
+	tcs := []struct {
+		name    string
+		in      string
+		wantErr string
+	}{
+		{name: "a bank", in: "Assets:Sparkasse"},
+		{name: "a dash", in: "Assets:Cash-USD"},
+		{name: "an underscore and a sub-account", in: "Expenses:Groceries:Bio_Markt"},
+		{name: "equity", in: "Equity:Conversions"},
+		{name: "income", in: "Income:Gehalt"},
+		{name: "umlauts", in: "Expenses:Bäckerei"},
+
+		{name: "empty", in: "", wantErr: `account ""` + noType},
+		{name: "no type", in: "Sparkasse", wantErr: `account "Sparkasse"` + noType},
+		{name: "lower case type", in: "assets:bank", wantErr: `account "assets:bank"` + noType},
+		{name: "empty last segment", in: "Assets:", wantErr: `account "Assets:" has an empty segment`},
+		{name: "empty middle segment", in: "Assets::Bank", wantErr: `account "Assets::Bank" has an empty segment`},
+		{name: "a space", in: "Assets:Bank Account", wantErr: `account "Assets:Bank Account": invalid character ' ' (use letters, digits, '-' and '_')`},
+		{name: "an ampersand", in: "Expenses:Food&Drink", wantErr: `account "Expenses:Food&Drink": invalid character '&' (use letters, digits, '-' and '_')`},
+		{name: "a leading dash", in: "Assets:-Bank", wantErr: `account "Assets:-Bank": invalid character '-' (use letters, digits, '-' and '_')`},
 	}
-	for _, in := range []string{"", "21/10/2026", "2026-13-01", "yesterday"} {
-		if _, err := ParseDate(in); err == nil {
-			t.Errorf("ParseDate(%q): expected error", in)
-		}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			err := ValidateAccountName(tc.in)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_TypeOf(t *testing.T) {
+	tcs := []struct {
+		name    string
+		in      string
+		want    AccountType
+		wantErr string
+	}{
+		{name: "liabilities", in: "Liabilities:Visa", want: Liabilities},
+		{name: "assets", in: "Assets:Bank", want: Assets},
+		{name: "a bare type", in: "Expenses", want: Expenses},
+		{name: "unknown type", in: "Visa:x", wantErr: `account "Visa:x" must start with one of Assets, Liabilities, Income, Expenses, Equity`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			got, err := TypeOf(tc.in)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("type mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_AccountType_NeedsCurrency(t *testing.T) {
+	tcs := []struct {
+		typ  AccountType
+		want bool
+	}{
+		{typ: Assets, want: true},
+		{typ: Liabilities, want: true},
+		{typ: Income, want: false},
+		{typ: Expenses, want: false}, // expense accounts must be multi-currency
+		{typ: Equity, want: false},
+	}
+	for _, tc := range tcs {
+		t.Run(string(tc.typ), func(t *testing.T) {
+			// given tc.typ
+
+			// when
+			got := tc.typ.NeedsCurrency()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ParseDate(t *testing.T) {
+	const hint = `: use YYYY-MM-DD or DD.MM.YYYY`
+	tcs := []struct {
+		name    string
+		in      string
+		want    string // the day, as YYYY-MM-DD
+		wantErr string
+	}{
+		{name: "iso", in: "2026-10-21", want: "2026-10-21"},
+		{name: "german", in: "21.10.2026", want: "2026-10-21"},
+		{name: "surrounding spaces", in: " 2026-10-21 ", want: "2026-10-21"},
+		{name: "empty", in: "", wantErr: `invalid date ""` + hint},
+		{name: "slashes", in: "21/10/2026", wantErr: `invalid date "21/10/2026"` + hint},
+		{name: "month 13", in: "2026-13-01", wantErr: `invalid date "2026-13-01"` + hint},
+		{name: "a word", in: "yesterday", wantErr: `invalid date "yesterday"` + hint},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			d, err := ParseDate(tc.in)
+
+			// then
+			got := ""
+			if err == nil {
+				got = d.Format(DateLayout)
+			}
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("date mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

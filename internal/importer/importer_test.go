@@ -1,81 +1,57 @@
 package importer
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-func openSample(t *testing.T) *os.File {
-	t.Helper()
-	f, err := os.Open("testdata/sparkasse_camt_sample.csv")
-	if err != nil {
-		t.Fatal(err)
+func errText(err error) string {
+	if err == nil {
+		return ""
 	}
-	t.Cleanup(func() { f.Close() })
-	return f
+	return err.Error()
 }
 
-func TestParseSparkasseSample(t *testing.T) {
-	res, err := Parse(openSample(t), Sparkasse, "EUR")
+func day(s string) time.Time {
+	d, err := ledger.ParseDate(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
+func eur(minor int64) ledger.Money { return ledger.Money{Minor: minor, Currency: "EUR"} }
+
+// rowErrors compares a RowError by its line and message: the error inside is
+// an opaque value.
+var rowErrors = cmp.Transformer("RowError", func(e RowError) struct {
+	Line    int
+	Message string
+} {
+	return struct {
+		Line    int
+		Message string
+	}{e.Line, errText(e.Err)}
+})
+
+func readSample(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/sparkasse_camt_sample.csv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Errors) != 0 {
-		t.Fatalf("unexpected row errors: %v", res.Errors)
-	}
-	if res.Skipped != 1 {
-		t.Errorf("Skipped = %d, want 1 (the pending REWE booking)", res.Skipped)
-	}
-	if len(res.Rows) != 5 {
-		t.Fatalf("got %d rows, want 5", len(res.Rows))
-	}
-
-	salary := res.Rows[0]
-	if salary.Amount.Minor != 245000 || salary.Amount.Currency != "EUR" {
-		t.Errorf("salary amount = %v", salary.Amount)
-	}
-	if salary.Date.Format(ledger.DateLayout) != "2026-10-01" {
-		t.Errorf("two-digit year parsed as %s", salary.Date.Format(ledger.DateLayout))
-	}
-	if salary.Payee != "Muster GmbH" || salary.IBAN != "DE00123456780000000000" {
-		t.Errorf("salary payee/iban = %q / %q", salary.Payee, salary.IBAN)
-	}
-
-	bakery := res.Rows[1]
-	if bakery.Payee != "Bäckerei Schmidt" || bakery.Amount.Minor != -320 {
-		t.Errorf("bakery = %+v", bakery)
-	}
-	if strings.Contains(bakery.Purpose, "  ") {
-		t.Errorf("purpose whitespace not collapsed: %q", bakery.Purpose)
-	}
-
-	rent := res.Rows[3]
-	if rent.Amount.Minor != -115000 {
-		t.Errorf("rent amount = %v, want -1150.00 (thousands separator)", rent.Amount)
-	}
-
-	fee := res.Rows[4]
-	if fee.Date.Format(ledger.DateLayout) != "2026-10-07" {
-		t.Errorf("four-digit year parsed as %s", fee.Date.Format(ledger.DateLayout))
-	}
-	if fee.Payee != "ENTGELTABSCHLUSS" {
-		t.Errorf("empty payee should fall back to booking text, got %q", fee.Payee)
-	}
-
-	var sum int64
-	for _, r := range res.Rows {
-		sum += r.Amount.Minor
-	}
-	if sum != 128870 {
-		t.Errorf("sum of rows = %d, want 128870", sum)
-	}
+	return string(raw)
 }
 
 // cp1252 encodes s the way an old banking export would.
-func cp1252(t *testing.T, s string) []byte {
+func cp1252(t *testing.T, s string) string {
 	t.Helper()
 	var out []byte
 	for _, r := range s {
@@ -88,230 +64,359 @@ func cp1252(t *testing.T, s string) []byte {
 			t.Fatalf("test helper cannot encode %q", r)
 		}
 	}
-	return out
+	return string(out)
 }
 
-func TestParseWindows1252(t *testing.T) {
-	raw, err := os.ReadFile("testdata/sparkasse_camt_sample.csv")
-	if err != nil {
-		t.Fatal(err)
+// sampleRows is what testdata/sparkasse_camt_sample.csv holds: five booked rows
+// (the sixth is pending). Two of them are identical bakery bookings.
+func sampleRows() []Row {
+	bakery := Row{
+		Date: day("2026-10-02"), Payee: "Bäckerei Schmidt", BookingText: "KARTENZAHLUNG", Amount: eur(-320),
+		Purpose: "Baeckerei Schmidt//Hamburg/DE 2026-10-01T07:45:10 KFN 1 VJ 2912", // whitespace collapsed
 	}
-	encoded := cp1252(t, string(raw))
-	if string(encoded) == string(raw) {
-		t.Fatal("test file should contain non-ASCII characters")
-	}
-	res, err := Parse(strings.NewReader(string(encoded)), Sparkasse, "EUR")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Rows) != 5 || res.Rows[1].Payee != "Bäckerei Schmidt" {
-		t.Errorf("Windows-1252 file decoded wrongly: %d rows, payee %q", len(res.Rows), res.Rows[1].Payee)
-	}
-
-	// An explicit utf-8 profile must reject the same bytes instead of guessing.
-	p := Sparkasse
-	p.Encoding = "utf-8"
-	if _, err := Parse(strings.NewReader(string(encoded)), p, "EUR"); err == nil {
-		t.Error("expected an error for invalid UTF-8 when encoding is utf-8")
+	salary := Row{Line: 2, Date: day("2026-10-01"), Payee: "Muster GmbH", Purpose: "Gehalt Oktober 2026", IBAN: "DE00123456780000000000", BookingText: "GEHALT/RENTE", Amount: eur(245000)}
+	first, second := bakery, bakery
+	first.Line, second.Line = 3, 4
+	return []Row{
+		salary, first, second,
+		{Line: 5, Date: day("2026-10-05"), Payee: "Hausverwaltung Nord", Purpose: "Miete Oktober", IBAN: "DE00987654320000000000", BookingText: "LASTSCHRIFT", Amount: eur(-115000)}, // 1.150,00: a thousands separator
+		{Line: 7, Date: day("2026-10-07"), Payee: "ENTGELTABSCHLUSS", Purpose: "Abrechnung 30.09.2026 Entgelte", BookingText: "ENTGELTABSCHLUSS", Amount: eur(-490)},                 // no payee: the booking text; four-digit year
 	}
 }
 
-func TestParseHandlesBOMAndMissingColumns(t *testing.T) {
-	withBOM := "\ufeff" + `"Buchungstag";"Beguenstigter/Zahlungspflichtiger";"Betrag"` + "\n" + `"01.02.26";"Test";"1,50"` + "\n"
-	res, err := Parse(strings.NewReader(withBOM), Sparkasse, "EUR")
-	if err != nil {
-		t.Fatal(err)
+func Test_Parse(t *testing.T) {
+	utf8Only := Sparkasse
+	utf8Only.Encoding = "utf-8"
+	mybank := Profile{
+		Name: "mybank", Delimiter: ",", Encoding: "utf-8", DecimalSep: ".", DateFormats: []string{"YYYY-MM-DD"},
+		Columns:    Columns{Date: []string{"Date"}, Payee: []string{"Description"}, Amount: []string{"Amount"}},
+		SkipColumn: "Status", SkipContains: "pending",
 	}
-	if len(res.Rows) != 1 || res.Rows[0].Amount.Minor != 150 || res.Rows[0].Amount.Currency != "EUR" {
-		t.Errorf("rows = %+v (fallback currency should apply without a Waehrung column)", res.Rows)
-	}
+	text := func(s string) func(*testing.T) string { return func(*testing.T) string { return s } }
 
-	_, err = Parse(strings.NewReader(`"Datum";"Text"`+"\n"), Sparkasse, "EUR")
-	if err == nil || !strings.Contains(err.Error(), "does not match") {
-		t.Errorf("expected a profile mismatch error naming the header, got %v", err)
-	}
-	if _, err := Parse(strings.NewReader(""), Sparkasse, "EUR"); err == nil {
-		t.Error("expected an error for an empty file")
-	}
-}
-
-func TestParseReportsBadRows(t *testing.T) {
-	csv := `"Buchungstag";"Betrag";"Waehrung"` + "\n" +
-		`"01.02.26";"1,50";"EUR"` + "\n" +
-		`"31.02.26";"1,50";"EUR"` + "\n" +
-		`"03.02.26";"abc";"EUR"` + "\n" +
-		`"04.02.26";"2,00";"usd"` + "\n"
-	res, err := Parse(strings.NewReader(csv), Sparkasse, "EUR")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Rows) != 2 || len(res.Errors) != 2 {
-		t.Fatalf("rows=%d errors=%d, want 2 and 2: %v", len(res.Rows), len(res.Errors), res.Errors)
-	}
-	if res.Rows[1].Amount.Currency != "USD" {
-		t.Errorf("currency column should win and be upper-cased, got %s", res.Rows[1].Amount.Currency)
-	}
-	if res.Errors[0].Line != 3 || res.Errors[1].Line != 4 {
-		t.Errorf("error lines = %d, %d, want 3 and 4", res.Errors[0].Line, res.Errors[1].Line)
-	}
-}
-
-func TestCustomProfile(t *testing.T) {
-	p := Profile{
-		Name:        "mybank",
-		Delimiter:   ",",
-		Encoding:    "utf-8",
-		DecimalSep:  ".",
-		DateFormats: []string{"YYYY-MM-DD"},
-		Columns: Columns{
-			Date:   []string{"Date"},
-			Payee:  []string{"Description"},
-			Amount: []string{"Amount"},
+	tcs := []struct {
+		name     string
+		input    func(t *testing.T) string
+		profile  Profile
+		fallback ledger.Currency
+		want     ParseResult
+		wantErr  string
+	}{
+		{
+			name:     "the sparkasse sample",
+			input:    func(t *testing.T) string { return readSample(t) },
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1}, // the pending REWE booking
 		},
-		SkipColumn:   "Status",
-		SkipContains: "pending",
+		{
+			name:     "the same sample as a windows-1252 file",
+			input:    func(t *testing.T) string { return cp1252(t, readSample(t)) },
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1},
+		},
+		{
+			name:     "an explicit utf-8 profile refuses windows-1252 bytes instead of guessing",
+			input:    func(t *testing.T) string { return cp1252(t, readSample(t)) },
+			profile:  utf8Only,
+			fallback: "EUR",
+			wantErr:  `file is not valid UTF-8 (try encoding = "windows-1252")`,
+		},
+		{
+			name:     "a byte order mark, and no currency column so the fallback applies",
+			input:    text("\ufeff" + `"Buchungstag";"Beguenstigter/Zahlungspflichtiger";"Betrag"` + "\n" + `"01.02.26";"Test";"1,50"` + "\n"),
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Payee: "Test", Amount: eur(150)}}},
+		},
+		{
+			name: "bad rows are reported and do not stop the others; the currency column wins and is upper-cased",
+			input: text(`"Buchungstag";"Betrag";"Waehrung"` + "\n" +
+				`"01.02.26";"1,50";"EUR"` + "\n" +
+				`"31.02.26";"1,50";"EUR"` + "\n" +
+				`"03.02.26";"abc";"EUR"` + "\n" +
+				`"04.02.26";"2,00";"usd"` + "\n"),
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want: ParseResult{
+				Rows: []Row{
+					{Line: 2, Date: day("2026-02-01"), Amount: eur(150)},
+					{Line: 5, Date: day("2026-02-04"), Amount: ledger.Money{Minor: 200, Currency: "USD"}},
+				},
+				Errors: []RowError{
+					{Line: 3, Err: errors.New(`unrecognised date "31.02.26"`)},
+					{Line: 4, Err: errors.New(`invalid amount "abc"`)},
+				},
+			},
+		},
+		{
+			name:     "a custom profile with its own delimiter, decimal point, date format and skip rule",
+			input:    text("Date,Description,Amount,Status\n2026-03-04,Coffee,\"-3.50\",posted\n2026-03-05,Lunch,-9.00,PENDING\n"),
+			profile:  mybank,
+			fallback: "USD",
+			want: ParseResult{
+				Rows:    []Row{{Line: 2, Date: day("2026-03-04"), Payee: "Coffee", Amount: ledger.Money{Minor: -350, Currency: "USD"}}},
+				Skipped: 1,
+			},
+		},
+		{
+			name:     "a header that is not this bank's names the header it found",
+			input:    text(`"Datum";"Text"` + "\n"),
+			profile:  Sparkasse,
+			fallback: "EUR",
+			wantErr:  `profile "sparkasse" does not match this file: need a date column (Buchungstag) and an amount column (Betrag), but the header is: Datum; Text`,
+		},
+		{
+			name:     "an empty file",
+			input:    text(""),
+			profile:  Sparkasse,
+			fallback: "EUR",
+			wantErr:  "file is empty: no header row found",
+		},
+		{
+			name:     "a profile without date and amount columns",
+			input:    text("a,b\n"),
+			profile:  Profile{Name: "broken"},
+			fallback: "EUR",
+			wantErr:  `profile "broken": columns.date and columns.amount are required`,
+		},
 	}
-	csv := "Date,Description,Amount,Status\n2026-03-04,Coffee,\"-3.50\",posted\n2026-03-05,Lunch,-9.00,PENDING\n"
-	res, err := Parse(strings.NewReader(csv), p, "USD")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Rows) != 1 || res.Skipped != 1 || res.Rows[0].Amount.Minor != -350 || res.Rows[0].Amount.Currency != "USD" {
-		t.Errorf("rows=%+v skipped=%d", res.Rows, res.Skipped)
-	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			input := tc.input(t)
 
-	found, err := FindProfile("MyBank", []Profile{p})
-	if err != nil || found.Name != "mybank" {
-		t.Errorf("FindProfile custom: %v, %v", found.Name, err)
-	}
-	if _, err := FindProfile("sparkasse", nil); err != nil {
-		t.Errorf("FindProfile builtin: %v", err)
-	}
-	if _, err := FindProfile("nope", []Profile{p}); err == nil || !strings.Contains(err.Error(), "mybank") {
-		t.Errorf("unknown profile error should list the available ones, got %v", err)
-	}
-	if _, err := Parse(strings.NewReader(csv), Profile{Name: "broken"}, "EUR"); err == nil {
-		t.Error("profile without date/amount columns must be rejected")
+			// when
+			got, err := Parse(strings.NewReader(input), tc.profile, tc.fallback)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Fatalf("error mismatch (-want +got):\n%s", diff)
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.want, *got, rowErrors); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestDeduper(t *testing.T) {
-	res, err := Parse(openSample(t), Sparkasse, "EUR")
-	if err != nil {
-		t.Fatal(err)
+func Test_FindProfile(t *testing.T) {
+	mybank := Profile{Name: "mybank", Delimiter: ","}
+	shadow := Profile{Name: "Sparkasse", Delimiter: ","} // a custom profile takes precedence over the built-in one
+	tcs := []struct {
+		name    string
+		find    string
+		custom  []Profile
+		want    Profile
+		wantErr string
+	}{
+		{name: "custom, any case", find: "MyBank", custom: []Profile{mybank}, want: mybank},
+		{name: "built-in", find: "sparkasse", want: Sparkasse},
+		{name: "built-in, padded and upper-cased", find: "  SPARKASSE ", want: Sparkasse},
+		{name: "custom shadows built-in", find: "sparkasse", custom: []Profile{shadow}, want: shadow},
+		{name: "unknown lists what exists", find: "nope", custom: []Profile{mybank}, wantErr: `unknown import profile "nope" (available: mybank, sparkasse)`},
+		{name: "unknown without custom profiles", find: "nope", wantErr: `unknown import profile "nope" (available: sparkasse)`},
 	}
-	keys := func(account string) []string {
-		d := NewDeduper(account)
-		var out []string
-		for _, r := range res.Rows {
-			out = append(out, d.Key(r))
-		}
-		return out
-	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.find and tc.custom
 
-	first, again := keys("1"), keys("1")
-	for i := range first {
-		if first[i] != again[i] {
-			t.Errorf("key %d is not stable across runs", i)
-		}
-	}
-	seen := map[string]bool{}
-	for i, k := range first {
-		if seen[k] {
-			t.Errorf("key %d collides: identical bookings must still be distinguishable", i)
-		}
-		seen[k] = true
-	}
-	// Rows 1 and 2 are the two identical bakery bookings.
-	if first[1] == first[2] {
-		t.Error("identical rows in one file must get different keys")
-	}
-	if keys("2")[0] == first[0] {
-		t.Error("the account must be part of the key")
-	}
+			// when
+			got, err := FindProfile(tc.find, tc.custom)
 
-	// Re-importing only the second half of the file (as an overlapping export
-	// would) must reproduce the keys of rows that were already imported when
-	// the overlap starts on a day boundary.
-	d := NewDeduper("1")
-	if got := d.Key(res.Rows[3]); got != first[3] {
-		t.Error("key of a row must not depend on rows from other days")
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("profile mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
-func TestRuleset(t *testing.T) {
+func Test_ProfileNames(t *testing.T) {
+	tcs := []struct {
+		name   string
+		custom []Profile
+		want   []string
+	}{
+		{name: "built-in only", want: []string{"sparkasse"}},
+		{name: "custom ones are added, lower-cased and sorted", custom: []Profile{{Name: "Zeta"}, {Name: "alpha"}}, want: []string{"alpha", "sparkasse", "zeta"}},
+		{name: "a custom profile with a built-in name is listed once", custom: []Profile{{Name: "Sparkasse"}}, want: []string{"sparkasse"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.custom
+
+			// when
+			got := ProfileNames(tc.custom)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The keys are stored in the database, so their format must never change: a
+// different key for the same bank row would make a re-import add it again.
+func Test_Deduper_Key(t *testing.T) {
+	bakery := Row{Date: day("2026-10-02"), Payee: "Bäckerei Schmidt", Purpose: "p", BookingText: "KARTENZAHLUNG", Amount: eur(-320)}
+	rent := Row{Date: day("2026-10-05"), Payee: "Hausverwaltung Nord", Purpose: "Miete Oktober", IBAN: "DE00987654320000000000", BookingText: "LASTSCHRIFT", Amount: eur(-115000)}
+	shouty := bakery
+	shouty.Payee = "  BÄCKEREI   schmidt " // the same booking, spelled differently
+
+	const (
+		bakeryFirst  = "140c1875c2fd0cbfec692128c0130f22d3deb66dd3a29c710fa1a90790f4ab48"
+		bakerySecond = "39de5435079ed1ec96403c8e53f0ac79f77e17ebbea393c4658c6cc85b302516"
+		bakeryThird  = "3959a251bf2fbdef16325883375eccea841c1370dc732f7177d09e62e141f600"
+		rentFirst    = "1faa529de8cc7e0e755ce8b8e304316ce8a74fd98acc5ba6a0a6776efc5d9b59"
+		otherAccount = "279f52270b0e122e8b496d753728027813123181974ae43e9926b487c3e5e36a"
+	)
+	tcs := []struct {
+		name    string
+		account string
+		rows    []Row
+		want    []string
+	}{
+		{name: "a first booking", account: "1", rows: []Row{bakery}, want: []string{bakeryFirst}},
+		{name: "identical bookings in one file are numbered, so they stay two", account: "1", rows: []Row{bakery, bakery, bakery}, want: []string{bakeryFirst, bakerySecond, bakeryThird}},
+		{name: "a row's key does not depend on other days' rows", account: "1", rows: []Row{rent}, want: []string{rentFirst}},
+		{name: "interleaved bookings are numbered independently", account: "1", rows: []Row{bakery, rent, bakery}, want: []string{bakeryFirst, rentFirst, bakerySecond}},
+		{name: "the account is part of the key", account: "2", rows: []Row{bakery}, want: []string{otherAccount}},
+		{name: "case and whitespace do not make a different booking", account: "1", rows: []Row{bakery, shouty}, want: []string{bakeryFirst, bakerySecond}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			d := NewDeduper(tc.account)
+
+			// when
+			var got []string
+			for _, r := range tc.rows {
+				got = append(got, d.Key(r))
+			}
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_NewRuleset(t *testing.T) {
+	tcs := []struct {
+		name    string
+		rules   []Rule
+		wantErr string
+	}{
+		{name: "none"},
+		{name: "contains and regex rules", rules: []Rule{{Contains: "rewe", Category: "Expenses:Groceries"}, {Regex: `^Hausverwaltung`, Category: "Expenses:Rent"}}},
+		{name: "neither contains nor regex", rules: []Rule{{Category: "Expenses:Food"}}, wantErr: "rule 1: set exactly one of contains and regex"},
+		{name: "both contains and regex", rules: []Rule{{Contains: "a", Regex: "b", Category: "Expenses:Food"}}, wantErr: "rule 1: set exactly one of contains and regex"},
+		{name: "blank contains", rules: []Rule{{Contains: "ok", Category: "Expenses:Food"}, {Contains: "  ", Category: "Expenses:Food"}}, wantErr: "rule 2: set exactly one of contains and regex"},
+		{name: "a category that is not an account", rules: []Rule{{Contains: "a", Category: "Food"}}, wantErr: `rule 1: category: account "Food" must start with one of Assets, Liabilities, Income, Expenses, Equity`},
+		{name: "a regex that does not compile", rules: []Rule{{Regex: "(", Category: "Expenses:Food"}}, wantErr: "rule 1: regex: error parsing regexp: missing closing ): `(?i)(`"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.rules
+
+			// when
+			_, err := NewRuleset(tc.rules)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func testRules(t *testing.T) *Ruleset {
+	t.Helper()
 	rs, err := NewRuleset([]Rule{
 		{Contains: "rewe", Category: "Expenses:Groceries"},
-		{Regex: `bäckerei|baeckerei`, Category: "Expenses:Groceries:Bakery"},
+		{Regex: `b(ä|ae)ckerei`, Category: "Expenses:Bakery"},
 		{Contains: "gehalt", Category: "Income:Salary"},
 		{Regex: `^Hausverwaltung`, Category: "Expenses:Rent"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		fields []string
-		want   string
-		ok     bool
-	}{
-		{[]string{"REWE Markt GmbH", "", "KARTENZAHLUNG"}, "Expenses:Groceries", true},
-		{[]string{"Bäckerei Schmidt", "", ""}, "Expenses:Groceries:Bakery", true},
-		{[]string{"Muster GmbH", "Gehalt Oktober", "GEHALT/RENTE"}, "Income:Salary", true},
-		{[]string{"Hausverwaltung Nord", "Miete", ""}, "Expenses:Rent", true},
-		{[]string{"Unknown Shop", "", ""}, "", false},
-	}
-	for _, tc := range cases {
-		got, ok := rs.Match(tc.fields...)
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("Match(%q) = %q, %v; want %q, %v", tc.fields, got, ok, tc.want, tc.ok)
-		}
-	}
-
-	// First match wins: a payee matching two rules takes the earlier one.
-	first, _ := rs.Match("REWE Bäckerei")
-	if first != "Expenses:Groceries" {
-		t.Errorf("rule order not respected, got %q", first)
-	}
-
-	invalid := [][]Rule{
-		{{Category: "Expenses:Food"}},
-		{{Contains: "a", Regex: "b", Category: "Expenses:Food"}},
-		{{Contains: "a", Category: "Food"}},
-		{{Regex: "(", Category: "Expenses:Food"}},
-	}
-	for i, rules := range invalid {
-		if _, err := NewRuleset(rules); err == nil {
-			t.Errorf("invalid[%d]: expected error", i)
-		}
-	}
-}
-
-func TestRulesetFindSaysWhichRule(t *testing.T) {
-	rs, err := NewRuleset([]Rule{
-		{Contains: "rewe", Category: "Expenses:Groceries"},
-		{Regex: "b(ä|ae)ckerei", Category: "Expenses:Bakery"},
 		{Contains: "markt", Category: "Expenses:Other"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
+	return rs
+}
+
+func Test_Ruleset_Match(t *testing.T) {
+	type matched struct {
+		Category string
+		OK       bool
+	}
+	tcs := []struct {
+		name   string
 		fields []string
-		index  int
-		cat    string
-		ok     bool
+		want   matched
 	}{
-		{[]string{"REWE Markt", ""}, 0, "Expenses:Groceries", true}, // rule 0 beats rule 2, which also matches
-		{[]string{"Bäckerei Schulz"}, 1, "Expenses:Bakery", true},
-		{[]string{"Wochenmarkt"}, 2, "Expenses:Other", true},
-		{[]string{"Kino"}, 0, "", false},
-	} {
-		i, cat, ok := rs.Find(tc.fields...)
-		if ok != tc.ok || cat != tc.cat || (ok && i != tc.index) {
-			t.Errorf("Find(%q) = %d, %q, %v; want %d, %q, %v", tc.fields, i, cat, ok, tc.index, tc.cat, tc.ok)
-		}
-		if mc, mok := rs.Match(tc.fields...); mc != tc.cat || mok != tc.ok {
-			t.Errorf("Match(%q) = %q, %v; must agree with Find", tc.fields, mc, mok)
-		}
+		{name: "contains, any case", fields: []string{"REWE Markt GmbH", "", "KARTENZAHLUNG"}, want: matched{"Expenses:Groceries", true}},
+		{name: "a regex with an umlaut", fields: []string{"Bäckerei Schmidt", "", ""}, want: matched{"Expenses:Bakery", true}},
+		{name: "any of the fields", fields: []string{"Muster GmbH", "Gehalt Oktober", "GEHALT/RENTE"}, want: matched{"Income:Salary", true}},
+		{name: "an anchored regex", fields: []string{"Hausverwaltung Nord", "Miete", ""}, want: matched{"Expenses:Rent", true}},
+		{name: "the first matching rule wins", fields: []string{"REWE Bäckerei"}, want: matched{"Expenses:Groceries", true}},
+		{name: "no rule matches", fields: []string{"Unknown Shop", "", ""}, want: matched{}},
+		{name: "no fields", want: matched{}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			rs := testRules(t)
+
+			// when
+			category, ok := rs.Match(tc.fields...)
+
+			// then
+			if diff := cmp.Diff(tc.want, matched{category, ok}); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Ruleset_Find(t *testing.T) {
+	type found struct {
+		Index    int
+		Category string
+		OK       bool
+	}
+	tcs := []struct {
+		name   string
+		fields []string
+		want   found
+	}{
+		{name: "the first rule", fields: []string{"REWE Markt", ""}, want: found{0, "Expenses:Groceries", true}}, // rule 4 also matches
+		{name: "a later rule", fields: []string{"Bäckerei Schulz"}, want: found{1, "Expenses:Bakery", true}},
+		{name: "the last rule", fields: []string{"Wochenmarkt"}, want: found{4, "Expenses:Other", true}},
+		{name: "no rule", fields: []string{"Kino"}, want: found{}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			rs := testRules(t)
+
+			// when
+			index, category, ok := rs.Find(tc.fields...)
+
+			// then
+			if diff := cmp.Diff(tc.want, found{index, category, ok}); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
