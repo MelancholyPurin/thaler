@@ -1046,3 +1046,135 @@ func TestUsers(t *testing.T) {
 		t.Error("an account cannot belong to a user that does not exist")
 	}
 }
+
+// balanceOn is what an account holds at the end of a day, in minor units.
+func balanceOn(t *testing.T, st *Local, account, asOf string) int64 {
+	t.Helper()
+	report, err := st.BalanceReport(ctx, BalanceRequest{AsOf: asOf, IncludeAll: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range report.Lines {
+		if l.Account == account {
+			return l.Amount.Minor
+		}
+	}
+	return 0
+}
+
+func TestSetOpeningBalance(t *testing.T) {
+	st := newLocal(t)
+	mustAccount(t, st, "Assets:Bank", "EUR")
+
+	// A new account with nothing booked: the balance is booked on the given day.
+	res, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: "Assets:Bank", Balance: eur(100000), AsOf: day("2026-01-01")})
+	if err != nil || res.ID == 0 || res.Before != nil || res.Date != "2026-01-01" || res.Amount != eur(100000) {
+		t.Fatalf("first call = %+v, %v", res, err)
+	}
+	if got := balanceOn(t, st, "Assets:Bank", "2026-01-01"); got != 100000 {
+		t.Errorf("balance = %d, want 100000", got)
+	}
+	if got := balanceOn(t, st, ledger.OpeningBalanceAccount, ""); got != -100000 {
+		t.Errorf("%s = %d, want -100000", ledger.OpeningBalanceAccount, got)
+	}
+
+	// Transactions arrive (an import): the balance the bank showed on 1 February
+	// was 500.00, so the opening balance becomes 1000.00, dated before the first.
+	spend(t, st, "2026-01-10", "Expenses:Food", 20000)
+	spend(t, st, "2026-02-01", "Expenses:Food", 30000)
+	spend(t, st, "2026-03-01", "Expenses:Food", 5000) // after the day stated: must not count
+	again, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: "Assets:Bank", Balance: eur(50000), AsOf: day("2026-02-01")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ID != res.ID || again.Amount != eur(100000) || again.Date != "2026-01-09" {
+		t.Errorf("second call = %+v; want the same transaction, 1000.00, on 2026-01-09", again)
+	}
+	if again.Before == nil || again.Before.Date != "2026-01-01" || again.Before.Postings[0].Amount != eur(100000) {
+		t.Errorf("Before = %+v; want the transaction as it was", again.Before)
+	}
+	for asOf, want := range map[string]int64{"2026-01-09": 100000, "2026-02-01": 50000, "2026-03-01": 45000} {
+		if got := balanceOn(t, st, "Assets:Bank", asOf); got != want {
+			t.Errorf("balance on %s = %d, want %d", asOf, got, want)
+		}
+	}
+
+	// Correcting it with a later reading changes the same transaction again.
+	later, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: "Assets:Bank", Balance: eur(40000), AsOf: day("2026-03-01")})
+	if err != nil || later.ID != res.ID || later.Amount != eur(95000) {
+		t.Errorf("third call = %+v, %v; want 950.00 on the same transaction", later, err)
+	}
+	listed, _ := st.ListTransactions(ctx, TxFilter{Account: ledger.OpeningBalanceAccount})
+	if len(listed) != 1 {
+		t.Errorf("%d opening-balance transactions, want 1", len(listed))
+	}
+	if problems, err := st.Check(ctx); err != nil || len(problems) != 0 {
+		t.Errorf("Check = %v, %v", problems, err)
+	}
+}
+
+func TestSetOpeningBalanceNothingToExplain(t *testing.T) {
+	st := newLocal(t)
+	mustAccount(t, st, "Assets:Bank", "EUR")
+	spend(t, st, "2026-01-10", "Expenses:Food", 1000)
+
+	// The booked transactions already add up to -10.00.
+	res, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: "Assets:Bank", Balance: eur(-1000), AsOf: day("2026-01-31")})
+	if err != nil || res.ID != 0 {
+		t.Errorf("result = %+v, %v; want no transaction", res, err)
+	}
+	if listed, _ := st.ListTransactions(ctx, TxFilter{Account: ledger.OpeningBalanceAccount}); len(listed) != 0 {
+		t.Error("an opening balance of zero must not create a transaction")
+	}
+}
+
+func TestSetOpeningBalanceLiability(t *testing.T) {
+	st := newLocal(t)
+	mustAccount(t, st, "Liabilities:Card", "EUR")
+	if _, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: "Liabilities:Card", Balance: eur(-50000), AsOf: day("2026-01-01")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := balanceOn(t, st, "Liabilities:Card", ""); got != -50000 {
+		t.Errorf("card = %d, want -50000 (500.00 owed)", got)
+	}
+	if got := balanceOn(t, st, ledger.OpeningBalanceAccount, ""); got != 50000 {
+		t.Errorf("opening = %d, want 50000", got)
+	}
+}
+
+func TestSetOpeningBalanceRejects(t *testing.T) {
+	st := newLocal(t)
+	mustAccount(t, st, "Assets:Bank", "EUR")
+	mustAccount(t, st, "Income:Salary", "")
+	cases := map[string]OpeningBalanceRequest{
+		"unknown account":  {Account: "Assets:Nope", Balance: eur(1), AsOf: day("2026-01-01")},
+		"category account": {Account: "Income:Salary", Balance: eur(1), AsOf: day("2026-01-01")},
+		"wrong currency":   {Account: "Assets:Bank", Balance: usd(1), AsOf: day("2026-01-01")},
+		"missing date":     {Account: "Assets:Bank", Balance: eur(1)},
+	}
+	for name, req := range cases {
+		if _, err := st.SetOpeningBalance(ctx, req); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	if listed, _ := st.ListTransactions(ctx, TxFilter{}); len(listed) != 0 {
+		t.Error("a refused request must write nothing")
+	}
+	if _, err := st.SetOpeningBalance(ctx, cases["unknown account"]); !errors.Is(err, ErrNoAccount) {
+		t.Errorf("unknown account: err = %v, want ErrNoAccount", err)
+	}
+}
+
+func TestLedgerBalance(t *testing.T) {
+	asset := Account{Type: ledger.Assets}
+	debt := Account{Type: ledger.Liabilities}
+	if got := asset.LedgerBalance(eur(1000)); got != eur(1000) {
+		t.Errorf("asset = %v", got)
+	}
+	if got := asset.LedgerBalance(eur(-1000)); got != eur(-1000) {
+		t.Errorf("overdrawn asset = %v", got)
+	}
+	if got := debt.LedgerBalance(eur(50000)); got != eur(-50000) {
+		t.Errorf("500.00 owed = %v, want -500.00", got)
+	}
+}

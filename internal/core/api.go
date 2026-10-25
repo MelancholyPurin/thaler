@@ -67,6 +67,9 @@ type Service interface {
 	// nothing, and returns the names of categories it created.
 	SetCategories(ctx context.Context, changes []CategoryChange) ([]string, error)
 	Transfer(ctx context.Context, req TransferRequest) (TransferResult, error)
+	// SetOpeningBalance books (or corrects) the transaction that makes an asset
+	// or liability account hold the balance you read off your bank.
+	SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest) (OpeningBalanceResult, error)
 
 	// Import books parsed bank rows into one account, categorised by the rules
 	// in the request. With DryRun nothing is written and every row's outcome is
@@ -96,6 +99,16 @@ type Account struct {
 	Name     string
 	Type     ledger.AccountType
 	Currency ledger.Currency // empty = any currency
+}
+
+// LedgerBalance converts a balance as people read it into the ledger's sign:
+// the amount a bank shows for a credit card is what you owe, so a positive
+// number on a Liabilities account becomes negative. Assets keep their sign.
+func (a Account) LedgerBalance(shown ledger.Money) ledger.Money {
+	if a.Type == ledger.Liabilities {
+		return shown.Neg()
+	}
+	return shown
 }
 
 // NewTransaction is the input for adding a transaction. Postings reference
@@ -202,6 +215,31 @@ type TransferResult struct {
 	In ledger.Money
 	// CrossCurrency is true when the transfer went through Equity:Conversions.
 	CrossCurrency bool
+}
+
+// OpeningBalanceRequest says what an account held at the end of a day, as the
+// bank shows it. The service works out the opening balance from that: whatever
+// the transactions already booked do not explain.
+type OpeningBalanceRequest struct {
+	Account string
+	// Balance is in the account's currency and the ledger's sign: positive for
+	// an asset that holds money, negative for a liability that owes it.
+	Balance ledger.Money
+	AsOf    time.Time
+}
+
+// OpeningBalanceResult describes the opening-balance transaction. Calling
+// SetOpeningBalance again corrects the same transaction instead of adding one.
+type OpeningBalanceResult struct {
+	// ID is the opening-balance transaction; 0 when the booked transactions
+	// already explain the balance and none was needed.
+	ID     int64
+	Date   string       // the day it is booked on: before the account's first transaction
+	Amount ledger.Money // what it books on the account
+	// Before is the transaction as it was when this call corrected it; nil when
+	// the call created it. It is what an undo puts back.
+	Before  *TxView
+	Created []string // Equity:Opening, the first time
 }
 
 // ---- import and recategorisation ---------------------------------------------

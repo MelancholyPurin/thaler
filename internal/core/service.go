@@ -214,32 +214,36 @@ func (s *Local) DeleteTransaction(ctx context.Context, id int64) error {
 func (s *Local) ReplaceTransaction(ctx context.Context, id int64, nt NewTransaction) ([]string, error) {
 	var created []string
 	err := s.repo.inTx(ctx, func(q queries) error {
-		found, err := q.transactionExists(ctx, id)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("transaction #%d does not exist", id)
-		}
-		if err := nt.validate(); err != nil {
-			return err
-		}
-		accountIDs, err := resolvePostings(ctx, q, nt, &created)
-		if err != nil {
-			return err
-		}
-		if err := q.updateTransaction(ctx, id, nt); err != nil {
-			return err
-		}
-		if err := q.deletePostings(ctx, id); err != nil {
-			return err
-		}
-		return q.insertPostings(ctx, id, nt.Postings, accountIDs)
+		return replaceTransaction(ctx, q, id, nt, &created)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return created, nil
+}
+
+func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransaction, created *[]string) error {
+	found, err := q.transactionExists(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("transaction #%d does not exist", id)
+	}
+	if err := nt.validate(); err != nil {
+		return err
+	}
+	accountIDs, err := resolvePostings(ctx, q, nt, created)
+	if err != nil {
+		return err
+	}
+	if err := q.updateTransaction(ctx, id, nt); err != nil {
+		return err
+	}
+	if err := q.deletePostings(ctx, id); err != nil {
+		return err
+	}
+	return q.insertPostings(ctx, id, nt.Postings, accountIDs)
 }
 
 // RestoreTransaction stores nt under the given id, which must be free. It
@@ -649,6 +653,89 @@ func sortedCurrencies(set map[ledger.Currency]bool) []ledger.Currency {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
+}
+
+// ---- opening balances ------------------------------------------------------
+
+// SetOpeningBalance makes the account hold req.Balance at the end of req.AsOf
+// by booking the difference between that and what its other transactions add
+// up to as one transaction against Equity:Opening. That transaction is dated the
+// day before the account's first transaction (or on AsOf when the account has
+// none), so the account's whole history adds up. Asking again with a new
+// balance corrects the same transaction.
+func (s *Local) SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest) (OpeningBalanceResult, error) {
+	var res OpeningBalanceResult
+	err := s.repo.inTx(ctx, func(q queries) error {
+		acc, err := q.account(ctx, req.Account)
+		if err != nil {
+			return err
+		}
+		if !acc.Type.NeedsCurrency() {
+			return fmt.Errorf("%s is a %s account; only asset and liability accounts have a balance to set", acc.Name, acc.Type)
+		}
+		if req.Balance.Currency != acc.Currency {
+			return fmt.Errorf("%s holds %s, but the balance is in %s", acc.Name, acc.Currency, req.Balance.Currency)
+		}
+		if req.AsOf.IsZero() {
+			return errors.New("the balance has no date")
+		}
+		asOf := req.AsOf.Format(ledger.DateLayout)
+
+		existing, err := q.openingTransaction(ctx, acc.ID)
+		if err != nil {
+			return err
+		}
+		others, err := q.accountSum(ctx, acc.ID, asOf, existing)
+		if err != nil {
+			return err
+		}
+		first, err := q.firstPostingDate(ctx, acc.ID, existing)
+		if err != nil {
+			return err
+		}
+		amount := ledger.Money{Minor: req.Balance.Minor - others, Currency: acc.Currency}
+		if existing == 0 && amount.Minor == 0 {
+			return nil // nothing to explain
+		}
+		date := req.AsOf
+		if first != "" && first <= asOf {
+			firstDay, err := ledger.ParseDate(first)
+			if err != nil {
+				return err
+			}
+			date = firstDay.AddDate(0, 0, -1)
+		}
+		nt := NewTransaction{
+			Date:  date,
+			Payee: "Opening balance",
+			Postings: []ledger.Posting{
+				{Account: acc.Name, Amount: amount},
+				{Account: ledger.OpeningBalanceAccount, Amount: amount.Neg()},
+			},
+		}
+		if existing != 0 {
+			views, err := q.listTransactions(ctx, TxFilter{ID: existing})
+			if err != nil {
+				return err
+			}
+			if len(views) != 1 {
+				return fmt.Errorf("transaction #%d disappeared", existing)
+			}
+			res.Before = &views[0]
+			if err := replaceTransaction(ctx, q, existing, nt, &res.Created); err != nil {
+				return err
+			}
+			res.ID = existing
+		} else if res.ID, err = storeTransaction(ctx, q, nt, 0, &res.Created); err != nil {
+			return err
+		}
+		res.Date, res.Amount = date.Format(ledger.DateLayout), amount
+		return nil
+	})
+	if err != nil {
+		return OpeningBalanceResult{}, err
+	}
+	return res, nil
 }
 
 // ---- maintenance -----------------------------------------------------------
