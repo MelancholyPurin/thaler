@@ -1841,3 +1841,162 @@ func TestThePickerOffersTransfers(t *testing.T) {
 		t.Errorf("Kino is in %s", categoryOf(t, st, "Kino"))
 	}
 }
+
+// ---- the transfer popup ------------------------------------------------------
+
+// transferAccounts is an empty ledger with Assets:Bank, Assets:Dollars (USD) and
+// Assets:Savings, in that order.
+func transferAccounts(t *testing.T) (*Model, *core.Local) {
+	t.Helper()
+	m, st := noAccountsModel(t)
+	for name, cur := range map[string]ledger.Currency{"Assets:Bank": "EUR", "Assets:Dollars": "USD", "Assets:Savings": "EUR"} {
+		if _, err := st.AddAccount(ctx, name, cur); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	return m, st
+}
+
+func TestTransferBetweenAccounts(t *testing.T) {
+	m, st := transferAccounts(t)
+	press(m, "x")
+	if m.mode != modeTransfer {
+		t.Fatalf("x should open the transfer popup, mode %v, status %q", m.mode, m.status)
+	}
+	view := m.View()
+	for _, want := range []string{"Transfer between your accounts", "Assets:Bank", "Assets:Savings"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("popup is missing %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "Received") {
+		t.Error("within one currency there is nothing to say about what arrives")
+	}
+	typeText(m, "500")
+	press(m, "enter", "enter") // the date, then save
+	if m.mode != modeList {
+		t.Fatalf("popup still open: %q", m.xfer.err)
+	}
+	if bankBalance(t, st, "Assets:Bank") != -50000 || bankBalance(t, st, "Assets:Savings") != 50000 {
+		t.Errorf("balances: bank %d, savings %d", bankBalance(t, st, "Assets:Bank"), bankBalance(t, st, "Assets:Savings"))
+	}
+	out, in := txByPayee(t, st, "Transfer to Savings"), txByPayee(t, st, "Transfer from Bank")
+	if out.TransferWith != in.ID || in.TransferWith != out.ID {
+		t.Errorf("the halves should be linked: %+v / %+v", out, in)
+	}
+	if !strings.Contains(m.status, "Transferred 500.00 EUR from Bank to Savings") || m.scopeAccount() != "Assets:Bank" {
+		t.Errorf("status %q, scope %q", m.status, m.scopeAccount())
+	}
+
+	// Both halves are marked, and the detail pane names the other one.
+	m.accts.cursor = 0
+	m.applyFilter(false)
+	selectPayee(t, m, "Transfer from Bank")
+	if view := m.View(); !strings.Contains(view, "⇄ Transfer from Bank") || !strings.Contains(view, fmt.Sprintf("Transfer with #%d on Assets:Bank", out.ID)) {
+		t.Errorf("marker or detail missing:\n%s", view)
+	}
+
+	// z takes back both halves.
+	press(m, "z")
+	if txCount(t, st) != 0 || !strings.Contains(m.status, "the transfer") {
+		t.Errorf("%d transactions after undo, status %q", txCount(t, st), m.status)
+	}
+}
+
+func TestTransferAcrossCurrencies(t *testing.T) {
+	m, st := transferAccounts(t)
+	press(m, "x")
+	m.xfer.to = m.accountIndex("Assets:Dollars")
+	if view := m.View(); !strings.Contains(view, "Received") {
+		t.Fatalf("different currencies need a received amount:\n%s", view)
+	}
+	typeText(m, "100")
+	press(m, "enter")
+	typeText(m, "108.50")
+	if view := m.View(); !strings.Contains(view, "1 EUR = 1.0850 USD") {
+		t.Errorf("the implied rate should show while typing:\n%s", view)
+	}
+	press(m, "enter", "enter")
+	if m.mode != modeList {
+		t.Fatalf("err %q", m.xfer.err)
+	}
+	if bankBalance(t, st, "Assets:Bank") != -10000 || bankBalance(t, st, "Assets:Dollars") != 10850 {
+		t.Errorf("balances: %d / %d", bankBalance(t, st, "Assets:Bank"), bankBalance(t, st, "Assets:Dollars"))
+	}
+	if !strings.Contains(m.status, "108.50 USD arrived") || !strings.Contains(m.status, "1 EUR = 1.0850 USD") {
+		t.Errorf("status = %q", m.status)
+	}
+	if categoryOf(t, st, "Transfer to Dollars") != ledger.ConversionAccount {
+		t.Errorf("a cross-currency transfer goes through %s", ledger.ConversionAccount)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+func TestTransferFlipsDirectionAndRefusesBadInput(t *testing.T) {
+	m, st := transferAccounts(t)
+	press(m, "x")
+	f := m.xfer
+	if m.accounts[f.from].account.Name != "Assets:Bank" || m.accounts[f.to].account.Name != "Assets:Savings" {
+		t.Fatalf("defaults: from %s, to %s (the same currency comes first)", m.accounts[f.from].account.Name, m.accounts[f.to].account.Name)
+	}
+	// Choosing the account the other side has swaps the two.
+	bank, dollars, savings := m.accountIndex("Assets:Bank"), m.accountIndex("Assets:Dollars"), m.accountIndex("Assets:Savings")
+	f.from, f.to = bank, dollars
+	m.focusTransferField(tfFrom)
+	m.stepTransferAccount(1) // From lands on Dollars, which is To
+	if f.from != dollars || f.to != bank {
+		t.Errorf("from %d, to %d; want them swapped to %d / %d", f.from, f.to, dollars, bank)
+	}
+	f.from, f.to = bank, savings // the same currency again for the checks below
+
+	for name, tc := range map[string]struct{ amount, received, date, want string }{
+		"no amount":    {"", "", "", "amount"},
+		"zero":         {"0", "", "", "greater than zero"},
+		"not a number": {"lots", "", "", "amount"},
+		"a bad date":   {"5", "", "someday", "date"},
+	} {
+		m.xfer.amount.SetValue(tc.amount)
+		m.xfer.date.SetValue(tc.date)
+		m.Update(keyCtrlS)
+		if m.mode != modeTransfer || !strings.Contains(m.xfer.err, tc.want) {
+			t.Errorf("%s: mode %v, err %q; want it to mention %q", name, m.mode, m.xfer.err, tc.want)
+		}
+	}
+	// Across currencies, what arrives is required.
+	m.xfer.to = m.accountIndex("Assets:Dollars")
+	m.xfer.from = m.accountIndex("Assets:Bank")
+	m.xfer.amount.SetValue("5")
+	m.xfer.date.SetValue("")
+	m.Update(keyCtrlS)
+	if m.mode != modeTransfer || !strings.Contains(m.xfer.err, "received") {
+		t.Errorf("err %q", m.xfer.err)
+	}
+	if txCount(t, st) != 0 {
+		t.Error("a refused transfer must write nothing")
+	}
+	press(m, "esc")
+	if m.mode != modeList {
+		t.Error("esc closes the popup")
+	}
+}
+
+func TestTransferNeedsTwoAccounts(t *testing.T) {
+	m, st := noAccountsModel(t)
+	press(m, "x")
+	if m.mode != modeList || !m.statusIsError || !strings.Contains(m.status, "two accounts") {
+		t.Errorf("no accounts: mode %v, status %q", m.mode, m.status)
+	}
+	if _, err := st.AddAccount(ctx, "Assets:Bank", "EUR"); err != nil {
+		t.Fatal(err)
+	}
+	m.reload()
+	press(m, "x")
+	if m.mode != modeList || !strings.Contains(m.status, "two accounts") {
+		t.Errorf("one account: mode %v, status %q", m.mode, m.status)
+	}
+}
