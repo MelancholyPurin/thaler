@@ -136,9 +136,9 @@ func (m *Model) rowStyle(p pane) lipgloss.Style {
 // ---- left column ---------------------------------------------------------------
 
 func (m *Model) homePanel(l layout) string {
-	text := appName + "  " + dim.Render("local-first finance")
+	text := appName + "  " + dim.Render("From Purin • https://github.com/MelancholyPurin")
 	if m.focus == paneHome {
-		text = bold.Render(appName) + "  " + dim.Render("local-first finance")
+		text = bold.Render(appName) + "  " + dim.Render("From Purin • https://github.com/MelancholyPurin")
 	}
 	return box("[1] Home", []string{text}, l.leftW, l.hHome, m.focus == paneHome, "")
 }

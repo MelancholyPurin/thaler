@@ -62,7 +62,7 @@ func (m *Model) homeDetail(w int) []string {
 	for _, b := range banner {
 		lines = append(lines, centered(accent.Render(b), w))
 	}
-	lines = append(lines, "", centered(dim.Render("local-first personal finance"), w), "")
+	lines = append(lines, "", centered(dim.Render("From Purin • https://github.com/MelancholyPurin"), w), "")
 
 	netText := m.netWorth.Total.String()
 	if len(m.netWorth.Missing) > 0 {

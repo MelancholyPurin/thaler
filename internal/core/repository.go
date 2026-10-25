@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
 	"uuid"
+
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
 	"github.com/melancholypurin/thaler/internal/ledger"
