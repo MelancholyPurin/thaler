@@ -298,7 +298,9 @@ func (m *Model) saveForm() {
 		fail("amount: %v", err)
 		return
 	}
-	if amount.Minor <= 0 {
+	// Banks book zero amounts (card verifications) and may correct a charge to
+	// zero, so an edit may be zero; a new entry typed by hand may not.
+	if amount.Minor == 0 && f.editing == 0 {
 		fail("amount must be greater than zero")
 		return
 	}
