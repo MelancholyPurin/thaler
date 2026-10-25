@@ -1463,3 +1463,244 @@ func TestHomePaneShowsTheBiggestBannerThatFits(t *testing.T) {
 		}
 	}
 }
+
+// ---- rules from the picker ---------------------------------------------------
+
+// ruleModel is newModel with a real config file that rules are read from and
+// appended to, and a second uncategorized "Kino" so a rule has something to
+// catch besides the transaction being categorized.
+func ruleModel(t *testing.T, initial string) (*Model, *core.Local, string) {
+	t.Helper()
+	m, st := newModel(t)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if initial != "" {
+		if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	load := func() (*config.Config, error) { return config.Load(path, false) }
+	m.loadConfig = load
+	m.opts = Options{LoadConfig: load, ConfigPath: path, ConfigTemplate: "# sample\n[[rule]]\ncontains = \"SAMPLE\"\ncategory = \"Expenses:Sample\"\n"}
+	_, err := st.AddTransaction(ctx, core.NewTransaction{
+		Date: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC), Payee: "Kino Royal",
+		Postings: []ledger.Posting{
+			{Account: "Assets:Bank", Amount: ledger.Money{Minor: -500, Currency: "EUR"}},
+			{Account: ledger.UncategorizedExpense, Amount: ledger.Money{Minor: 500, Currency: "EUR"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	m.applyFilter(false)
+	return m, st, path
+}
+
+func categoryOf(t *testing.T, st core.Service, payee string) string {
+	t.Helper()
+	_, cat, ok := txByPayee(t, st, payee).Legs()
+	if !ok {
+		t.Fatalf("%q is not a simple transaction", payee)
+	}
+	return cat.Account
+}
+
+func configRules(t *testing.T, path string) []importer.Rule {
+	t.Helper()
+	c, err := config.Load(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.Rules
+}
+
+func TestMakingARuleWhileCategorizing(t *testing.T) {
+	m, st, path := ruleModel(t, "")
+	selectPayee(t, m, "Kino")
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab")
+	if !m.pickRuleOn || m.pickRule.Value() != "Kino" {
+		t.Fatalf("tab should move to the rule field offering the payee: on %v, text %q", m.pickRuleOn, m.pickRule.Value())
+	}
+	if !strings.Contains(m.pickNote, "adds a rule") || !strings.Contains(m.pickNote, "1 other") {
+		t.Errorf("note = %q", m.pickNote)
+	}
+	if view := m.View(); !strings.Contains(view, "Rule") || !strings.Contains(view, "also categorizes 1 other") {
+		t.Errorf("the popup should show the rule:\n%s", view)
+	}
+
+	press(m, "enter")
+	if m.mode != modeList {
+		t.Fatalf("enter should apply: mode %v, note %q", m.mode, m.pickNote)
+	}
+	for _, payee := range []string{"Kino", "Kino Royal"} {
+		if got := categoryOf(t, st, payee); got != "Expenses:Fun" {
+			t.Errorf("%s is in %s, want Expenses:Fun", payee, got)
+		}
+	}
+	rules := configRules(t, path)
+	if len(rules) != 1 || rules[0].Contains != "Kino" || rules[0].Category != "Expenses:Fun" {
+		t.Errorf("config rules = %+v; the file was new, so its sample is switched off and the rule is the only one", rules)
+	}
+	for _, want := range []string{"rule added", "1 more categorized", "z undoes"} {
+		if !strings.Contains(m.status, want) {
+			t.Errorf("status %q is missing %q", m.status, want)
+		}
+	}
+	if got := categoryOf(t, st, "REWE"); got != ledger.UncategorizedExpense {
+		t.Errorf("an unrelated payee moved to %s", got)
+	}
+
+	// z puts both categories back in one step; the rule stays in the file.
+	press(m, "z")
+	for _, payee := range []string{"Kino", "Kino Royal"} {
+		if got := categoryOf(t, st, payee); got != ledger.UncategorizedExpense {
+			t.Errorf("after undo %s is in %s", payee, got)
+		}
+	}
+	if len(configRules(t, path)) != 1 {
+		t.Error("undo must leave the rule in the config")
+	}
+}
+
+func TestTrimmingTheRuleTextWidensIt(t *testing.T) {
+	m, st, path := ruleModel(t, "")
+	selectPayee(t, m, "Kino Royal")
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab")
+	if m.pickRule.Value() != "Kino Royal" || !strings.Contains(m.pickNote, "no other") {
+		t.Fatalf("text %q, note %q", m.pickRule.Value(), m.pickNote)
+	}
+	m.pickRule.SetValue("Kino")
+	m.refreshRuleNote()
+	if !strings.Contains(m.pickNote, "1 other") {
+		t.Errorf("note after trimming = %q", m.pickNote)
+	}
+	press(m, "enter")
+	if categoryOf(t, st, "Kino") != "Expenses:Fun" || configRules(t, path)[0].Contains != "Kino" {
+		t.Error("the trimmed rule should be the one stored and applied")
+	}
+}
+
+func TestAnEarlierRuleBlocksALaterOne(t *testing.T) {
+	existing := "# mine\n[[rule]]\ncontains = \"rewe\"\ncategory = \"Expenses:Groceries\"\n"
+	m, st, path := ruleModel(t, existing)
+	selectPayee(t, m, "REWE") // uncategorized: it was imported before the rule existed
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab")
+	if !m.pickNoteBad || !strings.Contains(m.pickNote, "rule 1") || !strings.Contains(m.pickNote, "Expenses:Groceries") {
+		t.Fatalf("note = %q (bad %v); it should name the rule that wins", m.pickNote, m.pickNoteBad)
+	}
+	press(m, "enter")
+	body, _ := os.ReadFile(path)
+	if m.mode != modePick || string(body) != existing || categoryOf(t, st, "REWE") != ledger.UncategorizedExpense {
+		t.Errorf("a refused rule must change nothing: mode %v, config:\n%s", m.mode, body)
+	}
+
+	// Choosing what that rule says is fine, and adds nothing to the file.
+	press(m, "tab") // back to the category
+	for range len("Expenses:Fun") {
+		m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	}
+	typeText(m, "Groceries")
+	if m.pickItems[0].name != "Expenses:Groceries" {
+		t.Fatalf("first suggestion = %q", m.pickItems[0].name)
+	}
+	if !strings.Contains(m.pickNote, "rule 1 already covers this") {
+		t.Fatalf("note = %q", m.pickNote)
+	}
+	press(m, "enter")
+	if body, _ := os.ReadFile(path); string(body) != existing {
+		t.Errorf("a rule that exists must not be added twice:\n%s", body)
+	}
+	if categoryOf(t, st, "REWE") != "Expenses:Groceries" || !strings.Contains(m.status, "already covers") {
+		t.Errorf("category %s, status %q", categoryOf(t, st, "REWE"), m.status)
+	}
+}
+
+func TestARuleNeedsSomethingSensibleToLookFor(t *testing.T) {
+	for name, tc := range map[string]struct {
+		text, want  string
+		decideLater bool
+	}{
+		"text not in the transaction": {"zzz", "does not appear", false},
+		"one character":               {"K", "at least two", false},
+		"decide later":                {"Kino", "real category", true},
+	} {
+		m, st, path := ruleModel(t, "")
+		selectPayee(t, m, "Kino")
+		press(m, "c")
+		if tc.decideLater {
+			m.pickCursor = len(m.pickItems) - 1 // "decide later" closes the list
+		} else {
+			typeText(m, "Expenses:Fun")
+		}
+		press(m, "tab")
+		m.pickRule.SetValue(tc.text)
+		m.refreshRuleNote()
+		if !m.pickNoteBad || !strings.Contains(m.pickNote, tc.want) {
+			t.Errorf("%s: note %q (bad %v), want it to say %q", name, m.pickNote, m.pickNoteBad, tc.want)
+		}
+		press(m, "enter")
+		if _, err := os.Stat(path); err == nil || m.mode != modePick || categoryOf(t, st, "Kino") != ledger.UncategorizedExpense {
+			t.Errorf("%s: a refused rule must write and change nothing (mode %v)", name, m.mode)
+		}
+	}
+}
+
+func TestAnEmptyRuleFieldMeansNoRule(t *testing.T) {
+	m, st, path := ruleModel(t, "")
+	selectPayee(t, m, "Kino")
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab")
+	m.pickRule.SetValue("")
+	press(m, "enter")
+	if categoryOf(t, st, "Kino") != "Expenses:Fun" || categoryOf(t, st, "Kino Royal") != ledger.UncategorizedExpense {
+		t.Error("without a rule only the selected transaction changes")
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("no rule, so the config must not be created")
+	}
+	if strings.Contains(m.status, "rule") {
+		t.Errorf("status = %q", m.status)
+	}
+}
+
+func TestEscapingTheRuleWritesNothing(t *testing.T) {
+	m, st, path := ruleModel(t, "")
+	selectPayee(t, m, "Kino")
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab", "esc")
+	if _, err := os.Stat(path); err == nil || m.mode != modeList || categoryOf(t, st, "Kino") != ledger.UncategorizedExpense {
+		t.Errorf("mode %v", m.mode)
+	}
+	// Tab twice goes back to the category field.
+	press(m, "c")
+	press(m, "tab", "tab")
+	if m.pickRuleOn {
+		t.Error("the second tab should return to the category")
+	}
+}
+
+func TestABrokenConfigStopsRulesButNotCategorizing(t *testing.T) {
+	m, st, _ := ruleModel(t, "")
+	m.loadConfig = func() (*config.Config, error) { return nil, errors.New("config.toml: unknown key(s): [rule.typo]") }
+	selectPayee(t, m, "Kino")
+	press(m, "c")
+	typeText(m, "Expenses:Fun")
+	press(m, "tab")
+	if m.pickRuleOn || !m.pickNoteBad || !strings.Contains(m.pickNote, "unknown key") {
+		t.Fatalf("on %v, note %q", m.pickRuleOn, m.pickNote)
+	}
+	press(m, "enter")
+	if categoryOf(t, st, "Kino") != "Expenses:Fun" {
+		t.Error("categorizing by hand must still work with a broken config")
+	}
+}
