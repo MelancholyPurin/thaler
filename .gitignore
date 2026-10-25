@@ -4,6 +4,7 @@
 /bin/
 /dist/
 *.test
+coverage.out
 .DS_Store
 
 # never commit financial data
