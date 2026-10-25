@@ -35,6 +35,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.confirmPopup())
 	case modeImport:
 		screen = m.centerPopup(screen, m.importPopup())
+	case modeAccount:
+		screen = m.centerPopup(screen, m.accountPopup())
 	}
 	return screen
 }
@@ -190,7 +192,7 @@ func (m *Model) transactionsPanel(l layout) string {
 	if len(m.view) == 0 {
 		switch {
 		case len(m.rows) == 0:
-			lines = []string{dim.Render("No transactions yet."), dim.Render("i imports a bank export · a adds one by hand")}
+			lines = []string{dim.Render("No transactions yet."), dim.Render("n creates an account · i imports a bank export")}
 		case m.period != "" && !m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
 			lines = []string{dim.Render("No transactions in " + periodLabel(m.period) + "."), dim.Render("[ ] change month · T all time")}
 		case m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
@@ -279,9 +281,9 @@ func (m *Model) ledgerHint() string {
 	var hint string
 	switch m.focus {
 	case paneHome:
-		hint = "a add · i import · enter transactions · 2 accounts · ? help · q quit"
+		hint = "a add · i import · n new account · enter transactions · ? help · q quit"
 	case paneAccounts:
-		hint = "↑/↓ pick account · a add to it · enter transactions · ? help · q quit"
+		hint = "↑/↓ pick account · a add to it · b balance · n new account · enter transactions · ? help · q quit"
 	default:
 		hint = "a add · i import · c categorize · e edit · d delete · z undo · / search · ? help · q quit"
 	}
@@ -337,6 +339,7 @@ func (m *Model) helpPopup() string {
 		{"enter", "open the next panel / categorize"},
 		{"a", "add a transaction (to the selected account)"},
 		{"i", "import a bank export (CSV) into an account"},
+		{"n  b", "new account / set the selected account's balance"},
 		{"c  e  d", "categorize / edit / delete the selected transaction"},
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},

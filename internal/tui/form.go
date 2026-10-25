@@ -61,7 +61,7 @@ func (m *Model) inputWidth() int { return max(8, min(max(m.width-6, 30), 72)-2-1
 // in the database.
 func (m *Model) openForm(edit bool) tea.Cmd {
 	if len(m.accounts) == 0 {
-		m.setStatus("no accounts yet: create one with: thaler cli account add Assets:Cash --currency EUR", true)
+		m.setStatus("no accounts yet: press n to create one", true)
 		return nil
 	}
 	f := &form{payeeCur: -1}
