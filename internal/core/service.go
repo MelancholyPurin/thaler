@@ -243,7 +243,10 @@ func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransact
 	if err := q.deletePostings(ctx, id); err != nil {
 		return err
 	}
-	return q.insertPostings(ctx, id, nt.Postings, accountIDs)
+	if err := q.insertPostings(ctx, id, nt.Postings, accountIDs); err != nil {
+		return err
+	}
+	return reconcileTransferLink(ctx, q, id, created)
 }
 
 // RestoreTransaction stores nt under the given id, which must be free. It
@@ -314,7 +317,61 @@ func setCategory(ctx context.Context, q queries, c CategoryChange, created *[]st
 	if err != nil {
 		return err
 	}
-	return q.moveStoredPosting(ctx, postings[0].id, acc.ID)
+	if err := q.moveStoredPosting(ctx, postings[0].id, acc.ID); err != nil {
+		return err
+	}
+	return reconcileTransferLink(ctx, q, c.TransactionID, created)
+}
+
+// uncategorizedFor is the Uncategorized account for money that moved by m on
+// your own account: income when it came in, an expense when it went out.
+func uncategorizedFor(m ledger.Money) string {
+	if m.Minor > 0 {
+		return ledger.UncategorizedIncome
+	}
+	return ledger.UncategorizedExpense
+}
+
+// reconcileTransferLink keeps a transfer link honest after id was edited. A link
+// means both halves are booked to Equity:Transfers on different own accounts
+// and their amounts cancel. If the edit broke that, the link is removed, and a
+// partner still sitting in Equity:Transfers goes back to Uncategorized so that
+// it is noticed instead of being left to wait for a half that is not coming.
+func reconcileTransferLink(ctx context.Context, q queries, id int64, created *[]string) error {
+	partnerID, err := q.transferPartner(ctx, id)
+	if err != nil || partnerID == 0 {
+		return err
+	}
+	mine, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil {
+		return err
+	}
+	theirs, err := q.listTransactions(ctx, TxFilter{ID: partnerID})
+	if err != nil {
+		return err
+	}
+	if len(mine) == 1 && len(theirs) == 1 && transferHalves(mine[0], theirs[0]) {
+		return nil
+	}
+	if err := q.unlinkTransfer(ctx, id, partnerID); err != nil {
+		return err
+	}
+	if len(theirs) == 1 {
+		if source, category, ok := theirs[0].Legs(); ok && category.Account == ledger.TransferAccount {
+			return setCategory(ctx, q, CategoryChange{TransactionID: partnerID, Category: uncategorizedFor(source.Amount)}, created)
+		}
+	}
+	return nil
+}
+
+// transferHalves reports whether a and b still make one transfer.
+func transferHalves(a, b TxView) bool {
+	sa, ca, oka := a.Legs()
+	sb, cb, okb := b.Legs()
+	return oka && okb &&
+		ca.Account == ledger.TransferAccount && cb.Account == ledger.TransferAccount &&
+		sa.Account != sb.Account &&
+		sa.Amount.Currency == sb.Amount.Currency && sa.Amount.Minor == -sb.Amount.Minor
 }
 
 // Transfer moves money between two accounts that hold their own currency. A
@@ -414,11 +471,11 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 
 	dedupe := importer.NewDeduper(strconv.FormatInt(acc.ID, 10))
 	txs := make([]NewTransaction, len(rows))
-	categories := make([]string, len(rows))
+	ruled := make([]bool, len(rows)) // a rule chose the category
 	for i, r := range rows {
 		category, ok := rules.Match(r.Payee, r.Purpose, r.BookingText)
+		ruled[i] = ok
 		if !ok {
-			res.Uncategorized++
 			category = ledger.UncategorizedExpense
 			if r.Amount.Minor > 0 {
 				category = ledger.UncategorizedIncome
@@ -428,7 +485,6 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		if description == "" {
 			description = r.BookingText
 		}
-		categories[i] = category
 		txs[i] = NewTransaction{
 			Date:        r.Date,
 			Payee:       r.Payee,
@@ -442,33 +498,71 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 	}
 
 	if req.DryRun {
-		for i, tx := range txs {
-			dup, err := q.importHashExists(ctx, tx.ImportHash)
-			if err != nil {
-				return ImportResult{}, err
-			}
-			if dup {
+		plan, err := planImport(ctx, q, acc, rows, txs, ruled)
+		if err != nil {
+			return ImportResult{}, err
+		}
+		for i, p := range plan {
+			switch {
+			case p.duplicate:
 				res.Duplicates++
-			} else {
+			default:
 				res.Inserted++
+				if p.partner != nil {
+					res.Transfers++
+				}
 			}
-			res.Rows = append(res.Rows, ImportedRow{Row: rows[i], Category: categories[i], Duplicate: dup})
+			if !ruled[i] && p.partner == nil {
+				res.Uncategorized++
+			}
+			row := ImportedRow{Row: rows[i], Category: p.tx.Postings[1].Account, Duplicate: p.duplicate}
+			if p.partner != nil {
+				row.Transfer = &TransferMatch{ID: p.partner.id, Account: p.partner.account, Date: p.partner.date, Was: p.partner.category}
+			}
+			res.Rows = append(res.Rows, row)
 		}
 		return res, nil
 	}
 
 	err = s.repo.inTx(ctx, func(q queries) error {
-		for i, nt := range txs {
-			id, err := storeTransaction(ctx, q, nt, 0, &res.Created)
+		// Planned inside the transaction, so the pairs it finds are still free
+		// when the rows are written.
+		plan, err := planImport(ctx, q, acc, rows, txs, ruled)
+		if err != nil {
+			return err
+		}
+		for i, p := range plan {
+			if !ruled[i] && p.partner == nil {
+				res.Uncategorized++
+			}
+			if p.duplicate {
+				res.Duplicates++
+				continue
+			}
+			id, err := storeTransaction(ctx, q, p.tx, 0, &res.Created)
 			if errors.Is(err, ErrDuplicate) {
 				res.Duplicates++
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("transaction %d (%s %s): %w", i+1, nt.Date.Format(ledger.DateLayout), nt.Payee, err)
+				return fmt.Errorf("transaction %d (%s %s): %w", i+1, p.tx.Date.Format(ledger.DateLayout), p.tx.Payee, err)
 			}
 			res.Inserted++
 			res.IDs = append(res.IDs, id)
+			if p.partner == nil {
+				continue
+			}
+			if p.partner.category != ledger.TransferAccount {
+				change := CategoryChange{TransactionID: p.partner.id, Category: ledger.TransferAccount}
+				if err := setCategory(ctx, q, change, &res.Created); err != nil {
+					return fmt.Errorf("transaction #%d: %w", p.partner.id, err)
+				}
+			}
+			if err := q.linkTransfer(ctx, id, p.partner.id); err != nil {
+				return err
+			}
+			res.Transfers++
+			res.Linked = append(res.Linked, TransferLink{ID: id, OtherID: p.partner.id, OtherWas: p.partner.category})
 		}
 		return nil
 	})
@@ -476,6 +570,54 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		return ImportResult{}, err
 	}
 	return res, nil
+}
+
+// transferWindowDays is how many days apart the two halves of a transfer may be
+// booked: banks do not always book both sides on the same day.
+const transferWindowDays = 3
+
+// plannedRow is what an import would do with one row.
+type plannedRow struct {
+	tx        NewTransaction
+	duplicate bool
+	partner   *transferCandidate // the stored half this row completes, if any
+}
+
+// planImport decides, for each parsed row, whether it is already stored and
+// whether it is the other half of a transfer between two of your own accounts:
+// a stored transaction on another account that moved exactly the opposite
+// amount within a few days and has not been paired or categorized yet. A row a
+// rule categorized stays where the rule put it, unless that is Equity:Transfers.
+// Every stored transaction is paired at most once.
+func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row, txs []NewTransaction, ruled []bool) ([]plannedRow, error) {
+	plan := make([]plannedRow, len(rows))
+	taken := map[int64]bool{}
+	for i, tx := range txs {
+		p := plannedRow{tx: tx}
+		dup, err := q.importHashExists(ctx, tx.ImportHash)
+		if err != nil {
+			return nil, err
+		}
+		p.duplicate = dup
+		wanted := !ruled[i] || tx.Postings[1].Account == ledger.TransferAccount
+		if !dup && wanted && rows[i].Amount.Minor != 0 {
+			candidates, err := q.transferCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, transferWindowDays)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range candidates {
+				if !taken[c.id] {
+					c := c
+					p.partner = &c
+					taken[c.id] = true
+					p.tx.Postings = []ledger.Posting{tx.Postings[0], {Account: ledger.TransferAccount, Amount: tx.Postings[0].Amount.Neg()}}
+					break
+				}
+			}
+		}
+		plan[i] = p
+	}
+	return plan, nil
 }
 
 // Recategorize runs rules over every transaction that sits in
@@ -767,7 +909,12 @@ func (s *Local) Check(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(problems, unnamed...), nil
+	problems = append(problems, unnamed...)
+	broken, err := q.brokenTransferLinks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(problems, broken...), nil
 }
 
 // Backup writes a consistent snapshot of the database to dest using

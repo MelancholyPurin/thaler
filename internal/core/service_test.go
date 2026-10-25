@@ -623,8 +623,12 @@ func TestMigrateAdoptsLegacyUserVersion(t *testing.T) {
 		}
 		names = append(names, n)
 	}
-	if len(names) != 2 || names[0] != "20261022_init.up.sql" {
-		t.Fatalf("schema_migrations = %v; want the initial schema adopted and the later one applied", names)
+	embedded, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != len(embedded) || names[0] != "20261022_init.up.sql" {
+		t.Fatalf("schema_migrations = %v; want the initial schema adopted and every later migration applied (%d files)", names, len(embedded))
 	}
 }
 
@@ -1177,4 +1181,324 @@ func TestLedgerBalance(t *testing.T) {
 	if got := debt.LedgerBalance(eur(50000)); got != eur(-50000) {
 		t.Errorf("500.00 owed = %v, want -500.00", got)
 	}
+}
+
+// ---- transfers between your own accounts ------------------------------------
+
+func twoAccounts(t *testing.T) *Local {
+	t.Helper()
+	st := newLocal(t)
+	mustAccount(t, st, "Assets:Bank", "EUR")
+	mustAccount(t, st, "Assets:Savings", "EUR")
+	return st
+}
+
+func importRows(t *testing.T, st *Local, account string, rules []importer.Rule, rows ...importer.Row) ImportResult {
+	t.Helper()
+	res, err := st.Import(ctx, ImportRequest{Account: account, Rows: rows, Rules: rules})
+	if err != nil {
+		t.Fatalf("import into %s: %v", account, err)
+	}
+	return res
+}
+
+func txOf(t *testing.T, st *Local, id int64) TxView {
+	t.Helper()
+	tx, err := st.GetTransaction(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tx
+}
+
+func categoryAccount(t *testing.T, tx TxView) string {
+	t.Helper()
+	_, cat, ok := tx.Legs()
+	if !ok {
+		t.Fatalf("#%d is not a simple transaction", tx.ID)
+	}
+	return cat.Account
+}
+
+func TestImportPairsTheTwoHalvesOfATransfer(t *testing.T) {
+	st := twoAccounts(t)
+	groceries := []importer.Rule{{Contains: "rewe", Category: "Expenses:Groceries"}}
+	bank := importRows(t, st, "Assets:Bank", groceries,
+		row(2, "2026-10-04", "Umbuchung Sparen", "", eur(-50000)),
+		row(3, "2026-10-04", "REWE", "", eur(-2000)))
+	if bank.Transfers != 0 || bank.Uncategorized != 1 {
+		t.Fatalf("the first account has nothing to pair with: %+v", bank)
+	}
+	sparenID := bank.IDs[0]
+
+	// A day later the savings account books the other half.
+	savings := ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{row(2, "2026-10-05", "Umbuchung", "", eur(50000))}, Rules: groceries}
+	dry := savings
+	dry.DryRun = true
+	preview, err := st.Import(ctx, dry)
+	if err != nil || preview.Transfers != 1 || preview.Uncategorized != 0 || preview.Inserted != 1 {
+		t.Fatalf("dry run = %+v, %v", preview, err)
+	}
+	got := preview.Rows[0]
+	if got.Category != ledger.TransferAccount || got.Transfer == nil || got.Transfer.ID != sparenID ||
+		got.Transfer.Account != "Assets:Bank" || got.Transfer.Date != "2026-10-04" || got.Transfer.Was != ledger.UncategorizedExpense {
+		t.Errorf("preview row = %+v / %+v", got, got.Transfer)
+	}
+	if tx := txOf(t, st, sparenID); categoryAccount(t, tx) != ledger.UncategorizedExpense || tx.TransferWith != 0 {
+		t.Error("a dry run must change nothing")
+	}
+
+	res, err := st.Import(ctx, savings)
+	if err != nil || res.Transfers != 1 || len(res.Linked) != 1 || res.Uncategorized != 0 {
+		t.Fatalf("import = %+v, %v", res, err)
+	}
+	link := res.Linked[0]
+	if link.ID != res.IDs[0] || link.OtherID != sparenID || link.OtherWas != ledger.UncategorizedExpense {
+		t.Errorf("link = %+v", link)
+	}
+	mine, theirs := txOf(t, st, link.ID), txOf(t, st, link.OtherID)
+	if categoryAccount(t, mine) != ledger.TransferAccount || categoryAccount(t, theirs) != ledger.TransferAccount {
+		t.Errorf("both halves belong in %s: %s, %s", ledger.TransferAccount, categoryAccount(t, mine), categoryAccount(t, theirs))
+	}
+	if mine.TransferWith != theirs.ID || theirs.TransferWith != mine.ID {
+		t.Errorf("the halves must point at each other: %d -> %d, %d -> %d", mine.ID, mine.TransferWith, theirs.ID, theirs.TransferWith)
+	}
+
+	// The point of it all: the transfer is neither income nor spending.
+	report, err := st.BudgetReport(ctx, BudgetRequest{From: "2026-10-01", To: "2026-10-31", RateDate: "2026-10-31"})
+	if err != nil || report.IncomeTotal.Minor != 0 || report.ExpenseTotal.Minor != 2000 {
+		t.Errorf("budget = income %v, spending %v; want 0 and 20.00 (only the groceries)", report.IncomeTotal, report.ExpenseTotal)
+	}
+	if got := balanceOn(t, st, ledger.TransferAccount, ""); got != 0 {
+		t.Errorf("%s = %d; paired halves cancel", ledger.TransferAccount, got)
+	}
+	if problems, err := st.Check(ctx); err != nil || len(problems) != 0 {
+		t.Errorf("Check = %v, %v", problems, err)
+	}
+
+	// Importing either file again changes nothing.
+	again := importRows(t, st, "Assets:Savings", groceries, row(2, "2026-10-05", "Umbuchung", "", eur(50000)))
+	if again.Inserted != 0 || again.Duplicates != 1 || again.Transfers != 0 {
+		t.Errorf("re-import = %+v", again)
+	}
+	again = importRows(t, st, "Assets:Bank", groceries, row(2, "2026-10-04", "Umbuchung Sparen", "", eur(-50000)))
+	if again.Inserted != 0 || again.Duplicates != 1 {
+		t.Errorf("re-import of the first file = %+v", again)
+	}
+}
+
+func TestTransfersPairInEitherOrder(t *testing.T) {
+	st := twoAccounts(t)
+	importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "Umbuchung", "", eur(50000)))
+	res := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "Umbuchung Sparen", "", eur(-50000)))
+	if res.Transfers != 1 || res.Linked[0].OtherWas != ledger.UncategorizedIncome {
+		t.Errorf("the credit side was waiting as income: %+v", res)
+	}
+}
+
+func TestTransferNeedsTheSameAmountClosely(t *testing.T) {
+	st := twoAccounts(t)
+	usd := mustAccount(t, st, "Assets:Dollars", "USD")
+	importRows(t, st, "Assets:Bank", nil,
+		row(2, "2026-10-10", "out", "", eur(-50000)),
+		row(3, "2026-10-20", "late", "", eur(-30000)),
+		row(4, "2026-10-25", "zero", "", eur(0)))
+	for name, r := range map[string]importer.Row{
+		"five days apart":    row(2, "2026-10-15", "in", "", eur(50000)),
+		"another amount":     row(3, "2026-10-10", "in", "", eur(49999)),
+		"the same direction": row(4, "2026-10-10", "in", "", eur(-50000)),
+		"zero":               row(5, "2026-10-25", "zero", "", eur(0)),
+	} {
+		res := importRows(t, st, "Assets:Savings", nil, r)
+		if res.Transfers != 0 {
+			t.Errorf("%s: must not pair", name)
+		}
+	}
+	// Within the window, on either side of the date, it does.
+	if res := importRows(t, st, "Assets:Savings", nil, row(9, "2026-10-17", "in", "", eur(30000))); res.Transfers != 1 {
+		t.Errorf("three days later should pair: %+v", res)
+	}
+	// Another currency never pairs, even for the same number.
+	res, err := st.Import(ctx, ImportRequest{Account: usd.Name, Rows: []importer.Row{row(2, "2026-10-10", "in", "", usd2(50000))}})
+	if err != nil || res.Transfers != 0 {
+		t.Errorf("USD against EUR: %+v, %v", res, err)
+	}
+}
+
+func usd2(minor int64) ledger.Money { return ledger.Money{Minor: minor, Currency: "USD"} }
+
+func TestEachTransferHalfIsPairedOnlyOnce(t *testing.T) {
+	st := twoAccounts(t)
+	// Two identical transfers out of the bank, but only one arrived so far.
+	importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000)))
+	res := importRows(t, st, "Assets:Bank", nil,
+		row(2, "2026-10-04", "out", "a", eur(-50000)),
+		row(3, "2026-10-04", "out", "b", eur(-50000)))
+	if res.Inserted != 2 || res.Transfers != 1 || res.Uncategorized != 1 {
+		t.Fatalf("one pairs, one waits: %+v", res)
+	}
+	if got := categoryAccount(t, txOf(t, st, res.IDs[0])); got != ledger.TransferAccount {
+		t.Errorf("the first row pairs, got %s", got)
+	}
+	if got := categoryAccount(t, txOf(t, st, res.IDs[1])); got != ledger.UncategorizedExpense {
+		t.Errorf("the second stays uncategorized, got %s", got)
+	}
+	// ...and the second arrives later.
+	late := importRows(t, st, "Assets:Savings", nil, row(3, "2026-10-04", "in", "b", eur(50000)))
+	if late.Transfers != 1 || late.Linked[0].OtherID != res.IDs[1] {
+		t.Errorf("the late half should find the waiting one: %+v", late)
+	}
+}
+
+func TestRulesDecideBeforeTransferMatching(t *testing.T) {
+	st := twoAccounts(t)
+	rent := []importer.Rule{{Contains: "miete", Category: "Expenses:Rent"}, {Contains: "umbuchung", Category: ledger.TransferAccount}}
+	importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "x", "", eur(80000)), row(3, "2026-10-06", "y", "", eur(50000)))
+
+	// A rule that names a real category is the user's decision, even if the
+	// amounts happen to cancel.
+	res := importRows(t, st, "Assets:Bank", rent, row(2, "2026-10-04", "Miete Oktober", "", eur(-80000)))
+	if res.Transfers != 0 || categoryAccount(t, txOf(t, st, res.IDs[0])) != "Expenses:Rent" {
+		t.Errorf("rent stays rent: %+v", res)
+	}
+	// A rule that says "transfer" is matched like an uncategorized row would be.
+	res = importRows(t, st, "Assets:Bank", rent, row(3, "2026-10-06", "Umbuchung", "", eur(-50000)))
+	if res.Transfers != 1 {
+		t.Errorf("a transfer rule still pairs: %+v", res)
+	}
+}
+
+func TestATransferRuleWithoutAPartnerWaitsForIt(t *testing.T) {
+	st := twoAccounts(t)
+	mark := []importer.Rule{{Contains: "umbuchung", Category: ledger.TransferAccount}}
+	first := importRows(t, st, "Assets:Bank", mark, row(2, "2026-10-04", "Umbuchung Sparen", "", eur(-50000)))
+	tx := txOf(t, st, first.IDs[0])
+	if first.Transfers != 0 || categoryAccount(t, tx) != ledger.TransferAccount || tx.TransferWith != 0 {
+		t.Fatalf("it is marked but unpaired: %+v, %+v", first, tx)
+	}
+	if got := balanceOn(t, st, ledger.TransferAccount, ""); got != 50000 {
+		t.Errorf("an unpaired half shows up as the balance of %s: %d", ledger.TransferAccount, got)
+	}
+	second := importRows(t, st, "Assets:Savings", mark, row(2, "2026-10-05", "Umbuchung", "", eur(50000)))
+	if second.Transfers != 1 || second.Linked[0].OtherWas != ledger.TransferAccount {
+		t.Errorf("the other half pairs with it: %+v", second)
+	}
+	if got := balanceOn(t, st, ledger.TransferAccount, ""); got != 0 {
+		t.Errorf("paired, %s = %d", ledger.TransferAccount, got)
+	}
+}
+
+func TestEditingAHalfBreaksTheLink(t *testing.T) {
+	setup := func() (*Local, int64, int64) {
+		st := twoAccounts(t)
+		a := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "out", "", eur(-50000)))
+		b := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000)))
+		return st, a.IDs[0], b.IDs[0]
+	}
+
+	// Recategorizing one half: the pair is dissolved and the other half is
+	// uncategorized again, so it gets noticed.
+	st, out, in := setup()
+	if _, err := st.SetCategories(ctx, []CategoryChange{{TransactionID: out, Category: "Expenses:Gifts"}}); err != nil {
+		t.Fatal(err)
+	}
+	if o, i := txOf(t, st, out), txOf(t, st, in); o.TransferWith != 0 || i.TransferWith != 0 ||
+		categoryAccount(t, o) != "Expenses:Gifts" || categoryAccount(t, i) != ledger.UncategorizedIncome {
+		t.Errorf("out: %d %s, in: %d %s", o.TransferWith, categoryAccount(t, o), i.TransferWith, categoryAccount(t, i))
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+
+	// Changing the amount of one half does the same.
+	st, out, in = setup()
+	o := txOf(t, st, out)
+	nt, _ := o.NewTransaction()
+	nt.Postings = []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-49000)}, {Account: ledger.TransferAccount, Amount: eur(49000)}}
+	if _, err := st.ReplaceTransaction(ctx, out, nt); err != nil {
+		t.Fatal(err)
+	}
+	if i := txOf(t, st, in); i.TransferWith != 0 || categoryAccount(t, i) != ledger.UncategorizedIncome {
+		t.Errorf("the untouched half should be uncategorized and unlinked: %+v", i)
+	}
+	if o := txOf(t, st, out); o.TransferWith != 0 || categoryAccount(t, o) != ledger.TransferAccount {
+		t.Errorf("the edited half keeps what the user chose: %+v", o)
+	}
+
+	// An edit that keeps it a transfer leaves the link alone.
+	st, out, in = setup()
+	o = txOf(t, st, out)
+	nt, _ = o.NewTransaction()
+	nt.Payee = "renamed"
+	if _, err := st.ReplaceTransaction(ctx, out, nt); err != nil {
+		t.Fatal(err)
+	}
+	if txOf(t, st, out).TransferWith != in {
+		t.Error("renaming a half must not break the pair")
+	}
+}
+
+func TestDeletingAHalfClearsTheOtherLink(t *testing.T) {
+	st := twoAccounts(t)
+	a := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "out", "", eur(-50000)))
+	b := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000)))
+	if err := st.DeleteTransaction(ctx, a.IDs[0]); err != nil {
+		t.Fatal(err)
+	}
+	other := txOf(t, st, b.IDs[0])
+	if other.TransferWith != 0 || categoryAccount(t, other) != ledger.TransferAccount {
+		t.Errorf("the survivor is unlinked and still waiting in %s: %+v", ledger.TransferAccount, other)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+// What the interface does to take an import back: put the paired halves back
+// where they were, then delete what the import added.
+func TestUndoingAnImportThatPaired(t *testing.T) {
+	st := twoAccounts(t)
+	first := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "out", "", eur(-50000)))
+	second := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000)))
+	if len(second.Linked) != 1 {
+		t.Fatalf("setup: %+v", second)
+	}
+
+	var back []CategoryChange
+	for _, l := range second.Linked {
+		back = append(back, CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
+	}
+	if _, err := st.SetCategories(ctx, back); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range second.IDs {
+		if err := st.DeleteTransaction(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := txOf(t, st, first.IDs[0])
+	if out.TransferWith != 0 || categoryAccount(t, out) != ledger.UncategorizedExpense {
+		t.Errorf("the first account's row should be as it was: %+v", out)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+	// And the whole thing can be done again.
+	if again := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000))); again.Transfers != 1 {
+		t.Errorf("re-importing after the undo should pair again: %+v", again)
+	}
+}
+
+func TestCheckFindsOneSidedTransferLinks(t *testing.T) {
+	st := twoAccounts(t)
+	a := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "out", "", eur(-50000)))
+	b := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "in", "", eur(50000)))
+	if _, err := st.repo.db.ExecContext(ctx, `UPDATE transactions SET transfer_with = NULL WHERE id = ?`, b.IDs[0]); err != nil {
+		t.Fatal(err)
+	}
+	problems, err := st.Check(ctx)
+	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], "does not link back") {
+		t.Errorf("problems = %v, %v", problems, err)
+	}
+	_ = a
 }
