@@ -1267,3 +1267,119 @@ func TestConfigKeyIsPlainTextInAForm(t *testing.T) {
 		t.Error("typing in a form must not create the config")
 	}
 }
+
+// ---- zero amounts ------------------------------------------------------------
+
+// zeroModel is a ledger with one 0.00 transaction, as a bank books for a card
+// verification, and one ordinary spending.
+func zeroModel(t *testing.T) (*Model, *core.Local, int64) {
+	t.Helper()
+	m, st := emptyModel(t)
+	add := func(payee string, cents int64) int64 {
+		res, err := st.AddTransaction(ctx, core.NewTransaction{
+			Date: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), Payee: payee,
+			Postings: []ledger.Posting{
+				{Account: "Assets:Bank", Amount: ledger.Money{Minor: -cents, Currency: "EUR"}},
+				{Account: ledger.UncategorizedExpense, Amount: ledger.Money{Minor: cents, Currency: "EUR"}},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.ID
+	}
+	zero := add("Verifizierung", 0)
+	add("Bakery", 320)
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	m.applyFilter(false)
+	return m, st, zero
+}
+
+// selectPayee moves the transaction cursor onto the transaction of payee.
+func selectPayee(t *testing.T, m *Model, payee string) {
+	t.Helper()
+	press(m, "3")
+	for i := range m.view {
+		if m.rows[m.view[i]].tx.Payee == payee {
+			m.txs.cursor = i
+			return
+		}
+	}
+	t.Fatalf("%q is not listed", payee)
+}
+
+func TestEditingAZeroAmountTransaction(t *testing.T) {
+	m, st, zero := zeroModel(t)
+	selectPayee(t, m, "Verifizierung")
+	press(m, "e")
+	if m.mode != modeForm || m.form.amount.Value() != "0.00" {
+		t.Fatalf("the edit form should open on 0.00: mode %v", m.mode)
+	}
+	press(m, "enter") // on to the payee
+	typeText(m, " Karte")
+	m.Update(keyCtrlS)
+	if m.mode != modeList {
+		t.Fatalf("saving a zero amount that was already zero must work: %q", m.form.err)
+	}
+	tx, err := st.GetTransaction(ctx, zero)
+	if err != nil || tx.Payee != "Verifizierung Karte" || tx.Postings[0].Amount.Minor != 0 {
+		t.Errorf("transaction = %+v, %v", tx, err)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+
+	// z restores it, and it can be categorised like any other.
+	press(m, "z")
+	if tx, _ := st.GetTransaction(ctx, zero); tx.Payee != "Verifizierung" {
+		t.Errorf("undo left payee %q", tx.Payee)
+	}
+	selectPayee(t, m, "Verifizierung")
+	press(m, "c")
+	typeText(m, "Expenses:BankFees")
+	press(m, "enter")
+	if tx, _ := st.GetTransaction(ctx, zero); tx.Postings[1].Account != "Expenses:BankFees" {
+		t.Errorf("categorising a zero amount: %+v (status %q)", tx.Postings, m.status)
+	}
+}
+
+func TestZeroAmountStaysRefusedElsewhere(t *testing.T) {
+	m, st, _ := zeroModel(t)
+
+	// Not for a new entry.
+	press(m, "a")
+	typeText(m, "0")
+	m.Update(keyCtrlS)
+	if m.mode != modeForm || !strings.Contains(m.form.err, "greater than zero") {
+		t.Errorf("a new zero entry: mode %v, err %q", m.mode, m.form.err)
+	}
+	press(m, "esc")
+
+	// Not by editing a real amount down to zero.
+	selectPayee(t, m, "Bakery")
+	press(m, "e")
+	m.form.amount.SetValue("0")
+	m.Update(keyCtrlS)
+	if m.mode != modeForm || !strings.Contains(m.form.err, "greater than zero") {
+		t.Errorf("editing 3.20 down to 0: mode %v, err %q", m.mode, m.form.err)
+	}
+	press(m, "esc")
+	if txs, _ := st.ListTransactions(ctx, core.TxFilter{}); len(txs) != 2 {
+		t.Errorf("%d transactions, want 2", len(txs))
+	}
+
+	// A zero transaction can be given a real amount.
+	selectPayee(t, m, "Verifizierung")
+	press(m, "e")
+	m.form.amount.SetValue("1.50")
+	m.Update(keyCtrlS)
+	if m.mode != modeList {
+		t.Fatalf("giving a zero transaction an amount: %q", m.form.err)
+	}
+	tx := txByPayee(t, st, "Verifizierung")
+	if src, _, _ := tx.Legs(); src.Amount.Minor != -150 {
+		t.Errorf("amount = %d, want -150", src.Amount.Minor)
+	}
+}
