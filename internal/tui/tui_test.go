@@ -129,7 +129,7 @@ func TestHomeScreen(t *testing.T) {
 		t.Fatalf("should start on the home tile, focus = %v", m.focus)
 	}
 	out := m.View()
-	for _, want := range []string{banner[0], "Net worth", "-72.00 EUR", "Uncategorized", "[1] Home", "[2] Accounts", "[3] Transactions"} {
+	for _, want := range []string{bannerCompact[0], "Net worth", "-72.00 EUR", "Uncategorized", "[1] Home", "[2] Accounts", "[3] Transactions"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("home view lacks %q", want)
 		}
@@ -1388,5 +1388,78 @@ func TestZeroAmountOnlyRefusedForNewEntries(t *testing.T) {
 	tx := txByPayee(t, st, "Verifizierung")
 	if src, _, _ := tx.Legs(); src.Amount.Minor != -150 {
 		t.Errorf("amount = %d, want -150", src.Amount.Minor)
+	}
+}
+
+// ---- banner ------------------------------------------------------------------
+
+func TestBannersAreRectanglesThatFitTheNarrowestPane(t *testing.T) {
+	// The detail pane is 32 cells wide at the narrowest two-column layout (76
+	// columns), 30 inside its border.
+	for name, b := range map[string][]string{"antiqua": bannerAntiqua, "compact": bannerCompact} {
+		w := lipgloss.Width(b[0])
+		if w > 30 {
+			t.Errorf("%s banner is %d cells wide, more than the 30 the narrowest pane has", name, w)
+		}
+		for i, line := range b {
+			if got := lipgloss.Width(line); got != w {
+				t.Errorf("%s banner line %d is %d cells wide, line 0 is %d; centring would shear the letters", name, i, got, w)
+			}
+		}
+	}
+	if len(bannerAntiqua) != 7 {
+		t.Errorf("the large banner is %d lines, the sizes below assume 7", len(bannerAntiqua))
+	}
+}
+
+func TestHomeBannerChoice(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		w, room    int
+		wantLarge  bool
+		blankAbove bool
+	}{
+		{"plenty of room", 60, 20, true, true},
+		{"room for the art but not a blank line", 60, 7, true, false},
+		{"one line short", 60, 6, false, true},
+		{"too narrow for the art", 27, 20, false, true},
+		{"nothing fits: still the compact one", 10, 1, false, true},
+	} {
+		art, blank := homeBanner(tc.w, tc.room)
+		if isLarge := &art[0] == &bannerAntiqua[0]; isLarge != tc.wantLarge {
+			t.Errorf("%s: large banner = %v, want %v", tc.name, isLarge, tc.wantLarge)
+		}
+		if blank != tc.blankAbove {
+			t.Errorf("%s: blank above = %v, want %v", tc.name, blank, tc.blankAbove)
+		}
+	}
+}
+
+func TestHomePaneShowsTheBiggestBannerThatFits(t *testing.T) {
+	for _, tc := range []struct {
+		width, height int
+		large         bool
+	}{
+		{110, 32, true},
+		{100, 24, true}, // the classic terminal size: nothing cut off
+		{100, 22, true}, // the smallest height with room, without a blank line above
+		{100, 21, false},
+		{76, 24, false}, // the narrow pane wraps the facts onto more lines
+	} {
+		m, _ := newModel(t)
+		m.Update(tea.WindowSizeMsg{Width: tc.width, Height: tc.height})
+		view := m.View()
+		if got := strings.Contains(view, bannerAntiqua[3]); got != tc.large {
+			t.Errorf("%dx%d: large banner shown = %v, want %v", tc.width, tc.height, got, tc.large)
+		}
+		if !tc.large && !strings.Contains(view, bannerCompact[0]) {
+			t.Errorf("%dx%d: the compact banner is missing", tc.width, tc.height)
+		}
+		if tc.height >= 24 && strings.Contains(view, "more lines") {
+			t.Errorf("%dx%d: the home pane is cut off:\n%s", tc.width, tc.height, view)
+		}
+		if !strings.Contains(view, "Base currency") {
+			t.Errorf("%dx%d: the facts below the banner are missing", tc.width, tc.height)
+		}
 	}
 }
