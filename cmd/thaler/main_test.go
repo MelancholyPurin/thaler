@@ -82,3 +82,38 @@ func TestImportZeroAmountRow(t *testing.T) {
 		t.Errorf("list should show the zero-amount row, got %q, %v", out, err)
 	}
 }
+
+func TestAccountBalanceCommand(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "t.db")
+	for _, args := range [][]string{
+		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
+		{"cli", "account", "add", "Liabilities:Card", "-c", "EUR"},
+	} {
+		if _, err := run(t, db, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := run(t, db, "cli", "account", "balance", "Assets:Bank", "1234.56", "--as-of", "2026-10-22")
+	if err != nil || !strings.Contains(out, "opening balance of 1234.56 EUR on 2026-10-22") {
+		t.Fatalf("balance = %q, %v", out, err)
+	}
+	// A credit card is given as the amount owed.
+	if out, err = run(t, db, "cli", "account", "balance", "Liabilities:Card", "500", "--as-of", "2026-10-22"); err != nil {
+		t.Fatalf("balance = %q, %v", out, err)
+	}
+	out, err = run(t, db, "cli", "balance")
+	if err != nil || !strings.Contains(out, "1234.56") || !strings.Contains(out, "-500.00") {
+		t.Errorf("balance report = %q, %v", out, err)
+	}
+	// Saying the same again books nothing new.
+	out, err = run(t, db, "cli", "account", "balance", "Assets:Bank", "1234.56", "--as-of", "2026-10-22")
+	if err != nil || !strings.Contains(out, "Booked an opening balance") {
+		t.Errorf("repeat = %q, %v", out, err)
+	}
+	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Opening balance") != 2 {
+		t.Errorf("want exactly two opening-balance transactions, got:\n%s (%v)", out, err)
+	}
+	if _, err = run(t, db, "cli", "account", "balance", "Assets:Nope", "1"); err == nil {
+		t.Error("an unknown account must fail")
+	}
+}
