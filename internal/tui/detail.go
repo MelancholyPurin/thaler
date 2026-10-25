@@ -4,19 +4,55 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-// appName and banner are the only places the product name appears in the
+// appName and the banners are the only places the product name appears in the
 // interface.
 const appName = "thaler"
 
-var banner = []string{
+// bannerAntiqua is "Thaler" in a roman serif face, drawn with quadrant block
+// characters (two pixels per cell in each direction). It was rasterised from
+// Old Standard TT Bold, an open font (SIL Open Font License), at 56 pixels wide.
+// The letters up to the e use a low cutoff so that the thin bar of the e
+// survives; the r uses a higher one, which keeps its flag light. Every line has
+// the same width so that centring them keeps the letters aligned.
+var bannerAntiqua = []string{
+	"█▛██▜█▝█▌        ▜█         ",
+	"▛ ██ █ █▌        ▐█         ",
+	"▌ ██ ▐ █▙▜▙ ▗▛▙▖ ▐█ ▗▛▙  █▄▙",
+	"  ██   █▌▐█ ▜▌▐▌ ▐█ █▌▐▌ █▀█",
+	"  ██   █▌▐█ ▗▞▜▌ ▐█ ███▌ █  ",
+	"  ██   █▌▐█ █▌▐▌▖▐█ █▌ ▖ █  ",
+	" ▄██▖ ▗█▙▐█▖▜▙██▘▟█▖▝▙▄▘▗█▖ ",
+}
+
+// bannerCompact is the three-line fallback for small terminals.
+var bannerCompact = []string{
 	"╺┳╸ ╻ ╻ ┏━┓ ╻   ┏━╸ ┏━┓",
 	" ┃  ┣━┫ ┣━┫ ┃   ┣╸  ┣┳┛",
 	" ╹  ╹ ╹ ╹ ╹ ┗━╸ ┗━╸ ╹┗╸",
+}
+
+// homeBanner picks the largest banner that fits w cells with room lines to
+// spare, and whether there is a blank line to spare above it. When even the
+// compact one does not fit, it is used anyway and the pane scrolls its end.
+func homeBanner(w, room int) (art []string, blankAbove bool) {
+	for _, b := range [][]string{bannerAntiqua, bannerCompact} {
+		if lipgloss.Width(b[0]) > w {
+			continue
+		}
+		if len(b)+1 <= room {
+			return b, true
+		}
+		if len(b) <= room {
+			return b, false
+		}
+	}
+	return bannerCompact, true
 }
 
 // rightPane shows details for whatever is selected in the focused panel.
@@ -32,7 +68,7 @@ func (m *Model) rightPane(l layout) string {
 	case m.focus == paneTransactions:
 		title, lines = m.transactionDetail(iw)
 	default:
-		title, lines = appName, m.homeDetail(iw)
+		title, lines = appName, m.homeDetail(iw, l.avail-2)
 	}
 	if ih := l.avail - 2; ih > 1 && len(lines) > ih {
 		lines = append(lines[:ih-1:ih-1], dim.Render(fmt.Sprintf("… %d more lines", len(lines)-ih+1)))
@@ -56,14 +92,10 @@ func kv(key, value string, keyW, w int) []string {
 
 // ---- home -------------------------------------------------------------------------
 
-func (m *Model) homeDetail(w int) []string {
-	var lines []string
-	lines = append(lines, "")
-	for _, b := range banner {
-		lines = append(lines, centered(accent.Render(b), w))
-	}
-	lines = append(lines, "", centered(dim.Render("From Purin • https://github.com/MelancholyPurin"), w), "")
-
+// homeDetail is the pane shown beside the Home tile; h is the number of lines
+// it has, which decides how large a banner there is room for.
+func (m *Model) homeDetail(w, h int) []string {
+	var facts []string
 	netText := m.netWorth.Total.String()
 	if len(m.netWorth.Missing) > 0 {
 		netText = "≈ " + netText
@@ -81,7 +113,7 @@ func (m *Model) homeDetail(w int) []string {
 	pad := strings.Repeat(" ", max(0, (w-44)/2))
 	add := func(key, value string) {
 		for _, line := range kv(key, value, keyW, w-len(pad)) {
-			lines = append(lines, pad+line)
+			facts = append(facts, pad+line)
 		}
 	}
 	add("Net worth", bold.Render(netText))
@@ -97,8 +129,19 @@ func (m *Model) homeDetail(w int) []string {
 	add("Period", span)
 	add("Uncategorized", uncatText)
 	add("Base currency", string(m.netWorth.Base))
-	lines = append(lines, "", centered(dim.Render("? for keys · 2 accounts · 3 transactions"), w))
-	return lines
+	facts = append(facts, "", centered(dim.Render("? for keys · 2 accounts · 3 transactions"), w))
+
+	credit := []string{"", centered(dim.Render("From Purin • https://github.com/MelancholyPurin"), w), ""}
+	art, blankAbove := homeBanner(w, h-len(credit)-len(facts))
+	var lines []string
+	if blankAbove {
+		lines = append(lines, "")
+	}
+	for _, b := range art {
+		lines = append(lines, centered(accent.Render(b), w))
+	}
+	lines = append(lines, credit...)
+	return append(lines, facts...)
 }
 
 // ---- accounts ----------------------------------------------------------------------
