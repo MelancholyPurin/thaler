@@ -116,6 +116,9 @@ Use --dry-run first to see what would happen without writing anything.`,
 					if r.Transfer != nil {
 						category = fmt.Sprintf("⇄ #%d %s", r.Transfer.ID, r.Transfer.Account)
 					}
+					if r.Adopts != nil {
+						category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, r.Adopts.Payee)
+					}
 					lines = append(lines, column{
 						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(category, 28), truncate(r.Row.Payee, 40)),
 						amount: signed(r.Row.Amount),
@@ -124,6 +127,9 @@ Use --dry-run first to see what would happen without writing anything.`,
 				printColumns(out, "", lines)
 				fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
 					res.Inserted, res.Duplicates, parsed.Skipped)
+				if res.Adopted > 0 {
+					fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
+				}
 				if res.Transfers > 0 {
 					fmt.Fprintf(out, "%d new row(s) would be paired as the other half of a transfer with a transaction on another account.\n", res.Transfers)
 				}
@@ -134,6 +140,9 @@ Use --dry-run first to see what would happen without writing anything.`,
 				res.Inserted, acc.Name, res.Duplicates, parsed.Skipped)
 			for _, name := range res.Created {
 				fmt.Fprintf(out, "Created new account %s\n", name)
+			}
+			if res.Adopted > 0 {
+				fmt.Fprintf(out, "%d row(s) matched a transaction you entered by hand; it now stands for the bank row and nothing was added twice.\n", res.Adopted)
 			}
 			if res.Transfers > 0 {
 				fmt.Fprintf(out, "%d row(s) were paired as the other half of a transfer with a transaction on another account (%s).\n",
