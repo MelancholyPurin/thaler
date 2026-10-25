@@ -946,3 +946,211 @@ func TestImportBrowsesATypedFolder(t *testing.T) {
 		t.Errorf("imported %d, want 3", txCount(t, st)-before)
 	}
 }
+
+// ---- accounts ----------------------------------------------------------------
+
+var (
+	keyCtrlS = tea.KeyMsg{Type: tea.KeyCtrlS}
+	keyRight = tea.KeyMsg{Type: tea.KeyRight}
+)
+
+// bankBalance is what the ledger holds on an account, in minor units.
+func bankBalance(t *testing.T, st core.Service, account string) int64 {
+	t.Helper()
+	report, err := st.BalanceReport(ctx, core.BalanceRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range report.Lines {
+		if l.Account == account {
+			return l.Amount.Minor
+		}
+	}
+	return 0
+}
+
+func noAccountsModel(t *testing.T) (*Model, *core.Local) {
+	t.Helper()
+	st, err := core.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	return m, st
+}
+
+func TestCreateAccountWithBalance(t *testing.T) {
+	m, st := noAccountsModel(t)
+	press(m, "a")
+	if !strings.Contains(m.status, "press n") {
+		t.Errorf("with no accounts the add form should point at n, status %q", m.status)
+	}
+
+	press(m, "n")
+	if m.mode != modeAccount {
+		t.Fatalf("n should open the account popup, mode = %v", m.mode)
+	}
+	typeText(m, "Sparkasse")
+	if view := m.View(); !strings.Contains(view, "will be called Assets:Sparkasse") {
+		t.Errorf("the popup should show the full name:\n%s", view)
+	}
+	press(m, "enter", "enter", "enter") // type, currency (EUR is the base), balance
+	typeText(m, "1234.56")
+	press(m, "enter", "enter") // date (today), save
+	if m.mode != modeList {
+		t.Fatalf("popup still open: mode %v, err %q", m.mode, m.acct.err)
+	}
+
+	acc, err := st.GetAccount(ctx, "Assets:Sparkasse")
+	if err != nil || acc.Currency != "EUR" {
+		t.Fatalf("account = %+v, %v", acc, err)
+	}
+	if got := bankBalance(t, st, "Assets:Sparkasse"); got != 123456 {
+		t.Errorf("balance = %d, want 123456", got)
+	}
+	if m.scopeAccount() != "Assets:Sparkasse" {
+		t.Errorf("the new account should be selected, scope %q", m.scopeAccount())
+	}
+	for _, want := range []string{"Created Assets:Sparkasse (EUR)", "opening balance of 1234.56", "2026-10-22", "i imports"} {
+		if !strings.Contains(m.status, want) {
+			t.Errorf("status %q is missing %q", m.status, want)
+		}
+	}
+
+	// z takes back the balance; the account stays.
+	press(m, "z")
+	if bankBalance(t, st, "Assets:Sparkasse") != 0 {
+		t.Error("undo should remove the opening balance")
+	}
+	if _, err := st.GetAccount(ctx, "Assets:Sparkasse"); err != nil {
+		t.Error("undo must not delete the account")
+	}
+}
+
+func TestCreateLiabilityAccount(t *testing.T) {
+	m, st := noAccountsModel(t)
+	press(m, "n")
+	typeText(m, "Card")
+	press(m, "enter")
+	m.Update(keyRight) // Assets → Liabilities
+	press(m, "enter", "enter")
+	if view := m.View(); !strings.Contains(view, "the amount you owe") {
+		t.Errorf("a liability should ask for the amount owed:\n%s", view)
+	}
+	typeText(m, "500")
+	press(m, "enter", "enter")
+	if bankBalance(t, st, "Liabilities:Card") != -50000 {
+		t.Errorf("500 owed should be -50000 in the ledger, got %d (status %q)", bankBalance(t, st, "Liabilities:Card"), m.status)
+	}
+}
+
+func TestCreateAccountWithoutBalance(t *testing.T) {
+	m, st := noAccountsModel(t)
+	press(m, "n")
+	typeText(m, "Cash")
+	m.Update(keyCtrlS)
+	if m.mode != modeList {
+		t.Fatalf("ctrl+s should save: err %q", m.acct.err)
+	}
+	if _, err := st.GetAccount(ctx, "Assets:Cash"); err != nil {
+		t.Error(err)
+	}
+	if txs, _ := st.ListTransactions(ctx, core.TxFilter{}); len(txs) != 0 {
+		t.Errorf("no balance given, yet %d transactions were booked", len(txs))
+	}
+}
+
+func TestCreateAccountRejectsBadInput(t *testing.T) {
+	m, st := noAccountsModel(t)
+	if _, err := st.AddAccount(ctx, "Assets:Cash", "EUR"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	for name, input := range map[string]struct{ name, currency, balance, want string }{
+		"no name":         {"", "EUR", "", "name"},
+		"duplicate":       {"Cash", "EUR", "", "already exists"},
+		"bad currency":    {"Bank", "E1", "", "currency"},
+		"bad balance":     {"Bank", "EUR", "lots", "balance"},
+		"a category here": {"Expenses:Food", "EUR", "", "Assets and Liabilities"},
+	} {
+		press(m, "n")
+		m.acct.name.SetValue(input.name)
+		m.acct.currency.SetValue(input.currency)
+		m.acct.balance.SetValue(input.balance)
+		m.Update(keyCtrlS)
+		if m.mode != modeAccount {
+			t.Errorf("%s: the popup closed (status %q); want an error mentioning %q", name, m.status, input.want)
+			continue
+		}
+		if !strings.Contains(m.acct.err, input.want) {
+			t.Errorf("%s: err %q; want it to mention %q", name, m.acct.err, input.want)
+		}
+		press(m, "esc")
+	}
+	accs, _ := st.ListAccounts(ctx)
+	if len(accs) != 1 {
+		t.Errorf("%d accounts, want only the one that existed", len(accs))
+	}
+}
+
+func TestSetBalanceOfAnAccount(t *testing.T) {
+	m, st := newModel(t)
+	press(m, "b")
+	if m.mode == modeAccount || !m.statusIsError {
+		t.Fatalf("with no account selected b must refuse: mode %v, status %q", m.mode, m.status)
+	}
+
+	press(m, "2", "down") // Assets:Bank
+	press(m, "b")
+	if view := m.View(); m.mode != modeAccount || !strings.Contains(view, "Set balance · Assets:Bank") || !strings.Contains(view, "Thaler currently holds") {
+		t.Fatalf("balance popup:\n%s", view)
+	}
+	typeText(m, "500")
+	press(m, "enter", "enter")
+	if m.mode != modeList {
+		t.Fatalf("err %q", m.acct.err)
+	}
+	if got := bankBalance(t, st, "Assets:Bank"); got != 50000 {
+		t.Errorf("balance = %d, want 50000", got)
+	}
+	opening, _ := st.ListTransactions(ctx, core.TxFilter{Account: ledger.OpeningBalanceAccount})
+	if len(opening) != 1 || opening[0].Date >= "2026-09-15" {
+		t.Fatalf("opening balance should come before the first transaction (2026-09-15): %+v", opening)
+	}
+
+	// A second reading corrects the same transaction, and z restores the first.
+	press(m, "b")
+	typeText(m, "700")
+	press(m, "enter", "enter")
+	if got := bankBalance(t, st, "Assets:Bank"); got != 70000 {
+		t.Errorf("balance = %d, want 70000", got)
+	}
+	if again, _ := st.ListTransactions(ctx, core.TxFilter{Account: ledger.OpeningBalanceAccount}); len(again) != 1 {
+		t.Errorf("%d opening balances, want one", len(again))
+	}
+	press(m, "z")
+	if got := bankBalance(t, st, "Assets:Bank"); got != 50000 {
+		t.Errorf("after undo balance = %d, want 50000", got)
+	}
+	press(m, "z")
+	if got := bankBalance(t, st, "Assets:Bank"); got == 50000 {
+		t.Errorf("the second undo should remove the opening balance, balance %d", got)
+	}
+}
+
+func TestAccountPopupCancels(t *testing.T) {
+	m, st := noAccountsModel(t)
+	press(m, "n")
+	typeText(m, "Cash")
+	press(m, "esc")
+	if accs, _ := st.ListAccounts(ctx); m.mode != modeList || len(accs) != 0 {
+		t.Errorf("esc must write nothing: mode %v, %d accounts", m.mode, len(accs))
+	}
+}

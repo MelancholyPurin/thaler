@@ -71,7 +71,56 @@ and equity accounts accept any currency unless you give one.`,
 		},
 	}
 
-	root.AddCommand(add, list)
+	var asOf string
+	balance := &cobra.Command{
+		Use:   "balance ACCOUNT AMOUNT",
+		Short: "Set an account's balance to what your bank shows",
+		Long: `Make an Assets or Liabilities account hold AMOUNT at the end of a day, as your
+bank shows it. The difference between that and the transactions already booked
+becomes the account's opening balance, dated before its first transaction, so
+the whole history adds up. For a Liabilities account give the amount you owe
+(a credit card showing 500.00 owed is 500). Run it again with a new reading to
+correct the same opening balance.`,
+		Example: "  thaler cli account balance Assets:Sparkasse 1234.56 --as-of 2026-10-22",
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			acc, err := svc.GetAccount(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			if acc.Currency == "" {
+				return fmt.Errorf("%s has no fixed currency; only Assets and Liabilities accounts have a balance", acc.Name)
+			}
+			shown, err := ledger.ParseAmount(args[1], acc.Currency, 0)
+			if err != nil {
+				return err
+			}
+			when, err := parseDateFlag(asOf)
+			if err != nil {
+				return err
+			}
+			res, err := svc.SetOpeningBalance(ctx, core.OpeningBalanceRequest{Account: acc.Name, Balance: acc.LedgerBalance(shown), AsOf: when})
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if res.ID == 0 {
+				fmt.Fprintf(out, "Nothing to book: the transactions already add up to %s on %s.\n", shown, when.Format(ledger.DateLayout))
+				return nil
+			}
+			fmt.Fprintf(out, "Booked an opening balance of %s on %s (#%d) so that %s holds %s on %s.\n",
+				res.Amount, res.Date, res.ID, acc.Name, shown, when.Format(ledger.DateLayout))
+			return nil
+		},
+	}
+	balance.Flags().StringVar(&asOf, "as-of", "", "the day the bank showed this balance, YYYY-MM-DD or DD.MM.YYYY (default: today)")
+
+	root.AddCommand(add, list, balance)
 	return root
 }
 

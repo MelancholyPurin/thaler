@@ -462,6 +462,46 @@ func (q queries) rates(ctx context.Context) ([]ledger.RateEntry, error) {
 	return out, rows.Err()
 }
 
+// ---- opening balances ------------------------------------------------------
+
+// openingTransaction is the id of the transaction that books an account's
+// opening balance: exactly two postings, one on the account and one on
+// Equity:Opening. It is 0 when there is none.
+func (q queries) openingTransaction(ctx context.Context, accountID int64) (int64, error) {
+	var id int64
+	err := q.db.QueryRowContext(ctx, `
+		SELECT COALESCE(MIN(t.id), 0)
+		FROM transactions t
+		JOIN postings mine ON mine.transaction_id = t.id AND mine.account_id = ?
+		JOIN postings other ON other.transaction_id = t.id
+		JOIN accounts eq ON eq.id = other.account_id AND eq.name = ?
+		WHERE (SELECT COUNT(*) FROM postings WHERE transaction_id = t.id) = 2`,
+		accountID, ledger.OpeningBalanceAccount).Scan(&id)
+	return id, err
+}
+
+// accountSum is what the postings on an account add up to, up to and including
+// the day asOf, leaving out the transaction skip (0 = leave out none).
+func (q queries) accountSum(ctx context.Context, accountID int64, asOf string, skip int64) (int64, error) {
+	var sum int64
+	err := q.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(p.amount), 0)
+		FROM postings p JOIN transactions t ON t.id = p.transaction_id
+		WHERE p.account_id = ? AND t.date <= ? AND t.id <> ?`, accountID, asOf, skip).Scan(&sum)
+	return sum, err
+}
+
+// firstPostingDate is the day of the oldest transaction on an account, leaving
+// out the transaction skip; empty when there is none.
+func (q queries) firstPostingDate(ctx context.Context, accountID, skip int64) (string, error) {
+	var day string
+	err := q.db.QueryRowContext(ctx, `
+		SELECT COALESCE(MIN(t.date), '')
+		FROM postings p JOIN transactions t ON t.id = p.transaction_id
+		WHERE p.account_id = ? AND t.id <> ?`, accountID, skip).Scan(&day)
+	return day, err
+}
+
 // ---- maintenance -----------------------------------------------------------
 
 func (q queries) integrityCheck(ctx context.Context) (string, error) {

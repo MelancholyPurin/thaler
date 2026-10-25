@@ -26,6 +26,8 @@ const (
 	// ConversionAccount is the multi-currency account that sits between the two
 	// legs of a cross-currency transfer, so every currency balances on its own.
 	ConversionAccount = "Equity:Conversions"
+	// OpeningBalanceAccount is the other side of every account's opening balance.
+	OpeningBalanceAccount = "Equity:Opening"
 )
 
 var accountTypes = []AccountType{Assets, Liabilities, Income, Expenses, Equity}

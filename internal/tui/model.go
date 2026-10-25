@@ -36,6 +36,7 @@ const (
 	modeForm                // adding or editing a transaction
 	modeConfirm             // asking before deleting a transaction
 	modeImport              // importing a bank export
+	modeAccount             // creating an account or setting its balance
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -105,6 +106,7 @@ type Model struct {
 	loadConfig  ConfigLoader
 	downloads   string // where bank exports usually land; offered when importing unless config.toml says otherwise
 	imp         *importFlow
+	acct        *accountForm
 	lastProfile string // import profile used last in this session
 
 	picker       textinput.Model
@@ -223,6 +225,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.imp != nil {
 			m.imp.file.Width = m.importWidth()
 		}
+		if m.acct != nil {
+			for _, in := range []*textinput.Model{&m.acct.name, &m.acct.currency, &m.acct.balance, &m.acct.asOf} {
+				in.Width = m.accountWidth()
+			}
+		}
 		m.clampAll()
 		return m, nil
 	case tea.KeyMsg:
@@ -243,6 +250,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 		case modeImport:
 			return m.updateImport(msg)
+		case modeAccount:
+			return m.updateAccount(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -319,6 +328,10 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		return m, m.openForm(false)
 	case "i":
 		return m, m.openImport()
+	case "n":
+		return m, m.openAccountForm(false)
+	case "b":
+		return m, m.openAccountForm(true)
 	case "z":
 		m.undoLast()
 		return m, nil

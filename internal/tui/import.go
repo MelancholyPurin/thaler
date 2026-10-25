@@ -87,7 +87,7 @@ func (m *Model) importWidth() int {
 // add form's: the one selected in the Accounts panel, else the last one used.
 func (m *Model) openImport() tea.Cmd {
 	if len(m.accounts) == 0 {
-		m.setStatus("no accounts yet: create one with: thaler cli account add Assets:Cash --currency EUR", true)
+		m.setStatus("no accounts yet: press n to create one", true)
 		return nil
 	}
 	cfg := &config.Config{}

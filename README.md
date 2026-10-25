@@ -105,6 +105,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `enter` | open the next panel (Home, Accounts) / categorize (Transactions) |
 | `a` | add a transaction (see below) |
 | `i` | import a bank export (see below) |
+| `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
 | `e` / `d` | edit / delete the selected transaction (delete asks first) |
 | `z` | undo the last change made in this session: add, edit, delete, categorize or import, repeatable |
@@ -124,6 +125,10 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 - **Payee:** typing the start of a known payee highlights it, and Enter completes it. `↑` drops the suggestion if you meant something new.
 - **Category:** the category that payee went to last time is offered first (marked "same payee"), then categories of the right kind by how often you use them. Type to filter, or type a full new name such as `Expenses:Gifts`. The last entry, "decide later", books it as uncategorized.
 - **Date** defaults to today: `y` is yesterday, `-2` is two days ago, or type `2026-10-20` / `20.10.2026`. `tab` moves between fields, `ctrl+s` saves from anywhere and `esc` cancels. Mistakes are reported in the form and nothing is written.
+
+**Creating an account** needs no command line. Press `n`, type a name (`Sparkasse` becomes `Assets:Sparkasse`), pick Assets or Liabilities, and confirm the currency (it starts as your base currency). If you already know what the account holds, fill in **Balance** and **As of**; leave them empty to start from nothing.
+
+**Matching your bank's balance.** An import only brings in movements, so an account's balance is wrong until Thaler knows where it started. Select the account and press `b`, then type what your bank shows on a given day. Thaler books the difference as one *opening balance* transaction against `Equity:Opening`, dated the day before the account's first transaction, so the whole history adds up. Press `b` again after the next import and it corrects that same transaction instead of adding another. For a credit card or loan, type the amount you owe (a card showing 500.00 owed is `500`). `z` takes the change back. On the command line: `thaler cli account balance ACCOUNT AMOUNT --as-of DATE`.
 
 **Importing a bank export** works from the interface too. Press `i`:
 
@@ -162,6 +167,7 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 | Command | Purpose |
 | --- | --- |
 | `thaler cli account add NAME -c EUR` / `thaler cli account list` | chart of accounts; first segment is the type (`Assets:`, `Liabilities:`, `Income:`, `Expenses:`, `Equity:`) |
+| `thaler cli account balance ACCOUNT AMOUNT [--as-of DATE]` | make the account hold what your bank shows, via an opening balance |
 | `thaler cli add -a ACCOUNT --amount=-12.50 -t CATEGORY -p PAYEE -d DATE` | one income or expense |
 | `thaler cli transfer --from A --to B --amount N [--to-amount M]` | between your own accounts, also across currencies |
 | `thaler cli import FILE -a ACCOUNT [--profile P] [--dry-run]` | bank CSV import |
