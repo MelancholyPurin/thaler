@@ -202,8 +202,11 @@ func (m *Model) applyFilter(keep bool) {
 	m.clampAll()
 }
 
+// selected is the transaction under the cursor. After a reload the view can
+// still hold indexes into the old, longer list of rows (until applyFilter
+// rebuilds it), so an index past the end means there is no selection.
 func (m *Model) selected() (row, bool) {
-	if m.txs.cursor < 0 || m.txs.cursor >= len(m.view) {
+	if m.txs.cursor < 0 || m.txs.cursor >= len(m.view) || m.view[m.txs.cursor] >= len(m.rows) {
 		return row{}, false
 	}
 	return m.rows[m.view[m.txs.cursor]], true

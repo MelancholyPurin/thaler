@@ -20,5 +20,5 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return tui.Run(ctx, svc)
+	return tui.Run(ctx, svc, a.loadConfig)
 }

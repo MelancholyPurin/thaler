@@ -232,9 +232,10 @@ type RejectedRow struct {
 
 // ImportResult summarises an import.
 type ImportResult struct {
-	Inserted      int // new transactions (would be, in a dry run)
-	Duplicates    int // rows already stored
-	Uncategorized int // rows no rule matched
+	Inserted      int     // new transactions (would be, in a dry run)
+	IDs           []int64 // the new transactions, so the import can be undone; empty in a dry run
+	Duplicates    int     // rows already stored
+	Uncategorized int     // rows no rule matched
 	Created       []string
 	Rejected      []RejectedRow
 	Rows          []ImportedRow // dry run only

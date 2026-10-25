@@ -79,6 +79,12 @@ func FindProfile(name string, custom []Profile) (Profile, error) {
 	if p, ok := builtin[key]; ok {
 		return p, nil
 	}
+	return Profile{}, fmt.Errorf("unknown import profile %q (available: %s)", name, strings.Join(ProfileNames(custom), ", "))
+}
+
+// ProfileNames lists the built-in and custom profile names, lower-cased and
+// sorted.
+func ProfileNames(custom []Profile) []string {
 	set := make(map[string]bool)
 	for k := range builtin {
 		set[k] = true
@@ -91,7 +97,7 @@ func FindProfile(name string, custom []Profile) (Profile, error) {
 		names = append(names, k)
 	}
 	sort.Strings(names)
-	return Profile{}, fmt.Errorf("unknown import profile %q (available: %s)", name, strings.Join(names, ", "))
+	return names
 }
 
 type compiled struct {

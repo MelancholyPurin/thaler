@@ -11,13 +11,20 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
 )
+
+// ConfigLoader reads the user's config file. The interface calls it each time an
+// import starts, so rules edited while it is open take effect without a restart.
+type ConfigLoader func() (*config.Config, error)
 
 type mode int
 
@@ -28,6 +35,7 @@ const (
 	modeHelp                // key reference popup
 	modeForm                // adding or editing a transaction
 	modeConfirm             // asking before deleting a transaction
+	modeImport              // importing a bank export
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -94,6 +102,11 @@ type Model struct {
 	undo        []undoOp
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
 
+	loadConfig  ConfigLoader
+	downloads   string // where bank exports usually land; offered when importing
+	imp         *importFlow
+	lastProfile string // import profile used last in this session
+
 	picker       textinput.Model
 	pickItems    []pickItem
 	pickCursor   int
@@ -107,12 +120,15 @@ type Model struct {
 }
 
 // New loads the data and returns a ready model.
-func New(ctx context.Context, svc core.Service) (*Model, error) {
-	return newWithClock(ctx, svc, time.Now)
+func New(ctx context.Context, svc core.Service, load ConfigLoader) (*Model, error) {
+	return newWithClock(ctx, svc, load, time.Now)
 }
 
-func newWithClock(ctx context.Context, svc core.Service, now func() time.Time) (*Model, error) {
-	m := &Model{ctx: ctx, svc: svc, width: 100, height: 30, now: now}
+func newWithClock(ctx context.Context, svc core.Service, load ConfigLoader, now func() time.Time) (*Model, error) {
+	m := &Model{ctx: ctx, svc: svc, loadConfig: load, width: 100, height: 30, now: now}
+	if home, err := os.UserHomeDir(); err == nil {
+		m.downloads = filepath.Join(home, "Downloads")
+	}
 	m.period = now().Format(monthLayout)
 	m.filter = textinput.New()
 	m.filter.Prompt = "/ "
@@ -128,8 +144,8 @@ func newWithClock(ctx context.Context, svc core.Service, now func() time.Time) (
 }
 
 // Run starts the interface and blocks until the user quits.
-func Run(ctx context.Context, svc core.Service) error {
-	m, err := New(ctx, svc)
+func Run(ctx context.Context, svc core.Service, load ConfigLoader) error {
+	m, err := New(ctx, svc, load)
 	if err != nil {
 		return err
 	}
@@ -204,6 +220,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				in.Width = m.inputWidth()
 			}
 		}
+		if m.imp != nil {
+			m.imp.file.Width = m.importWidth()
+		}
 		m.clampAll()
 		return m, nil
 	case tea.KeyMsg:
@@ -222,6 +241,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateForm(msg)
 		case modeConfirm:
 			return m.updateConfirm(msg)
+		case modeImport:
+			return m.updateImport(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -296,6 +317,8 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "a":
 		return m, m.openForm(false)
+	case "i":
+		return m, m.openImport()
 	case "z":
 		m.undoLast()
 		return m, nil
