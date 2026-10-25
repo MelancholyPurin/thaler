@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/melancholypurin/thaler/internal/importer"
@@ -357,21 +358,36 @@ func reconcileTransferLink(ctx context.Context, q queries, id int64, created *[]
 		return err
 	}
 	if len(theirs) == 1 {
-		if source, category, ok := theirs[0].Legs(); ok && category.Account == ledger.TransferAccount {
+		if source, category, ok := theirs[0].Legs(); ok && isClearingAccount(category.Account) {
 			return setCategory(ctx, q, CategoryChange{TransactionID: partnerID, Category: uncategorizedFor(source.Amount)}, created)
 		}
 	}
 	return nil
 }
 
-// transferHalves reports whether a and b still make one transfer.
+// transferHalves reports whether a and b still make one transfer: on different
+// own accounts, booked to the same clearing account, and either the same amount
+// the other way round (Equity:Transfers) or an amount out in one currency and in
+// in another (Equity:Conversions).
 func transferHalves(a, b TxView) bool {
 	sa, ca, oka := a.Legs()
 	sb, cb, okb := b.Legs()
-	return oka && okb &&
-		ca.Account == ledger.TransferAccount && cb.Account == ledger.TransferAccount &&
-		sa.Account != sb.Account &&
-		sa.Amount.Currency == sb.Amount.Currency && sa.Amount.Minor == -sb.Amount.Minor
+	if !oka || !okb || sa.Account == sb.Account || ca.Account != cb.Account {
+		return false
+	}
+	switch ca.Account {
+	case ledger.TransferAccount:
+		return sa.Amount.Currency == sb.Amount.Currency && sa.Amount.Minor == -sb.Amount.Minor
+	case ledger.ConversionAccount:
+		return sa.Amount.Currency != sb.Amount.Currency && sa.Amount.Minor != 0 && sb.Amount.Minor != 0 &&
+			(sa.Amount.Minor > 0) != (sb.Amount.Minor > 0)
+	}
+	return false
+}
+
+// isClearingAccount reports whether a category is where a transfer half sits.
+func isClearingAccount(name string) bool {
+	return name == ledger.TransferAccount || name == ledger.ConversionAccount
 }
 
 // Transfer moves money between two accounts that hold their own currency. A
@@ -400,13 +416,17 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 		return TransferResult{}, errors.New("amount must be greater than zero")
 	}
 
-	postings := []ledger.Posting{{Account: src.Name, Amount: req.Amount.Neg()}}
+	// Each side of the transfer is its own transaction on its own account,
+	// booked against a clearing account and linked to the other, which is the
+	// shape an import of the two bank statements produces. Within one currency
+	// the clearing account is Equity:Transfers; across currencies it is
+	// Equity:Conversions, which then holds both currencies.
+	clearing, received := ledger.TransferAccount, req.Amount
 	res := TransferResult{In: req.Amount}
 	if src.Currency == dst.Currency {
 		if req.ToAmount != (ledger.Money{}) {
 			return TransferResult{}, fmt.Errorf("both accounts use %s, so there is no separate amount received", src.Currency)
 		}
-		postings = append(postings, ledger.Posting{Account: dst.Name, Amount: req.Amount})
 	} else {
 		if req.ToAmount == (ledger.Money{}) {
 			return TransferResult{}, fmt.Errorf("%s -> %s crosses currencies; say how much arrives in %s",
@@ -418,19 +438,39 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 		if req.ToAmount.Minor <= 0 {
 			return TransferResult{}, errors.New("amount received must be greater than zero")
 		}
-		postings = append(postings,
-			ledger.Posting{Account: ledger.ConversionAccount, Amount: req.Amount},
-			ledger.Posting{Account: ledger.ConversionAccount, Amount: req.ToAmount.Neg()},
-			ledger.Posting{Account: dst.Name, Amount: req.ToAmount},
-		)
+		clearing, received = ledger.ConversionAccount, req.ToAmount
 		res.In, res.CrossCurrency = req.ToAmount, true
 	}
-	add, err := s.AddTransaction(ctx, NewTransaction{Date: req.Date, Description: req.Memo, Postings: postings})
+	out := NewTransaction{
+		Date: req.Date, Payee: "Transfer to " + shortAccountName(dst.Name), Description: req.Memo,
+		Postings: []ledger.Posting{{Account: src.Name, Amount: req.Amount.Neg()}, {Account: clearing, Amount: req.Amount}},
+	}
+	in := NewTransaction{
+		Date: req.Date, Payee: "Transfer from " + shortAccountName(src.Name), Description: req.Memo,
+		Postings: []ledger.Posting{{Account: dst.Name, Amount: received}, {Account: clearing, Amount: received.Neg()}},
+	}
+	err = s.repo.inTx(ctx, func(q queries) error {
+		var err error
+		if res.ID, err = storeTransaction(ctx, q, out, 0, &res.Created); err != nil {
+			return err
+		}
+		if res.InID, err = storeTransaction(ctx, q, in, 0, &res.Created); err != nil {
+			return err
+		}
+		return q.linkTransfer(ctx, res.ID, res.InID)
+	})
 	if err != nil {
 		return TransferResult{}, err
 	}
-	res.AddResult = add
 	return res, nil
+}
+
+// shortAccountName drops the type segment: "Assets:Savings" is "Savings".
+func shortAccountName(name string) string {
+	if _, rest, ok := strings.Cut(name, ":"); ok {
+		return rest
+	}
+	return name
 }
 
 // ---- import and recategorisation -------------------------------------------

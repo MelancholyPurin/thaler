@@ -40,7 +40,7 @@ func newRow(tx core.TxView) row {
 	if src, cat, ok := tx.Legs(); ok {
 		r.source, r.category, r.simple = src, cat, true
 		r.uncategorized = cat.Account == ledger.UncategorizedExpense || cat.Account == ledger.UncategorizedIncome
-		r.transfer = cat.Account == ledger.TransferAccount
+		r.transfer = cat.Account == ledger.TransferAccount || cat.Account == ledger.ConversionAccount
 	} else {
 		names := make([]string, len(tx.Postings))
 		for i, p := range tx.Postings {

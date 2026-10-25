@@ -212,7 +212,11 @@ type TransferRequest struct {
 
 // TransferResult describes a stored transfer.
 type TransferResult struct {
+	// AddResult is the half that leaves the source account; InID is the half
+	// that arrives, linked to it. Each is an ordinary transaction on its own
+	// account, as an import of the two bank statements would produce.
 	AddResult
+	InID int64
 	// In is what arrived on the destination account (equal to the request's
 	// Amount for a same-currency transfer).
 	In ledger.Money

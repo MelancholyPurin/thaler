@@ -40,14 +40,15 @@ type Options struct {
 type mode int
 
 const (
-	modeList    mode = iota // browsing the panels
-	modeFilter              // typing into the search box
-	modePick                // choosing a category for the selected transaction
-	modeHelp                // key reference popup
-	modeForm                // adding or editing a transaction
-	modeConfirm             // asking before deleting a transaction
-	modeImport              // importing a bank export
-	modeAccount             // creating an account or setting its balance
+	modeList     mode = iota // browsing the panels
+	modeFilter               // typing into the search box
+	modePick                 // choosing a category for the selected transaction
+	modeHelp                 // key reference popup
+	modeForm                 // adding or editing a transaction
+	modeConfirm              // asking before deleting a transaction
+	modeImport               // importing a bank export
+	modeAccount              // creating an account or setting its balance
+	modeTransfer             // moving money between two accounts
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -119,6 +120,7 @@ type Model struct {
 	downloads   string // where bank exports usually land; offered when importing unless config.toml says otherwise
 	imp         *importFlow
 	acct        *accountForm
+	xfer        *transferForm
 	lastProfile string // import profile used last in this session
 
 	picker       textinput.Model
@@ -251,6 +253,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.imp != nil {
 			m.imp.file.Width = m.importWidth()
 		}
+		if m.xfer != nil {
+			for _, in := range []*textinput.Model{&m.xfer.amount, &m.xfer.received, &m.xfer.date} {
+				in.Width = m.transferWidth()
+			}
+		}
 		if m.acct != nil {
 			for _, in := range []*textinput.Model{&m.acct.name, &m.acct.currency, &m.acct.balance, &m.acct.asOf} {
 				in.Width = m.accountWidth()
@@ -281,6 +288,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateImport(msg)
 		case modeAccount:
 			return m.updateAccount(msg)
+		case modeTransfer:
+			return m.updateTransfer(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -359,6 +368,8 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		return m, m.openForm(false)
 	case "i":
 		return m, m.openImport()
+	case "x":
+		return m, m.openTransferForm()
 	case "n":
 		return m, m.openAccountForm(false)
 	case "b":
