@@ -213,6 +213,8 @@ func (m *Model) transactionsPanel(l layout) string {
 			marker = "●"
 		case !r.simple:
 			marker = "»"
+		case r.transfer:
+			marker = "⇄"
 		}
 		payeeW := max(4, iw-dateWidth-amtW-4)
 		plain := r.tx.Date + " " + marker + " " + fit(clean(r.tx.Payee), payeeW) + " " + fitRight(m.listAmount(r), amtW)
@@ -223,7 +225,7 @@ func (m *Model) transactionsPanel(l layout) string {
 		switch {
 		case r.uncategorized:
 			marker = warn.Render(marker)
-		case !r.simple:
+		case !r.simple, r.transfer:
 			marker = dim.Render(marker)
 		}
 		amount := fitRight(m.listAmount(r), amtW)

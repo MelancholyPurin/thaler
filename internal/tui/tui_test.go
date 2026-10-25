@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1702,5 +1703,141 @@ func TestABrokenConfigStopsRulesButNotCategorizing(t *testing.T) {
 	press(m, "enter")
 	if categoryOf(t, st, "Kino") != "Expenses:Fun" {
 		t.Error("categorizing by hand must still work with a broken config")
+	}
+}
+
+// ---- transfers between your own accounts -------------------------------------
+
+const exportHeader = "Buchungstag;Verwendungszweck;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info\n"
+
+// pairedModel has Assets:Bank and Assets:Savings, the bank's export already
+// imported through the interface, and the savings export ready to be imported.
+func pairedModel(t *testing.T) (*Model, *core.Local) {
+	t.Helper()
+	m, st := noAccountsModel(t)
+	for _, a := range []string{"Assets:Bank", "Assets:Savings"} {
+		if _, err := st.AddAccount(ctx, a, "EUR"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	writeExport(t, m, "bank.csv", exportHeader+
+		"04.10.26;;Umbuchung Sparen;-500,00;EUR;Umsatz gebucht\n"+
+		"05.10.26;;REWE;-20,00;EUR;Umsatz gebucht\n")
+	press(m, "i", "enter", "enter")
+	if txCount(t, st) != 2 || m.scopeAccount() != "Assets:Bank" {
+		t.Fatalf("setup: %d transactions, scope %q, status %q", txCount(t, st), m.scopeAccount(), m.status)
+	}
+	writeExport(t, m, "savings.csv", exportHeader+"05.10.26;;Umbuchung;500,00;EUR;Umsatz gebucht\n")
+	press(m, "2", "down") // Savings
+	return m, st
+}
+
+func TestImportPairsTransfersAndCanBeUndone(t *testing.T) {
+	m, st := pairedModel(t)
+	press(m, "i")
+	if !strings.Contains(m.View(), "Assets:Savings") {
+		t.Fatalf("the selected account should be the default:\n%s", m.View())
+	}
+	press(m, "enter")
+	view := m.View()
+	for _, want := range []string{"1 transfer paired", "⇄ Bank", "0 uncategorized"} {
+		if want == "0 uncategorized" {
+			if strings.Contains(view, "uncategorized") {
+				t.Errorf("a paired row is not uncategorized:\n%s", view)
+			}
+			continue
+		}
+		if !strings.Contains(view, want) {
+			t.Errorf("review is missing %q:\n%s", want, view)
+		}
+	}
+
+	press(m, "enter")
+	if !strings.Contains(m.status, "1 paired as transfers") {
+		t.Errorf("status = %q", m.status)
+	}
+	if m.onlyUncat {
+		t.Error("nothing is left to categorize, so the list must not be narrowed to uncategorized rows")
+	}
+	in := txByPayee(t, st, "Umbuchung")
+	out := txByPayee(t, st, "Umbuchung Sparen")
+	if in.TransferWith != out.ID || out.TransferWith != in.ID || categoryOf(t, st, "Umbuchung Sparen") != ledger.TransferAccount {
+		t.Fatalf("the halves should be paired: %+v / %+v", in, out)
+	}
+
+	// The list marks them and the detail pane explains.
+	press(m, "1", "2", "3") // all accounts need a look at both halves
+	m.accts.cursor = 0
+	m.applyFilter(false)
+	selectPayee(t, m, "Umbuchung")
+	if view := m.View(); !strings.Contains(view, "⇄ Umbuchung") || !strings.Contains(view, "Transfer with #"+fmt.Sprint(out.ID)) || !strings.Contains(view, "Assets:Bank") {
+		t.Errorf("list marker or detail missing:\n%s", view)
+	}
+
+	// z takes the import back, including the pairing.
+	press(m, "z")
+	if got := categoryOf(t, st, "Umbuchung Sparen"); got != ledger.UncategorizedExpense {
+		t.Errorf("after undo the first row is in %s", got)
+	}
+	if txByPayee(t, st, "Umbuchung Sparen").TransferWith != 0 {
+		t.Error("after undo the first row must not point at a deleted transaction")
+	}
+	if txCount(t, st) != 2 {
+		t.Errorf("%d transactions, want the 2 from the first import", txCount(t, st))
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+func TestEditingAPairedTransferKeepsItPaired(t *testing.T) {
+	m, st := pairedModel(t)
+	press(m, "i", "enter", "enter")
+	m.accts.cursor = 0
+	m.applyFilter(false)
+	selectPayee(t, m, "Umbuchung")
+	press(m, "e")
+	if m.mode != modeForm {
+		t.Fatalf("mode %v, status %q", m.mode, m.status)
+	}
+	press(m, "enter") // on to the payee
+	typeText(m, " Sparplan")
+	m.Update(keyCtrlS)
+	if m.mode != modeList {
+		t.Fatalf("saving failed: %q", m.form.err)
+	}
+	half := txByPayee(t, st, "Umbuchung Sparplan")
+	if categoryOf(t, st, "Umbuchung Sparplan") != ledger.TransferAccount || half.TransferWith == 0 {
+		t.Errorf("renaming must not move the category or break the pair: %+v", half)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+func TestThePickerOffersTransfers(t *testing.T) {
+	m, st := newModel(t)
+	selectPayee(t, m, "Kino")
+	press(m, "c")
+	last := m.pickItems[len(m.pickItems)-1]
+	prev := m.pickItems[len(m.pickItems)-2]
+	if last.name != ledger.UncategorizedExpense || prev.name != ledger.TransferAccount {
+		t.Fatalf("Equity:Transfers should come just before 'decide later': %+v", m.pickItems)
+	}
+	typeText(m, "transf")
+	if len(m.pickItems) == 0 || m.pickItems[0].name != ledger.TransferAccount {
+		t.Fatalf("typing should find it: %+v", m.pickItems)
+	}
+	for _, it := range m.pickItems {
+		if it.create {
+			t.Errorf("an existing account must not be offered as new: %+v", it)
+		}
+	}
+	press(m, "enter")
+	if categoryOf(t, st, "Kino") != ledger.TransferAccount {
+		t.Errorf("Kino is in %s", categoryOf(t, st, "Kino"))
 	}
 }

@@ -249,6 +249,14 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 		if r.uncategorized {
 			lines = append(lines, "", warn.Render("● Uncategorized")+dim.Render(" – press c to choose a category"))
 		}
+		if r.transfer {
+			lines = append(lines, "")
+			if partner, ok := m.findRow(r.tx.TransferWith); ok && r.tx.TransferWith != 0 {
+				lines = append(lines, accent.Render("⇄ Transfer")+dim.Render(fmt.Sprintf(" with #%d on %s, %s", partner.tx.ID, partner.source.Account, partner.tx.Date)))
+			} else {
+				lines = append(lines, warn.Render("⇄ Transfer")+dim.Render(" – waiting for its other half: import the other account"))
+			}
+		}
 	default:
 		lines = append(lines, dim.Render("Transfer or split: shown here, but it cannot be recategorized."))
 	}
