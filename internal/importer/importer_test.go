@@ -285,3 +285,33 @@ func TestRuleset(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesetFindSaysWhichRule(t *testing.T) {
+	rs, err := NewRuleset([]Rule{
+		{Contains: "rewe", Category: "Expenses:Groceries"},
+		{Regex: "b(ä|ae)ckerei", Category: "Expenses:Bakery"},
+		{Contains: "markt", Category: "Expenses:Other"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		fields []string
+		index  int
+		cat    string
+		ok     bool
+	}{
+		{[]string{"REWE Markt", ""}, 0, "Expenses:Groceries", true}, // rule 0 beats rule 2, which also matches
+		{[]string{"Bäckerei Schulz"}, 1, "Expenses:Bakery", true},
+		{[]string{"Wochenmarkt"}, 2, "Expenses:Other", true},
+		{[]string{"Kino"}, 0, "", false},
+	} {
+		i, cat, ok := rs.Find(tc.fields...)
+		if ok != tc.ok || cat != tc.cat || (ok && i != tc.index) {
+			t.Errorf("Find(%q) = %d, %q, %v; want %d, %q, %v", tc.fields, i, cat, ok, tc.index, tc.cat, tc.ok)
+		}
+		if mc, mok := rs.Match(tc.fields...); mc != tc.cat || mok != tc.ok {
+			t.Errorf("Match(%q) = %q, %v; must agree with Find", tc.fields, mc, mok)
+		}
+	}
+}

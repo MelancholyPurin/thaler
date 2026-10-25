@@ -20,6 +20,8 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/importer"
+	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 // ConfigLoader reads the user's config file. The interface calls it each time an
@@ -126,6 +128,16 @@ type Model struct {
 	pickPayee    string
 	pickIsIncome bool
 
+	// A rule can be made while categorizing: pickRule is the text it looks for
+	// (empty = no rule), pickRuleOn says the field has the focus, pickCfg is the
+	// config as it was when the field was first used, and pickNote explains
+	// what the rule would do, or why it cannot be added.
+	pickRule    textinput.Model
+	pickRuleOn  bool
+	pickCfg     *config.Config
+	pickNote    string
+	pickNoteBad bool
+
 	width, height int
 	status        string
 	statusIsError bool
@@ -148,6 +160,9 @@ func newWithClock(ctx context.Context, svc core.Service, opts Options, now func(
 	m.picker = textinput.New()
 	m.picker.Prompt = "> "
 	m.picker.Placeholder = "category, or a new name like Expenses:Gifts"
+	m.pickRule = textinput.New()
+	m.pickRule.Prompt = ""
+	m.pickRule.CharLimit = 80
 	if err := m.reload(); err != nil {
 		return nil, err
 	}
@@ -227,6 +242,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.filter.Width = max(10, msg.Width-4)
 		m.picker.Width = max(10, min(msg.Width-10, 60))
+		m.pickRule.Width = max(10, min(msg.Width-6, 66)-2-10)
 		if m.form != nil {
 			for _, in := range []*textinput.Model{&m.form.amount, &m.form.payee, &m.form.category, &m.form.date} {
 				in.Width = m.inputWidth()
@@ -419,30 +435,78 @@ func (m *Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) applyCategory(category string) {
 	id := m.pickTarget
+	match := clean(m.pickRule.Value())
+	var check ruleCheck
+	if match != "" {
+		if check = m.checkRule(match, category); check.problem != "" {
+			m.refreshRuleNote() // the popup stays open and says why
+			return
+		}
+	}
 	m.closePicker()
 	previous := ""
 	if r, ok := m.findRow(id); ok {
 		previous = r.category.Account
 	}
+	rule := importer.Rule{Contains: match, Category: category}
+	// The rule goes into the config before any data changes, so that if the
+	// file cannot be written nothing has happened.
+	if match != "" && check.covered == 0 {
+		if err := config.AppendRule(m.opts.ConfigPath, m.opts.ConfigTemplate, rule); err != nil {
+			m.setStatus("could not add the rule: "+err.Error(), true)
+			return
+		}
+	}
 	if _, err := m.svc.SetCategories(m.ctx, []core.CategoryChange{{TransactionID: id, Category: category}}); err != nil {
 		m.setStatus(err.Error(), true)
 		return
 	}
+	var back []core.CategoryChange // what z puts back
 	if previous != "" {
-		m.undo = append(m.undo, undoOp{
-			label: fmt.Sprintf("categorizing #%d", id),
-			run: func() error {
-				_, err := m.svc.SetCategories(m.ctx, []core.CategoryChange{{TransactionID: id, Category: previous}})
-				return err
-			},
-		})
+		back = append(back, core.CategoryChange{TransactionID: id, Category: previous})
+	}
+	moved := 0
+	if match != "" {
+		res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: []importer.Rule{rule}})
+		if err != nil {
+			m.setStatus("the rule was added, but categorizing the others failed: "+err.Error(), true)
+		}
+		for _, mv := range res.Moves {
+			was := ledger.UncategorizedExpense
+			if mv.Amount.Minor > 0 {
+				was = ledger.UncategorizedIncome
+			}
+			back = append(back, core.CategoryChange{TransactionID: mv.TransactionID, Category: was})
+		}
+		moved = len(res.Moves)
+	}
+	if len(back) > 0 {
+		label := fmt.Sprintf("categorizing #%d", id)
+		if moved > 0 {
+			label = fmt.Sprintf("categorizing #%d and %d more", id, moved)
+		}
+		m.undo = append(m.undo, undoOp{label: label, run: func() error {
+			_, err := m.svc.SetCategories(m.ctx, back)
+			return err
+		}})
 	}
 	if err := m.reload(); err != nil {
 		m.setStatus(err.Error(), true)
 		return
 	}
 	m.applyFilter(true)
-	m.setStatus(fmt.Sprintf("#%d → %s", id, category), false)
+	if match == "" {
+		m.setStatus(fmt.Sprintf("#%d → %s", id, category), false)
+		return
+	}
+	msg := fmt.Sprintf("#%d → %s · rule added to config.toml", id, category)
+	if check.covered > 0 {
+		msg = fmt.Sprintf("#%d → %s · rule %d already covers this", id, category, check.covered)
+	}
+	if moved > 0 {
+		msg += fmt.Sprintf(" · %d more categorized", moved)
+	}
+	m.setStatus(msg+" · z undoes the categories, C edits the rules", false)
 }
 
 func (m *Model) setStatus(s string, isErr bool) {

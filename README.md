@@ -142,6 +142,8 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 
 Rules and profiles are read from `config.toml` each time you press `i`, so you can edit them in another window and import again.
 
+**Making a rule while you categorize.** In the category picker, press `tab` to move to a *Rule* field. It starts with the payee; trim it to the part that matters (`REWE Markt GmbH Filiale 12` → `REWE`). As you type, the picker says how many other uncategorized transactions it would catch. `enter` then categorizes this transaction, appends the rule to `config.toml`, and categorizes the matching ones too. `z` takes the categories back in one step; the rule stays in the file (press `C` to remove it). Only the end of the file is ever written, so your comments and the order of your rules are untouched. Rules are checked top to bottom and the first match wins, so if an earlier rule already decides this payee differently the picker names that rule and refuses, instead of adding one that could never apply.
+
 In the category picker the category you last used for the same payee comes first (marked "same payee"), then the categories of the matching kind (income for money in, expenses for money out), most used first. Type to filter, or type a full new name such as `Expenses:Gifts` to create it. Transfers and split transactions are shown but cannot be recategorized there.
 
 On terminals narrower than 76 columns the detail pane is hidden, and below 14 rows only the focused panel is shown.

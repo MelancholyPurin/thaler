@@ -301,11 +301,11 @@ func (m *Model) centerPopup(screen, popup string) string {
 func (m *Model) pickerPopup() string {
 	r, _ := m.findRow(m.pickTarget)
 	w := min(max(m.width-6, 20), 66)
-	h := min(max(m.height-4, 5), 14, max(5, 3+len(m.pickItems)))
+	h := min(max(m.height-4, 8), 17, max(8, 6+len(m.pickItems)))
 	title := fmt.Sprintf("Categorize · %s %s", clean(r.tx.Payee), signed(r.source.Amount))
 
 	lines := []string{m.picker.View()}
-	listH := h - 2 - 1
+	listH := h - 2 - 1 - 3 // minus the border, the input and the rule section
 	start := 0
 	if m.pickCursor >= listH {
 		start = m.pickCursor - listH + 1
@@ -325,7 +325,28 @@ func (m *Model) pickerPopup() string {
 	if len(m.pickItems) == 0 {
 		lines = append(lines, dim.Render("No match. Type a full name like Expenses:Gifts to create one."))
 	}
-	return box(title, lines, w, h, true, "enter apply · esc cancel")
+	for len(lines) < 1+listH {
+		lines = append(lines, "")
+	}
+
+	// The rule section sits at the bottom: tab goes there from the category.
+	lines = append(lines, dim.Render(strings.Repeat("─", iw)))
+	footer := "enter apply · tab make a rule · esc cancel"
+	switch {
+	case m.pickRuleOn:
+		lines = append(lines, accent.Render("▸ Rule ")+" "+m.pickRule.View())
+		footer = "enter apply + rule · tab back · esc cancel"
+	case clean(m.pickRule.Value()) != "":
+		lines = append(lines, dim.Render("  Rule  ")+m.pickRule.View())
+	default:
+		lines = append(lines, dim.Render(fit("  Rule   tab: always use this category for payees like this one", iw)))
+	}
+	note := dim.Render(fit("  "+m.pickNote, iw))
+	if m.pickNoteBad {
+		note = errStyle.Render(fit("  "+m.pickNote, iw))
+	}
+	lines = append(lines, note)
+	return box(title, lines, w, h, true, footer)
 }
 
 func (m *Model) helpPopup() string {
@@ -340,6 +361,7 @@ func (m *Model) helpPopup() string {
 		{"a", "add a transaction (to the selected account)"},
 		{"i", "import a bank export (CSV) into an account"},
 		{"n  b", "new account / set the selected account's balance"},
+		{"c, then tab", "categorize, and make a rule so this payee is always categorized this way"},
 		{"c  e  d", "categorize / edit / delete the selected transaction"},
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},

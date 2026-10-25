@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/melancholypurin/thaler/internal/importer"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,5 +66,85 @@ func TestEnsureCreatesAnInertConfig(t *testing.T) {
 	}
 	if c, err := Load(path, true); err != nil || c.ImportDir != "/x" {
 		t.Errorf("Ensure overwrote an existing config: %+v, %v", c, err)
+	}
+}
+
+func TestAppendRuleKeepsEverythingElse(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	original := "# my rules, carefully ordered\nimport_dir = \"/x\"\n\n[[rule]]\ncontains = \"REWE\"   # the big one\ncategory = \"Expenses:Groceries\""
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil { // no newline at the end on purpose
+		t.Fatal(err)
+	}
+	if err := AppendRule(path, "", importer.Rule{Contains: "  Lidl ", Category: "Expenses:Groceries"}); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(path)
+	if !strings.HasPrefix(string(body), original+"\n") {
+		t.Errorf("the existing text must be untouched, got:\n%s", body)
+	}
+	c, err := Load(path, true)
+	if err != nil {
+		t.Fatalf("the result must still load: %v\n%s", err, body)
+	}
+	if len(c.Rules) != 2 || c.Rules[0].Contains != "REWE" || c.Rules[1].Contains != "Lidl" || c.Rules[1].Category != "Expenses:Groceries" || c.ImportDir != "/x" {
+		t.Errorf("config = %+v; the new rule must come last", c)
+	}
+
+	// Several in a row stay in order.
+	for _, name := range []string{"Aldi", "Edeka"} {
+		if err := AppendRule(path, "", importer.Rule{Contains: name, Category: "Expenses:Groceries"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if c, _ := Load(path, true); len(c.Rules) != 4 || c.Rules[3].Contains != "Edeka" {
+		t.Errorf("rules = %+v", c.Rules)
+	}
+}
+
+func TestAppendRuleEscapesWhateverTheBankSends(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	for _, text := range []string{
+		`O'Reilly "Books" & Co`, `C:\Temp\x`, "Bäckerei Müller – Straße", "tab\there", "ctrl\x01char", "ends with a backslash \\", "[[rule]] fake",
+	} {
+		if err := AppendRule(path, "", importer.Rule{Contains: text, Category: "Expenses:Misc"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := Load(path, true)
+	if err != nil {
+		body, _ := os.ReadFile(path)
+		t.Fatalf("the file must stay valid TOML: %v\n%s", err, body)
+	}
+	if len(c.Rules) != 7 {
+		t.Fatalf("%d rules, want 7", len(c.Rules))
+	}
+	for i, want := range []string{`O'Reilly "Books" & Co`, `C:\Temp\x`, "Bäckerei Müller – Straße", "tab\there", "ctrl\x01char", "ends with a backslash \\", "[[rule]] fake"} {
+		if c.Rules[i].Contains != want {
+			t.Errorf("rule %d = %q, want %q", i, c.Rules[i].Contains, want)
+		}
+	}
+}
+
+func TestAppendRuleCreatesAndRefuses(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "new", "config.toml")
+	if err := AppendRule(path, "# sample\n[[rule]]\ncontains = \"X\"\ncategory = \"Expenses:X\"\n", importer.Rule{Contains: "Lidl", Category: "Expenses:Groceries"}); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path, true)
+	if err != nil || len(c.Rules) != 1 || c.Rules[0].Contains != "Lidl" {
+		t.Errorf("a new file starts from the template with its samples switched off: %+v, %v", c, err)
+	}
+	for name, r := range map[string]importer.Rule{
+		"no text":     {Category: "Expenses:X"},
+		"blank text":  {Contains: "  ", Category: "Expenses:X"},
+		"no category": {Contains: "x"},
+		"a regex":     {Regex: "x", Category: "Expenses:X"},
+	} {
+		if err := AppendRule(path, "", r); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	if c, _ := Load(path, true); len(c.Rules) != 1 {
+		t.Error("a refused rule must write nothing")
 	}
 }
