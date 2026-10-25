@@ -12,7 +12,7 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 
 ## Quick start
 
-Requires Go 1.26 or newer. Install straight from GitHub:
+Requires Go 1.27 or newer. Install straight from GitHub:
 
 ```sh
 go install github.com/melancholypurin/thaler/cmd/thaler@latest
