@@ -33,6 +33,8 @@ go build -o thaler ./cmd/thaler
 ./thaler                         # no arguments: the interactive UI
 ```
 
+For development, `make` lists the shortcuts: `make test`, `make lint` (formatting and `go vet`, the same checks as CI), `make check` (both), `make check-coverage` (per-package and total test coverage) and `make build`.
+
 Export your transactions from Sparkasse online banking as CSV, choosing the **CSV-CAMT** format (the CSV-MT940 variant uses the same column names that thaler reads).
 
 Data lives in `~/.local/share/thaler/thaler.db`, config in `~/.config/thaler/config.toml`. Override with `--db` / `--config`, or `THALER_DB`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME`.

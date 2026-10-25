@@ -13,9 +13,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: gofmt
-        run: test -z "$(gofmt -l .)"
-      - name: vet
-        run: go vet ./...
+      - name: lint
+        run: make lint
       - name: test
-        run: go test ./...
+        run: make test
