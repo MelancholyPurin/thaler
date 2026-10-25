@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // run executes the command tree with args against a temporary database.
@@ -22,204 +24,470 @@ func run(t *testing.T, db string, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func TestCLIUnderCliCommand(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	if _, err := run(t, db, "cli", "account", "add", "Assets:Bank", "--currency", "EUR"); err != nil {
-		t.Fatal(err)
-	}
-	out, err := run(t, db, "cli", "account", "list")
-	if err != nil || !strings.Contains(out, "Assets:Bank") {
-		t.Errorf("account list = %q, %v", out, err)
-	}
+// cliEnv is a fresh database, a folder holding the files a test names and an
+// empty config file (so there are no rules), with the setup commands already
+// run. {dir} in an argument stands for the folder.
+type cliEnv struct {
+	t   *testing.T
+	db  string
+	dir string
+	cfg string
 }
 
-func TestOldTopLevelCommandsAreGone(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	if _, err := run(t, db, "balance"); err == nil {
-		t.Error("`thaler balance` must not exist any more; it is `thaler cli balance`")
-	}
-	if _, err := run(t, db, "tui"); err == nil {
-		t.Error("there is no `thaler tui` subcommand; plain `thaler` opens the interface")
-	}
-}
-
-func TestPlainThalerNeedsATerminal(t *testing.T) {
-	// Under `go test` stdin/stdout are not terminals, so the UI refuses to start
-	// instead of printing escape codes into a pipe.
-	_, err := run(t, filepath.Join(t.TempDir(), "t.db"))
-	if err == nil || !strings.Contains(err.Error(), "thaler cli") {
-		t.Errorf("err = %v, want a hint to use thaler cli", err)
-	}
-}
-
-// Banks book zero-amount rows (card verification charges); importing a file
-// that contains one must not fail, and re-importing must still dedupe it.
-func TestImportZeroAmountRow(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	file := filepath.Join(t.TempDir(), "export.csv")
-	csv := `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n" +
-		`"01.10.26";"KARTENZAHLUNG";"Verifizierung";"Some Shop";"0,00";"EUR";"Umsatz gebucht"` + "\n" +
-		`"02.10.26";"KARTENZAHLUNG";"Einkauf";"Some Shop";"-3,20";"EUR";"Umsatz gebucht"` + "\n"
-	if err := os.WriteFile(file, []byte(csv), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cfg := filepath.Join(t.TempDir(), "config.toml") // import needs a readable config; empty means no rules
-	if err := os.WriteFile(cfg, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := run(t, db, "cli", "account", "add", "Assets:Bank", "-c", "EUR"); err != nil {
-		t.Fatal(err)
-	}
-	out, err := run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--config", cfg)
-	if err != nil || !strings.Contains(out, "Imported 2 new") {
-		t.Fatalf("import = %q, %v", out, err)
-	}
-	out, err = run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--config", cfg)
-	if err != nil || !strings.Contains(out, "Imported 0 new") || !strings.Contains(out, "2 already present") {
-		t.Errorf("re-import = %q, %v", out, err)
-	}
-	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || !strings.Contains(out, "Verifizierung") {
-		t.Errorf("list should show the zero-amount row, got %q, %v", out, err)
-	}
-}
-
-func TestAccountBalanceCommand(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	for _, args := range [][]string{
-		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
-		{"cli", "account", "add", "Liabilities:Card", "-c", "EUR"},
-	} {
-		if _, err := run(t, db, args...); err != nil {
+func newCLIEnv(t *testing.T, files map[string]string, setup ...[]string) *cliEnv {
+	t.Helper()
+	e := &cliEnv{t: t, db: filepath.Join(t.TempDir(), "t.db"), dir: t.TempDir()}
+	e.cfg = filepath.Join(e.dir, "config.toml")
+	files = mergeFiles(files, map[string]string{"config.toml": ""})
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(e.dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	out, err := run(t, db, "cli", "account", "balance", "Assets:Bank", "1234.56", "--as-of", "2026-10-22")
-	if err != nil || !strings.Contains(out, "opening balance of 1234.56 EUR on 2026-10-22") {
-		t.Fatalf("balance = %q, %v", out, err)
+	for _, args := range setup {
+		if out, err := e.run(args...); err != nil {
+			t.Fatalf("setup %v: %q, %v", args, out, err)
+		}
 	}
-	// A credit card is given as the amount owed.
-	if out, err = run(t, db, "cli", "account", "balance", "Liabilities:Card", "500", "--as-of", "2026-10-22"); err != nil {
-		t.Fatalf("balance = %q, %v", out, err)
+	return e
+}
+
+func mergeFiles(a, b map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range a {
+		out[k] = v
 	}
-	out, err = run(t, db, "cli", "balance")
-	if err != nil || !strings.Contains(out, "1234.56") || !strings.Contains(out, "-500.00") {
-		t.Errorf("balance report = %q, %v", out, err)
+	for k, v := range b {
+		out[k] = v
 	}
-	// Saying the same again books nothing new.
-	out, err = run(t, db, "cli", "account", "balance", "Assets:Bank", "1234.56", "--as-of", "2026-10-22")
-	if err != nil || !strings.Contains(out, "Booked an opening balance") {
-		t.Errorf("repeat = %q, %v", out, err)
+	return out
+}
+
+// run executes one command. The output and the error text show the folder as
+// {dir}.
+func (e *cliEnv) run(args ...string) (string, error) {
+	e.t.Helper()
+	full := make([]string, 0, len(args)+2)
+	for _, a := range args {
+		full = append(full, strings.ReplaceAll(a, "{dir}", e.dir))
 	}
-	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Opening balance") != 2 {
-		t.Errorf("want exactly two opening-balance transactions, got:\n%s (%v)", out, err)
+	full = append(full, "--config", e.cfg)
+	out, err := run(e.t, e.db, full...)
+	return strings.ReplaceAll(out, e.dir, "{dir}"), err
+}
+
+func (e *cliEnv) errText(err error) string {
+	if err == nil {
+		return ""
 	}
-	if _, err = run(t, db, "cli", "account", "balance", "Assets:Nope", "1"); err == nil {
-		t.Error("an unknown account must fail")
+	return strings.ReplaceAll(err.Error(), e.dir, "{dir}")
+}
+
+// cliCase is a command with the state it runs against and what it should say.
+type cliCase struct {
+	name    string
+	files   map[string]string
+	setup   [][]string
+	args    []string
+	want    string // the output
+	wantErr string // the error text; {dir} stands for the folder
+}
+
+func (tc cliCase) check(t *testing.T, e *cliEnv) {
+	t.Helper()
+	// when
+	got, err := e.run(tc.args...)
+
+	// then
+	if diff := cmp.Diff(tc.wantErr, e.errText(err)); diff != "" {
+		t.Errorf("error mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(tc.want, got); diff != "" {
+		t.Errorf("output mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestImportPairsTransfersAcrossAccounts(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	dir := t.TempDir()
-	cfg := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(cfg, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	header := `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n"
-	bank := filepath.Join(dir, "bank.csv")
-	savings := filepath.Join(dir, "savings.csv")
-	if err := os.WriteFile(bank, []byte(header+`"04.10.26";"UMBUCHUNG";"Sparen";"Umbuchung Sparen";"-500,00";"EUR";"Umsatz gebucht"`+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(savings, []byte(header+`"05.10.26";"UMBUCHUNG";"Sparen";"Umbuchung";"500,00";"EUR";"Umsatz gebucht"`+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, a := range []string{"Assets:Bank", "Assets:Savings"} {
-		if _, err := run(t, db, "cli", "account", "add", a, "-c", "EUR"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if out, err := run(t, db, "cli", "import", bank, "-a", "Assets:Bank", "--config", cfg); err != nil || strings.Contains(out, "paired") {
-		t.Fatalf("first import = %q, %v", out, err)
-	}
+var (
+	addBank    = []string{"cli", "account", "add", "Assets:Bank", "-c", "EUR"}
+	addSavings = []string{"cli", "account", "add", "Assets:Savings", "-c", "EUR"}
+	addDollars = []string{"cli", "account", "add", "Assets:Dollars", "-c", "USD"}
+	addCard    = []string{"cli", "account", "add", "Liabilities:Card", "-c", "EUR"}
+)
 
-	out, err := run(t, db, "cli", "import", savings, "-a", "Assets:Savings", "--dry-run", "--config", cfg)
-	if err != nil || !strings.Contains(out, "⇄ #1 Assets:Bank") || !strings.Contains(out, "1 new row(s) would be paired") {
-		t.Fatalf("dry run = %q, %v", out, err)
+const csvHeader = `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n"
+
+// zeroRowCSV has a zero-amount row, as banks book for card verification.
+const zeroRowCSV = csvHeader +
+	`"01.10.26";"KARTENZAHLUNG";"Verifizierung";"Some Shop";"0,00";"EUR";"Umsatz gebucht"` + "\n" +
+	`"02.10.26";"KARTENZAHLUNG";"Einkauf";"Some Shop";"-3,20";"EUR";"Umsatz gebucht"` + "\n"
+
+const (
+	bankTransferCSV    = csvHeader + `"04.10.26";"UMBUCHUNG";"Sparen";"Umbuchung Sparen";"-500,00";"EUR";"Umsatz gebucht"` + "\n"
+	savingsTransferCSV = csvHeader + `"05.10.26";"UMBUCHUNG";"Sparen";"Umbuchung";"500,00";"EUR";"Umsatz gebucht"` + "\n"
+	reweCSV            = csvHeader + `"05.10.26";"KARTENZAHLUNG";"Einkauf";"REWE Markt";"-23,47";"EUR";"Umsatz gebucht"` + "\n"
+)
+
+var (
+	addRewe = []string{"cli", "add", "-a", "Assets:Bank", "--amount=-23.47", "-t", "Expenses:Groceries", "-p", "REWE", "-d", "2026-10-03"}
+)
+
+func Test_account_add(t *testing.T) {
+	tcs := []cliCase{
+		{name: "an asset", args: addBank, want: "Created Assets:Bank (Assets, EUR)\n"},
+		{name: "a category needs no currency", args: []string{"cli", "account", "add", "Expenses:Food"}, want: "Created Expenses:Food (Expenses, any currency)\n"},
+		{name: "twice", setup: [][]string{addBank}, args: addBank, wantErr: "account already exists: Assets:Bank"},
+		{name: "an asset without a currency", args: []string{"cli", "account", "add", "Assets:Bank"}, wantErr: "Assets accounts need a currency, e.g. EUR"},
+		{name: "a name without a type", args: []string{"cli", "account", "add", "bank", "-c", "EUR"}, wantErr: `account "bank" must start with one of Assets, Liabilities, Income, Expenses, Equity`},
 	}
-	out, err = run(t, db, "cli", "import", savings, "-a", "Assets:Savings", "--config", cfg)
-	if err != nil || !strings.Contains(out, "1 row(s) were paired") || strings.Contains(out, "matched no rule") {
-		t.Fatalf("import = %q, %v", out, err)
-	}
-	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Equity:Transfers") != 2 || strings.Contains(out, "Uncategorized") {
-		t.Errorf("both halves belong in Equity:Transfers:\n%s (%v)", out, err)
-	}
-	if out, err = run(t, db, "cli", "check"); err != nil || !strings.Contains(out, "OK") {
-		t.Errorf("check = %q, %v", out, err)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
 	}
 }
 
-func TestTransferCommandBooksALinkedPair(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	for _, args := range [][]string{
-		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
-		{"cli", "account", "add", "Assets:Savings", "-c", "EUR"},
-		{"cli", "account", "add", "Assets:Dollars", "-c", "USD"},
-	} {
-		if _, err := run(t, db, args...); err != nil {
-			t.Fatal(err)
-		}
+func Test_account_list(t *testing.T) {
+	tcs := []cliCase{
+		{name: "none yet", args: []string{"cli", "account", "list"}, want: "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR\n"},
+		{
+			name:  "with their types and currencies",
+			setup: [][]string{addBank, {"cli", "account", "add", "Expenses:Food"}},
+			args:  []string{"cli", "account", "list"},
+			want:  "Assets:Bank               Assets, EUR\nExpenses:Food  Expenses, any currency\n",
+		},
 	}
-	out, err := run(t, db, "cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "500", "-d", "2026-10-05")
-	if err != nil || !strings.Contains(out, "#1 and #2") || !strings.Contains(out, "Transferred 500.00 EUR") {
-		t.Fatalf("transfer = %q, %v", out, err)
-	}
-	out, err = run(t, db, "cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Dollars", "--amount", "100", "--to-amount", "108.50", "-d", "2026-10-06")
-	if err != nil || !strings.Contains(out, "#3 and #4") || !strings.Contains(out, "effective rate 1 EUR = 1.0850 USD") {
-		t.Fatalf("cross-currency transfer = %q, %v", out, err)
-	}
-	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Transfer to ")+strings.Count(out, "Transfer from ") != 4 ||
-		!strings.Contains(out, "Equity:Transfers") || !strings.Contains(out, "Equity:Conversions") {
-		t.Errorf("list:\n%s (%v)", out, err)
-	}
-	if out, err = run(t, db, "cli", "balance"); err != nil || !strings.Contains(out, "-600.00 EUR") || !strings.Contains(out, "108.50 USD") {
-		t.Errorf("balance:\n%s (%v)", out, err)
-	}
-	if out, err = run(t, db, "cli", "check"); err != nil || !strings.Contains(out, "OK") {
-		t.Errorf("check = %q, %v", out, err)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
 	}
 }
 
-func TestImportTakesOverHandEnteredTransactions(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "t.db")
-	dir := t.TempDir()
-	cfg := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(cfg, nil, 0o600); err != nil {
-		t.Fatal(err)
+func Test_account_balance(t *testing.T) {
+	asOf := []string{"--as-of", "2026-10-22"}
+	with := func(args ...string) []string {
+		return append(append([]string{"cli", "account", "balance"}, args...), asOf...)
 	}
-	file := filepath.Join(dir, "bank.csv")
-	csv := `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n" +
-		`"05.10.26";"KARTENZAHLUNG";"Einkauf";"REWE Markt";"-23,47";"EUR";"Umsatz gebucht"` + "\n"
-	if err := os.WriteFile(file, []byte(csv), 0o600); err != nil {
-		t.Fatal(err)
+	tcs := []cliCase{
+		{
+			name: "an asset", setup: [][]string{addBank}, args: with("Assets:Bank", "1234.56"),
+			want: "Booked an opening balance of 1234.56 EUR on 2026-10-22 (#1) so that Assets:Bank holds 1234.56 EUR on 2026-10-22.\n",
+		},
+		{
+			name: "a credit card is given as the amount owed", setup: [][]string{addCard}, args: with("Liabilities:Card", "500"),
+			want: "Booked an opening balance of -500.00 EUR on 2026-10-22 (#1) so that Liabilities:Card holds 500.00 EUR on 2026-10-22.\n",
+		},
+		{
+			name: "saying it again corrects the same opening balance", setup: [][]string{addBank, with("Assets:Bank", "1234.56")}, args: with("Assets:Bank", "1234.56"),
+			want: "Booked an opening balance of 1234.56 EUR on 2026-10-22 (#1) so that Assets:Bank holds 1234.56 EUR on 2026-10-22.\n",
+		},
+		{
+			name: "a balance of nothing needs no transaction", setup: [][]string{addBank}, args: with("Assets:Bank", "0"),
+			want: "Nothing to book: the transactions already add up to 0.00 EUR on 2026-10-22.\n",
+		},
+		{name: "an account that does not exist", args: with("Assets:Nope", "1"), wantErr: "account does not exist: Assets:Nope"},
+		{
+			name: "a category has no balance", setup: [][]string{{"cli", "account", "add", "Expenses:Food"}}, args: with("Expenses:Food", "1"),
+			wantErr: "Expenses:Food has no fixed currency; only Assets and Liabilities accounts have a balance",
+		},
+		{name: "an amount that is not a number", setup: [][]string{addBank}, args: with("Assets:Bank", "lots"), wantErr: `invalid amount "lots"`},
 	}
-	for _, args := range [][]string{
-		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
-		{"cli", "add", "-a", "Assets:Bank", "--amount=-23.47", "-t", "Expenses:Groceries", "-p", "REWE", "-d", "2026-10-03"},
-	} {
-		if out, err := run(t, db, args...); err != nil {
-			t.Fatalf("%v: %q, %v", args, out, err)
-		}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
 	}
-	out, err := run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--dry-run", "--config", cfg)
-	if err != nil || !strings.Contains(out, "↔ #1 REWE") || !strings.Contains(out, "take it over") {
-		t.Fatalf("dry run = %q, %v", out, err)
+}
+
+func Test_balance(t *testing.T) {
+	balance := func(account, amount string) []string {
+		return []string{"cli", "account", "balance", account, amount, "--as-of", "2026-10-22"}
 	}
-	out, err = run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--config", cfg)
-	if err != nil || !strings.Contains(out, "Imported 0 new") || !strings.Contains(out, "matched a transaction you entered by hand") {
-		t.Fatalf("import = %q, %v", out, err)
+	tcs := []cliCase{
+		{
+			name:  "with an asset and a card",
+			setup: [][]string{addBank, addCard, balance("Assets:Bank", "1234.56"), balance("Liabilities:Card", "500")},
+			args:  []string{"cli", "balance", "--as-of", "2026-12-31"},
+			want:  "Balances as of 2026-12-31\n\n  Assets:Bank       1234.56 EUR\n  Liabilities:Card  -500.00 EUR\n\nNet worth: 734.56 EUR\n",
+		},
+		{
+			name:  "across currencies without a rate",
+			setup: [][]string{addBank, addDollars, balance("Assets:Bank", "100"), balance("Assets:Dollars", "50")},
+			args:  []string{"cli", "balance", "--as-of", "2026-12-31"},
+			want: "Balances as of 2026-12-31\n\n  Assets:Bank     100.00 EUR\n  Assets:Dollars   50.00 USD\n\nNet worth: 100.00 EUR\n" +
+				"warning: no exchange rate USD -> EUR, so USD accounts are not in the net worth; add one with: thaler cli rate set USD EUR <rate>\n",
+		},
 	}
-	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "REWE") != 1 {
-		t.Errorf("one REWE transaction, not two:\n%s (%v)", out, err)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_import(t *testing.T) {
+	importFile := func(file, account string, extra ...string) []string {
+		return append([]string{"cli", "import", "{dir}/" + file, "-a", account}, extra...)
+	}
+	zeroFiles := map[string]string{"export.csv": zeroRowCSV}
+	transferFiles := map[string]string{"bank.csv": bankTransferCSV, "savings.csv": savingsTransferCSV}
+	tcs := []cliCase{
+		{
+			name: "a file with a zero-amount row", files: zeroFiles, setup: [][]string{addBank},
+			args: importFile("export.csv", "Assets:Bank"),
+			want: "Imported 2 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"2 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+		{
+			name: "the same file again is recognised", files: zeroFiles, setup: [][]string{addBank, importFile("export.csv", "Assets:Bank")},
+			args: importFile("export.csv", "Assets:Bank"),
+			want: "Imported 0 new transaction(s) into Assets:Bank; 2 already present (skipped); 0 pending row(s) ignored.\n" +
+				"2 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+		{
+			name: "a dry run lists the rows and writes nothing", files: zeroFiles, setup: [][]string{addBank},
+			args: importFile("export.csv", "Assets:Bank", "--dry-run"),
+			want: "new  2026-10-01  Expenses:Uncategorized        Some Shop   0.00 EUR\n" +
+				"new  2026-10-02  Expenses:Uncategorized        Some Shop  -3.20 EUR\n\n" +
+				"Dry run: 2 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n",
+		},
+		{
+			name: "the other half of a transfer: previewed", files: transferFiles,
+			setup: [][]string{addBank, addSavings, importFile("bank.csv", "Assets:Bank")},
+			args:  importFile("savings.csv", "Assets:Savings", "--dry-run"),
+			want: "new  2026-10-05  ⇄ #1 Assets:Bank              Umbuchung  +500.00 EUR\n\n" +
+				"Dry run: 1 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"1 new row(s) would be paired as the other half of a transfer with a transaction on another account.\n",
+		},
+		{
+			name: "the other half of a transfer: imported", files: transferFiles,
+			setup: [][]string{addBank, addSavings, importFile("bank.csv", "Assets:Bank")},
+			args:  importFile("savings.csv", "Assets:Savings"),
+			want: "Imported 1 new transaction(s) into Assets:Savings; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Equity:Transfers\n" +
+				"1 row(s) were paired as the other half of a transfer with a transaction on another account (Equity:Transfers).\n",
+		},
+		{
+			name: "a row that is the bank's record of an entry made by hand: previewed", files: map[string]string{"bank.csv": reweCSV},
+			setup: [][]string{addBank, addRewe},
+			args:  importFile("bank.csv", "Assets:Bank", "--dry-run"),
+			want: "new  2026-10-05  ↔ #1 REWE                     REWE Markt  -23.47 EUR\n\n" +
+				"Dry run: 0 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"1 row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n",
+		},
+		{
+			name: "a row that is the bank's record of an entry made by hand: imported", files: map[string]string{"bank.csv": reweCSV},
+			setup: [][]string{addBank, addRewe},
+			args:  importFile("bank.csv", "Assets:Bank"),
+			want: "Imported 0 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"1 row(s) matched a transaction you entered by hand; it now stands for the bank row and nothing was added twice.\n",
+		},
+		{name: "an account that does not exist", files: zeroFiles, args: importFile("export.csv", "Assets:Nope"), wantErr: "account does not exist: Assets:Nope"},
+		{name: "a file that does not exist", setup: [][]string{addBank}, args: importFile("nope.csv", "Assets:Bank"), wantErr: "open {dir}/nope.csv: no such file or directory"},
+		{name: "a profile that does not exist", files: zeroFiles, setup: [][]string{addBank}, args: importFile("export.csv", "Assets:Bank", "--profile", "nope"), wantErr: `unknown import profile "nope" (available: sparkasse)`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_list(t *testing.T) {
+	importFile := func(file, account string) []string {
+		return []string{"cli", "import", "{dir}/" + file, "-a", account}
+	}
+	list := []string{"cli", "list", "-n", "0"}
+	tcs := []cliCase{
+		{name: "nothing yet", args: []string{"cli", "list"}, want: "No transactions found.\n"},
+		{
+			name: "a zero-amount row is listed", files: map[string]string{"export.csv": zeroRowCSV},
+			setup: [][]string{addBank, importFile("export.csv", "Assets:Bank")}, args: list,
+			want: "2026-10-01  #1     Some Shop - Verifizierung\n" +
+				"    Assets:Bank              0.00 EUR\n" +
+				"    Expenses:Uncategorized   0.00 EUR\n" +
+				"2026-10-02  #2     Some Shop - Einkauf\n" +
+				"    Assets:Bank             -3.20 EUR\n" +
+				"    Expenses:Uncategorized  +3.20 EUR\n",
+		},
+		{
+			name:  "an opening balance said twice is one transaction",
+			setup: [][]string{addBank, {"cli", "account", "balance", "Assets:Bank", "10", "--as-of", "2026-10-22"}, {"cli", "account", "balance", "Assets:Bank", "10", "--as-of", "2026-10-22"}},
+			args:  list,
+			want:  "2026-10-22  #1     Opening balance\n    Assets:Bank     +10.00 EUR\n    Equity:Opening  -10.00 EUR\n",
+		},
+		{
+			name: "the two halves of an imported transfer", files: map[string]string{"bank.csv": bankTransferCSV, "savings.csv": savingsTransferCSV},
+			setup: [][]string{addBank, addSavings, importFile("bank.csv", "Assets:Bank"), importFile("savings.csv", "Assets:Savings")}, args: list,
+			want: "2026-10-04  #1     Umbuchung Sparen - Sparen\n" +
+				"    Assets:Bank       -500.00 EUR\n" +
+				"    Equity:Transfers  +500.00 EUR\n" +
+				"2026-10-05  #2     Umbuchung - Sparen\n" +
+				"    Assets:Savings    +500.00 EUR\n" +
+				"    Equity:Transfers  -500.00 EUR\n",
+		},
+		{
+			name: "an entry made by hand is not listed twice once imported", files: map[string]string{"bank.csv": reweCSV},
+			setup: [][]string{addBank, addRewe, importFile("bank.csv", "Assets:Bank")}, args: list,
+			want: "2026-10-03  #1     REWE\n    Assets:Bank         -23.47 EUR\n    Expenses:Groceries  +23.47 EUR\n",
+		},
+		{
+			name: "a transfer is two linked transactions",
+			setup: [][]string{addBank, addSavings, addDollars,
+				{"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "500", "-d", "2026-10-05"},
+				{"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Dollars", "--amount", "100", "--to-amount", "108.50", "-d", "2026-10-06"}},
+			args: []string{"cli", "list", "-n", "0"},
+			want: "2026-10-05  #1     Transfer to Savings\n" +
+				"    Assets:Bank         -500.00 EUR\n" +
+				"    Equity:Transfers    +500.00 EUR\n" +
+				"2026-10-05  #2     Transfer from Bank\n" +
+				"    Assets:Savings      +500.00 EUR\n" +
+				"    Equity:Transfers    -500.00 EUR\n" +
+				"2026-10-06  #3     Transfer to Dollars\n" +
+				"    Assets:Bank         -100.00 EUR\n" +
+				"    Equity:Conversions  +100.00 EUR\n" +
+				"2026-10-06  #4     Transfer from Bank\n" +
+				"    Assets:Dollars      +108.50 USD\n" +
+				"    Equity:Conversions  -108.50 USD\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_transfer(t *testing.T) {
+	transfer := func(args ...string) []string { return append([]string{"cli", "transfer"}, args...) }
+	accounts := [][]string{addBank, addSavings, addDollars}
+	tcs := []cliCase{
+		{
+			name: "within one currency", setup: accounts,
+			args: transfer("--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "500", "-d", "2026-10-05"),
+			want: "#1 and #2  2026-10-05  Transferred 500.00 EUR from Assets:Bank to Assets:Savings\nCreated new account Equity:Transfers\n",
+		},
+		{
+			name: "across currencies the amount received fixes the rate", setup: accounts,
+			args: transfer("--from", "Assets:Bank", "--to", "Assets:Dollars", "--amount", "100", "--to-amount", "108.50", "-d", "2026-10-06"),
+			want: "#1 and #2  2026-10-06  Transferred 100.00 EUR from Assets:Bank to Assets:Dollars (108.50 USD arrived, effective rate 1 EUR = 1.0850 USD; record it with: thaler cli rate set EUR USD 1.0850)\n" +
+				"Created new account Equity:Conversions\n",
+		},
+		{
+			name: "across currencies without the amount received", setup: accounts,
+			args:    transfer("--from", "Assets:Bank", "--to", "Assets:Dollars", "--amount", "100"),
+			wantErr: "EUR -> USD crosses currencies; say how much arrives in USD",
+		},
+		{
+			name: "within one currency with an amount received", setup: accounts,
+			args:    transfer("--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "100", "--to-amount", "100"),
+			wantErr: "both accounts use EUR, so there is no separate amount received",
+		},
+		{
+			name: "to the same account", setup: accounts,
+			args:    transfer("--from", "Assets:Bank", "--to", "Assets:Bank", "--amount", "1"),
+			wantErr: "source and destination are the same account",
+		},
+		{
+			name: "of nothing", setup: accounts,
+			args:    transfer("--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "0"),
+			wantErr: "amount must be greater than zero",
+		},
+		{
+			name: "from an account that does not exist", setup: accounts,
+			args:    transfer("--from", "Assets:Nope", "--to", "Assets:Savings", "--amount", "1"),
+			wantErr: "account does not exist: Assets:Nope",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_check(t *testing.T) {
+	tcs := []cliCase{
+		{name: "an empty ledger", args: []string{"cli", "check"}, want: "OK: the ledger is consistent.\n"},
+		{
+			name: "after transfers and an import that pairs", files: map[string]string{"bank.csv": bankTransferCSV, "savings.csv": savingsTransferCSV},
+			setup: [][]string{addBank, addSavings,
+				{"cli", "import", "{dir}/bank.csv", "-a", "Assets:Bank"}, {"cli", "import", "{dir}/savings.csv", "-a", "Assets:Savings"},
+				{"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "5"}},
+			args: []string{"cli", "check"},
+			want: "OK: the ledger is consistent.\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_newRoot(t *testing.T) {
+	tcs := []cliCase{
+		{name: "balance is a `cli` command now", args: []string{"balance"}, wantErr: `unknown command "balance" for "thaler"`},
+		{name: "there is no tui subcommand", args: []string{"tui"}, wantErr: `unknown command "tui" for "thaler"`},
+		{name: "the scripting commands live under cli", setup: [][]string{addBank}, args: []string{"cli", "account", "list"}, want: "Assets:Bank  Assets, EUR\n"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+// Under `go test` stdin and stdout are not terminals, so the interface refuses
+// to start instead of printing escape codes into a pipe.
+func Test_runTUI(t *testing.T) {
+	tcs := []cliCase{
+		{name: "without a terminal", wantErr: "the interactive interface needs a terminal; for scripts use: thaler cli --help"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
 	}
 }
