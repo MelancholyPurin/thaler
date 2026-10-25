@@ -41,7 +41,7 @@ Your financial data never belongs in this repository: `.gitignore` excludes data
 
 ## Categorising: `config.toml`
 
-Copy `config.example.toml` to `~/.config/thaler/config.toml` and add rules:
+In the interface, press `C` on any screen to open the config in your editor (`$VISUAL`, else `$EDITOR`, else `nano` or `vi`; with a graphical editor use its wait flag, e.g. `EDITOR="code --wait"`). If there is no file yet it is created from `config.example.toml` with every sample switched off. When the editor closes, Thaler re-reads the file and tells you if it has a mistake. Without the interface, copy `config.example.toml` to `~/.config/thaler/config.toml` yourself. Add rules like this:
 
 ```toml
 [[rule]]
@@ -105,6 +105,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `enter` | open the next panel (Home, Accounts) / categorize (Transactions) |
 | `a` | add a transaction (see below) |
 | `i` | import a bank export (see below) |
+| `C` | open `config.toml` in your editor (rules, import folder, bank profiles) |
 | `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
 | `e` / `d` | edit / delete the selected transaction (delete asks first) |

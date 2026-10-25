@@ -1,4 +1,5 @@
-# Copy this file to ~/.config/thaler/config.toml (or pass --config PATH).
+# Thaler's configuration: ~/.config/thaler/config.toml, or the file given with --config.
+# Copy this example there to start. In the TUI, press C to open the config in your editor.
 # Unknown keys are rejected, so a typo cannot silently disable a rule.
 
 # The folder the interface lists bank exports from when you press `i` to import

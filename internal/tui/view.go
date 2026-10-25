@@ -344,6 +344,7 @@ func (m *Model) helpPopup() string {
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},
 		{"u", "only uncategorized / all"},
+		{"C", "edit config.toml (rules, import folder, bank profiles) in $EDITOR"},
 		{"?", "this help"},
 		{"q  ctrl+c", "quit"},
 	}
