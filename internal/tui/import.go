@@ -404,10 +404,20 @@ func (m *Model) finishImport() {
 
 	if len(res.IDs) > 0 {
 		ids := res.IDs
+		// The stored halves this import paired go back to where they were first,
+		// then what the import added goes.
+		var unpair []core.CategoryChange
+		for _, l := range res.Linked {
+			unpair = append(unpair, core.CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
+		}
 		m.undo = append(m.undo, undoOp{
 			label: fmt.Sprintf("the import of %d transactions", len(ids)),
 			run: func() error {
 				var errs []error
+				if len(unpair) > 0 {
+					_, err := m.svc.SetCategories(m.ctx, unpair)
+					errs = append(errs, err)
+				}
 				for _, id := range ids {
 					errs = append(errs, m.svc.DeleteTransaction(m.ctx, id))
 				}
@@ -423,9 +433,7 @@ func (m *Model) finishImport() {
 	// Show what arrived: this account, newest first, and the rows that still
 	// need a category. An export of older months needs the period widened.
 	m.accts.cursor = m.accountIndex(acc.Name) + 1
-	if newUncat > 0 {
-		m.onlyUncat = true
-	}
+	m.onlyUncat = newUncat > 0 // what arrived is shown, narrowed to what needs a category if anything does
 	if outside {
 		m.setPeriod("")
 	}
@@ -435,6 +443,9 @@ func (m *Model) finishImport() {
 	msg := fmt.Sprintf("Imported %d into %s", res.Inserted, shortName(acc.Name))
 	if res.Duplicates > 0 {
 		msg += fmt.Sprintf(" · %d already there", res.Duplicates)
+	}
+	if res.Transfers > 0 {
+		msg += fmt.Sprintf(" · %d paired as transfers", res.Transfers)
 	}
 	if newUncat > 0 {
 		msg += fmt.Sprintf(" · %d need a category (u shows all)", newUncat)
@@ -545,6 +556,13 @@ func (m *Model) importReviewPopup(w, h int) string {
 	listH := h - 5 // minus the border, the summary, its rule and the message line
 
 	parts := []string{fmt.Sprintf("%d new", f.res.Inserted), fmt.Sprintf("%d already imported", f.res.Duplicates)}
+	if f.res.Transfers > 0 {
+		noun := "transfers"
+		if f.res.Transfers == 1 {
+			noun = "transfer"
+		}
+		parts = append(parts, accent.Render(fmt.Sprintf("%d %s paired", f.res.Transfers, noun)))
+	}
 	if f.newUncat > 0 {
 		parts = append(parts, warn.Render(fmt.Sprintf("%d uncategorized", f.newUncat)))
 	}
@@ -616,6 +634,9 @@ func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
 	catW := 16
 	payeeW := max(4, w-17-catW-amtW)
 	category := shortName(r.Category)
+	if r.Transfer != nil {
+		category = "⇄ " + shortName(r.Transfer.Account)
+	}
 	date := r.Row.Date.Format(ledger.DateLayout)
 	payee := fit(clean(r.Row.Payee), payeeW)
 	amount := fitRight(importAmount(r.Row.Amount), amtW)
@@ -627,7 +648,10 @@ func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
 		return dim.Render(fit(status+" "+date+" "+fit(category, catW)+" "+payee+" "+amount, w))
 	}
 	catText := fit(category, catW)
-	if r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome {
+	switch {
+	case r.Transfer != nil:
+		catText = accent.Render(catText)
+	case r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome:
 		catText = warn.Render(catText)
 	}
 	if r.Row.Amount.Minor > 0 {

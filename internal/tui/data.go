@@ -14,6 +14,7 @@ type row struct {
 	category      core.PostingView // leg on the category
 	simple        bool             // false for transfers and splits, which cannot be recategorized here
 	uncategorized bool
+	transfer      bool   // booked to Equity:Transfers: one half of a transfer between your own accounts
 	text          string // everything the search looks at
 }
 
@@ -39,6 +40,7 @@ func newRow(tx core.TxView) row {
 	if src, cat, ok := tx.Legs(); ok {
 		r.source, r.category, r.simple = src, cat, true
 		r.uncategorized = cat.Account == ledger.UncategorizedExpense || cat.Account == ledger.UncategorizedIncome
+		r.transfer = cat.Account == ledger.TransferAccount
 	} else {
 		names := make([]string, len(tx.Postings))
 		for i, p := range tx.Postings {

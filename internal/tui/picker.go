@@ -105,9 +105,15 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 		}
 		return a.name < b.name
 	})
-	out := make([]pickItem, 0, len(items)+2)
+	out := make([]pickItem, 0, len(items)+3)
 	for _, it := range items {
 		out = append(out, it.pickItem)
+	}
+	// Equity:Transfers is not an income or expense category, so it is offered
+	// separately: last, for money moved between your own accounts.
+	if _, ok := fuzzyScore(q, ledger.TransferAccount); ok {
+		out = append(out, pickItem{name: ledger.TransferAccount, hint: "between my accounts"})
+		exact = exact || q == ledger.TransferAccount
 	}
 	if q != "" && !exact {
 		if err := ledger.ValidateAccountName(q); err == nil {

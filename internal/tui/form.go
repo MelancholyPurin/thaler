@@ -173,6 +173,17 @@ func (m *Model) refreshForm() {
 
 	typed := strings.TrimSpace(f.category.Value())
 	f.catItems = m.rankCategories(typed, f.isIncome(), q, f.editing)
+	if f.editing != 0 && typed == "" && f.keepCat != "" {
+		// A category the list does not offer (Equity:Transfers, Equity:Opening)
+		// must still be there to keep, or saving would quietly move it.
+		kept := false
+		for _, it := range f.catItems {
+			kept = kept || it.name == f.keepCat
+		}
+		if !kept {
+			f.catItems = append([]pickItem{{name: f.keepCat, hint: "current"}}, f.catItems...)
+		}
+	}
 	switch {
 	case typed == "" && f.keepCat != "" && !f.catTouched:
 		// An edited transaction keeps its category until another is chosen.

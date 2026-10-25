@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"uuid"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
@@ -329,7 +330,7 @@ func (q queries) listTransactions(ctx context.Context, f TxFilter) ([]TxView, er
 	}
 	args = append(args, limit)
 
-	query := `SELECT t.id, t.date, t.payee, t.description, COALESCE(t.import_hash, ''), a.name, p.amount, p.currency
+	query := `SELECT t.id, t.date, t.payee, t.description, COALESCE(t.import_hash, ''), COALESCE(t.transfer_with, 0), a.name, p.amount, p.currency
 	      FROM transactions t
 	      JOIN postings p ON p.transaction_id = t.id
 	      JOIN accounts a ON a.id = p.account_id
@@ -345,15 +346,15 @@ func (q queries) listTransactions(ctx context.Context, f TxFilter) ([]TxView, er
 	var out []TxView
 	for rows.Next() {
 		var (
-			id                                 int64
+			id, transferWith                   int64
 			date, payee, desc, hash, acct, cur string
 			amount                             int64
 		)
-		if err := rows.Scan(&id, &date, &payee, &desc, &hash, &acct, &amount, &cur); err != nil {
+		if err := rows.Scan(&id, &date, &payee, &desc, &hash, &transferWith, &acct, &amount, &cur); err != nil {
 			return nil, err
 		}
 		if len(out) == 0 || out[len(out)-1].ID != id {
-			out = append(out, TxView{ID: id, Date: date, Payee: payee, Description: desc, ImportHash: hash})
+			out = append(out, TxView{ID: id, Date: date, Payee: payee, Description: desc, ImportHash: hash, TransferWith: transferWith})
 		}
 		last := &out[len(out)-1]
 		last.Postings = append(last.Postings, PostingView{
@@ -458,6 +459,101 @@ func (q queries) rates(ctx context.Context) ([]ledger.RateEntry, error) {
 			return nil, fmt.Errorf("corrupt exchange rate %q for %s/%s on %s", rate, base, quote, date)
 		}
 		out = append(out, ledger.RateEntry{Date: date, Base: ledger.Currency(base), Quote: ledger.Currency(quote), Rate: r})
+	}
+	return out, rows.Err()
+}
+
+// ---- transfers between your own accounts -----------------------------------
+
+// transferCandidate is a transaction that could be the other half of a transfer.
+type transferCandidate struct {
+	id       int64
+	date     string
+	account  string // the own account the money moved on
+	category string // where its other leg is booked now
+}
+
+// transferCandidates finds the unpaired two-posting transactions on other own
+// accounts that moved exactly the opposite of amount within days of date, and
+// whose other leg is still uncategorized or already waiting in
+// Equity:Transfers. The closest in time comes first.
+func (q queries) transferCandidates(ctx context.Context, accountID int64, amount ledger.Money, date time.Time, days int) ([]transferCandidate, error) {
+	from := date.AddDate(0, 0, -days).Format(ledger.DateLayout)
+	to := date.AddDate(0, 0, days).Format(ledger.DateLayout)
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT t.id, t.date, own.name, cat.name
+		FROM transactions t
+		JOIN postings pm ON pm.transaction_id = t.id
+		JOIN accounts own ON own.id = pm.account_id AND own.type IN ('Assets', 'Liabilities') AND own.id <> ?
+		JOIN postings pc ON pc.transaction_id = t.id AND pc.id <> pm.id
+		JOIN accounts cat ON cat.id = pc.account_id AND cat.name IN (?, ?, ?)
+		WHERE t.transfer_with IS NULL
+		  AND pm.amount = ? AND pm.currency = ?
+		  AND t.date BETWEEN ? AND ?
+		  AND (SELECT COUNT(*) FROM postings WHERE transaction_id = t.id) = 2
+		ORDER BY ABS(julianday(t.date) - julianday(?)), t.id`,
+		accountID, ledger.UncategorizedExpense, ledger.UncategorizedIncome, ledger.TransferAccount,
+		-amount.Minor, string(amount.Currency), from, to, date.Format(ledger.DateLayout))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []transferCandidate
+	for rows.Next() {
+		var c transferCandidate
+		if err := rows.Scan(&c.id, &c.date, &c.account, &c.category); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// linkTransfer makes a and b the two halves of one transfer.
+func (q queries) linkTransfer(ctx context.Context, a, b int64) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE transactions
+		SET transfer_with = CASE id WHEN ? THEN ? ELSE ? END, version = version + 1, updated_at = `+nowSQL+`
+		WHERE id IN (?, ?)`, a, b, a, a, b)
+	return err
+}
+
+// unlinkTransfer clears the link between a and b, whichever way round.
+func (q queries) unlinkTransfer(ctx context.Context, a, b int64) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE transactions SET transfer_with = NULL, version = version + 1, updated_at = `+nowSQL+`
+		WHERE id IN (?, ?)`, a, b)
+	return err
+}
+
+// transferPartner is the other half of id's transfer, or 0.
+func (q queries) transferPartner(ctx context.Context, id int64) (int64, error) {
+	var partner int64
+	err := q.db.QueryRowContext(ctx, `SELECT COALESCE(transfer_with, 0) FROM transactions WHERE id = ?`, id).Scan(&partner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return partner, err
+}
+
+// brokenTransferLinks describes every link that is not mutual.
+func (q queries) brokenTransferLinks(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT a.id, a.transfer_with
+		FROM transactions a LEFT JOIN transactions b ON b.id = a.transfer_with
+		WHERE a.transfer_with IS NOT NULL AND (b.id IS NULL OR b.transfer_with IS NOT a.id)
+		ORDER BY a.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var a, b int64
+		if err := rows.Scan(&a, &b); err != nil {
+			return nil, err
+		}
+		out = append(out, fmt.Sprintf("transaction #%d is linked to #%d as a transfer, but #%d does not link back", a, b, b))
 	}
 	return out, rows.Err()
 }

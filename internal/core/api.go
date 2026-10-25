@@ -156,7 +156,10 @@ type TxView struct {
 	Payee       string
 	Description string
 	ImportHash  string // empty for manual entries
-	Postings    []PostingView
+	// TransferWith is the other half when this is one half of a transfer between
+	// your own accounts (both booked to Equity:Transfers); 0 otherwise.
+	TransferWith int64
+	Postings     []PostingView
 }
 
 // Legs splits a simple two-posting transaction into the leg on your own account
@@ -260,6 +263,28 @@ type ImportedRow struct {
 	Row       importer.Row
 	Category  string
 	Duplicate bool // already stored, so a real import would skip it
+	// Transfer is set when the row is the other half of a transfer that is
+	// already stored on another of your accounts; Category is then
+	// Equity:Transfers.
+	Transfer *TransferMatch
+}
+
+// TransferMatch is the stored transaction an imported row was paired with.
+type TransferMatch struct {
+	ID      int64
+	Account string // the own account the money moved on
+	Date    string
+	// Was is where that transaction's other leg was booked before: an
+	// Uncategorized account, or Equity:Transfers when a rule had marked it.
+	Was string
+}
+
+// TransferLink records a pairing a real import made, so that it can be undone:
+// transaction ID was imported as the other half of OtherID, which was booked to
+// OtherWas until then.
+type TransferLink struct {
+	ID, OtherID int64
+	OtherWas    string
 }
 
 // RejectedRow is a row that does not fit the target account.
@@ -270,10 +295,12 @@ type RejectedRow struct {
 
 // ImportResult summarises an import.
 type ImportResult struct {
-	Inserted      int     // new transactions (would be, in a dry run)
-	IDs           []int64 // the new transactions, so the import can be undone; empty in a dry run
-	Duplicates    int     // rows already stored
-	Uncategorized int     // rows no rule matched
+	Inserted      int            // new transactions (would be, in a dry run)
+	IDs           []int64        // the new transactions, so the import can be undone; empty in a dry run
+	Transfers     int            // of those, how many were paired with a stored transaction as a transfer
+	Linked        []TransferLink // the pairings made; empty in a dry run
+	Duplicates    int            // rows already stored
+	Uncategorized int            // rows no rule matched and no transfer explained
 	Created       []string
 	Rejected      []RejectedRow
 	Rows          []ImportedRow // dry run only

@@ -26,6 +26,10 @@ const (
 	// ConversionAccount is the multi-currency account that sits between the two
 	// legs of a cross-currency transfer, so every currency balances on its own.
 	ConversionAccount = "Equity:Conversions"
+	// TransferAccount is where both halves of a transfer between your own
+	// accounts are booked, so that a transfer is neither income nor spending.
+	// Its balance is what is still waiting for its other half.
+	TransferAccount = "Equity:Transfers"
 	// OpeningBalanceAccount is the other side of every account's opening balance.
 	OpeningBalanceAccount = "Equity:Opening"
 )
