@@ -509,6 +509,73 @@ func (q queries) transferCandidates(ctx context.Context, accountID int64, amount
 	return out, rows.Err()
 }
 
+// adoptionCandidate is a hand-entered transaction that an imported bank row
+// could be the other record of.
+type adoptionCandidate struct {
+	id       int64
+	date     string
+	payee    string
+	category string // where its other leg is booked
+}
+
+// adoptionCandidates finds the transactions entered by hand (no import hash)
+// on an account that moved exactly amount within days of date: plain entries of
+// two postings, an account and a category. The category must not be another of
+// your own accounts (a transfer that spans two accounts is not one bank row)
+// nor the opening balance. The closest in time comes first.
+func (q queries) adoptionCandidates(ctx context.Context, accountID int64, amount ledger.Money, date time.Time, days int) ([]adoptionCandidate, error) {
+	from := date.AddDate(0, 0, -days).Format(ledger.DateLayout)
+	to := date.AddDate(0, 0, days).Format(ledger.DateLayout)
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT t.id, t.date, t.payee, cat.name
+		FROM transactions t
+		JOIN postings pm ON pm.transaction_id = t.id AND pm.account_id = ? AND pm.amount = ? AND pm.currency = ?
+		JOIN postings pc ON pc.transaction_id = t.id AND pc.id <> pm.id
+		JOIN accounts cat ON cat.id = pc.account_id AND cat.type NOT IN ('Assets', 'Liabilities') AND cat.name <> ?
+		WHERE t.import_hash IS NULL
+		  AND t.date BETWEEN ? AND ?
+		  AND (SELECT COUNT(*) FROM postings WHERE transaction_id = t.id) = 2
+		ORDER BY ABS(julianday(t.date) - julianday(?)), t.id`,
+		accountID, amount.Minor, string(amount.Currency), ledger.OpeningBalanceAccount, from, to, date.Format(ledger.DateLayout))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []adoptionCandidate
+	for rows.Next() {
+		var c adoptionCandidate
+		if err := rows.Scan(&c.id, &c.date, &c.payee, &c.category); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// setImportHash gives a hand-entered transaction the import hash of the bank
+// row it turned out to be, so importing that row again finds it. It fails if
+// the transaction already has one.
+func (q queries) setImportHash(ctx context.Context, id int64, hash string) error {
+	res, err := q.db.ExecContext(ctx, `
+		UPDATE transactions SET import_hash = ?, version = version + 1, updated_at = `+nowSQL+`
+		WHERE id = ? AND import_hash IS NULL`, hash, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("transaction #%d does not exist or is already an imported one", id)
+	}
+	return nil
+}
+
+// clearImportHash makes a transaction a hand-entered one again.
+func (q queries) clearImportHash(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `
+		UPDATE transactions SET import_hash = NULL, version = version + 1, updated_at = `+nowSQL+`
+		WHERE id = ?`, id)
+	return err
+}
+
 // linkTransfer makes a and b the two halves of one transfer.
 func (q queries) linkTransfer(ctx context.Context, a, b int64) error {
 	_, err := q.db.ExecContext(ctx, `
