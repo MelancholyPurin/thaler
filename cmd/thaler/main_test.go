@@ -189,3 +189,37 @@ func TestTransferCommandBooksALinkedPair(t *testing.T) {
 		t.Errorf("check = %q, %v", out, err)
 	}
 }
+
+func TestImportTakesOverHandEnteredTransactions(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "t.db")
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(cfg, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "bank.csv")
+	csv := `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n" +
+		`"05.10.26";"KARTENZAHLUNG";"Einkauf";"REWE Markt";"-23,47";"EUR";"Umsatz gebucht"` + "\n"
+	if err := os.WriteFile(file, []byte(csv), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
+		{"cli", "add", "-a", "Assets:Bank", "--amount=-23.47", "-t", "Expenses:Groceries", "-p", "REWE", "-d", "2026-10-03"},
+	} {
+		if out, err := run(t, db, args...); err != nil {
+			t.Fatalf("%v: %q, %v", args, out, err)
+		}
+	}
+	out, err := run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--dry-run", "--config", cfg)
+	if err != nil || !strings.Contains(out, "↔ #1 REWE") || !strings.Contains(out, "take it over") {
+		t.Fatalf("dry run = %q, %v", out, err)
+	}
+	out, err = run(t, db, "cli", "import", file, "-a", "Assets:Bank", "--config", cfg)
+	if err != nil || !strings.Contains(out, "Imported 0 new") || !strings.Contains(out, "matched a transaction you entered by hand") {
+		t.Fatalf("import = %q, %v", out, err)
+	}
+	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "REWE") != 1 {
+		t.Errorf("one REWE transaction, not two:\n%s (%v)", out, err)
+	}
+}

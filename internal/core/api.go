@@ -75,6 +75,10 @@ type Service interface {
 	// in the request. With DryRun nothing is written and every row's outcome is
 	// listed. Importing is idempotent: rows already stored are skipped.
 	Import(ctx context.Context, req ImportRequest) (ImportResult, error)
+	// DetachImport makes imported transactions hand-entered ones again by
+	// forgetting which bank row they stand for. It undoes the adoption an import
+	// made; the transactions themselves stay.
+	DetachImport(ctx context.Context, ids []int64) error
 	// Recategorize applies rules to transactions still in an Uncategorized
 	// account.
 	Recategorize(ctx context.Context, req RecategorizeRequest) (RecategorizeResult, error)
@@ -271,6 +275,18 @@ type ImportedRow struct {
 	// already stored on another of your accounts; Category is then
 	// Equity:Transfers.
 	Transfer *TransferMatch
+	// Adopts is set when the row is the bank's record of a transaction you
+	// entered by hand: that entry takes over the row instead of a new
+	// transaction being added, and Category is the entry's own category.
+	Adopts *AdoptedEntry
+}
+
+// AdoptedEntry is the hand-entered transaction a bank row was matched with.
+type AdoptedEntry struct {
+	ID       int64
+	Date     string
+	Payee    string
+	Category string
 }
 
 // TransferMatch is the stored transaction an imported row was paired with.
@@ -303,6 +319,8 @@ type ImportResult struct {
 	IDs           []int64        // the new transactions, so the import can be undone; empty in a dry run
 	Transfers     int            // of those, how many were paired with a stored transaction as a transfer
 	Linked        []TransferLink // the pairings made; empty in a dry run
+	Adopted       int            // rows that matched an entry made by hand and were not added again
+	AdoptedIDs    []int64        // those entries, so the import can be undone; empty in a dry run
 	Duplicates    int            // rows already stored
 	Uncategorized int            // rows no rule matched and no transfer explained
 	Created       []string

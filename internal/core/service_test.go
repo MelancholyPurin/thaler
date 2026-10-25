@@ -1582,16 +1582,190 @@ func TestATransferWritesNothingWhenItFails(t *testing.T) {
 	}
 }
 
-func TestAManualTransferIsNotPairedWithAnImportedRowYet(t *testing.T) {
-	// Documents what is not done: the halves of a transfer entered by hand are
-	// already linked, so a bank row for the same money is imported as a new
-	// transaction. Adopting the manual entry is a separate feature.
-	st := twoAccounts(t)
-	if _, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Savings", Amount: eur(5000), Date: day("2026-10-05")}); err != nil {
+// ---- adopting hand-entered transactions on import ---------------------------
+
+// handEntered books a transaction the way the interface does: an amount on an
+// account against a category, with no import hash. A negative amount leaves the
+// account.
+func handEntered(t *testing.T, st *Local, account, date, payee, category string, minor int64) int64 {
+	t.Helper()
+	res, err := st.AddTransaction(ctx, NewTransaction{
+		Date: day(date), Payee: payee,
+		Postings: []ledger.Posting{{Account: account, Amount: eur(minor)}, {Account: category, Amount: eur(-minor)}},
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
-	res := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-05", "Umbuchung", "", eur(5000)))
-	if res.Inserted != 1 || res.Transfers != 0 {
-		t.Errorf("import = %+v", res)
+	return res.ID
+}
+
+func TestImportAdoptsAHandEnteredTransaction(t *testing.T) {
+	st := twoAccounts(t)
+	mine := handEntered(t, st, "Assets:Bank", "2026-10-03", "REWE", "Expenses:Groceries", -2347)
+	req := ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{row(2, "2026-10-05", "REWE Markt GmbH", "Einkauf", eur(-2347))}}
+
+	dry := req
+	dry.DryRun = true
+	preview, err := st.Import(ctx, dry)
+	if err != nil || preview.Inserted != 0 || preview.Adopted != 1 || preview.Uncategorized != 0 {
+		t.Fatalf("dry run = %+v, %v", preview, err)
+	}
+	got := preview.Rows[0]
+	if got.Adopts == nil || got.Adopts.ID != mine || got.Adopts.Payee != "REWE" || got.Adopts.Date != "2026-10-03" ||
+		got.Adopts.Category != "Expenses:Groceries" || got.Category != "Expenses:Groceries" || got.Duplicate {
+		t.Errorf("preview row = %+v / %+v", got, got.Adopts)
+	}
+	if txOf(t, st, mine).ImportHash != "" {
+		t.Error("a dry run must change nothing")
+	}
+
+	res, err := st.Import(ctx, req)
+	if err != nil || res.Inserted != 0 || res.Adopted != 1 || len(res.AdoptedIDs) != 1 || res.AdoptedIDs[0] != mine || len(res.IDs) != 0 {
+		t.Fatalf("import = %+v, %v", res, err)
+	}
+	// Only the hash is added: what you typed stays.
+	tx := txOf(t, st, mine)
+	if tx.ImportHash == "" || tx.Payee != "REWE" || tx.Date != "2026-10-03" || categoryAccount(t, tx) != "Expenses:Groceries" {
+		t.Errorf("the entry should keep its payee, date and category and gain the hash: %+v", tx)
+	}
+	if all, _ := st.ListTransactions(ctx, TxFilter{}); len(all) != 1 {
+		t.Errorf("%d transactions; the bank row must not be added as well", len(all))
+	}
+	if got := balanceOn(t, st, "Assets:Bank", ""); got != -2347 {
+		t.Errorf("balance = %d", got)
+	}
+
+	// The row is now recognised as stored.
+	again, err := st.Import(ctx, req)
+	if err != nil || again.Duplicates != 1 || again.Adopted != 0 || again.Inserted != 0 {
+		t.Errorf("re-import = %+v, %v", again, err)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+func TestAnAdoptedEntryKeepsItsCategoryWhateverTheRulesSay(t *testing.T) {
+	st := twoAccounts(t)
+	mine := handEntered(t, st, "Assets:Bank", "2026-10-03", "REWE", "Expenses:Dining", -2000)
+	res := importRows(t, st, "Assets:Bank", []importer.Rule{{Contains: "rewe", Category: "Expenses:Groceries"}},
+		row(2, "2026-10-03", "REWE", "", eur(-2000)))
+	if res.Adopted != 1 || categoryAccount(t, txOf(t, st, mine)) != "Expenses:Dining" {
+		t.Errorf("your category wins: %+v / %s", res, categoryAccount(t, txOf(t, st, mine)))
+	}
+}
+
+func TestEachHandEnteredTransactionIsAdoptedOnceAndTheClosestFirst(t *testing.T) {
+	st := twoAccounts(t)
+	early := handEntered(t, st, "Assets:Bank", "2026-10-01", "coffee", "Expenses:Food", -350)
+	late := handEntered(t, st, "Assets:Bank", "2026-10-03", "coffee", "Expenses:Food", -350)
+	res := importRows(t, st, "Assets:Bank", nil,
+		row(2, "2026-10-03", "Bakery", "a", eur(-350)), // closest to the 3rd
+		row(3, "2026-10-02", "Bakery", "b", eur(-350)), // left: the 1st
+		row(4, "2026-10-02", "Bakery", "c", eur(-350))) // nothing left to adopt
+	if res.Adopted != 2 || res.Inserted != 1 || res.Uncategorized != 1 {
+		t.Fatalf("two adopted, one added: %+v", res)
+	}
+	if res.AdoptedIDs[0] != late || res.AdoptedIDs[1] != early {
+		t.Errorf("adopted %v; the row of the 3rd takes the entry of the 3rd (#%d), then the 1st (#%d)", res.AdoptedIDs, late, early)
+	}
+}
+
+func TestOnlyAPlainRecentEntryOfTheSameAmountIsAdopted(t *testing.T) {
+	st := twoAccounts(t)
+	mustAccount(t, st, "Assets:Cash", "EUR")
+	// Each of these is something a bank row of -10.00 on the 10th must not take.
+	handEntered(t, st, "Assets:Bank", "2026-10-01", "too early", "Expenses:Food", -1000) // 9 days
+	handEntered(t, st, "Assets:Bank", "2026-10-10", "another amount", "Expenses:Food", -999)
+	handEntered(t, st, "Assets:Bank", "2026-10-10", "money in", "Income:Gift", 1000)
+	handEntered(t, st, "Assets:Cash", "2026-10-10", "other account", "Expenses:Food", -1000)
+	handEntered(t, st, "Assets:Bank", "2026-10-10", "Opening balance", ledger.OpeningBalanceAccount, -1000)
+	imported := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-10", "earlier import", "", eur(-1000)))
+	if imported.Inserted != 1 {
+		t.Fatalf("setup: %+v", imported)
+	}
+	// A split has more than one category leg, and a transfer spans two accounts.
+	if _, err := st.AddTransaction(ctx, NewTransaction{Date: day("2026-10-10"), Payee: "split", Postings: []ledger.Posting{
+		{Account: "Assets:Bank", Amount: eur(-1000)}, {Account: "Expenses:Food", Amount: eur(600)}, {Account: "Expenses:Fun", Amount: eur(400)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddTransaction(ctx, NewTransaction{Date: day("2026-10-10"), Payee: "old style transfer", Postings: []ledger.Posting{
+		{Account: "Assets:Bank", Amount: eur(-1000)}, {Account: "Assets:Cash", Amount: eur(1000)}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	res := importRows(t, st, "Assets:Bank", nil, row(3, "2026-10-10", "Bank booking", "", eur(-1000)))
+	if res.Adopted != 0 || res.Inserted != 1 {
+		t.Errorf("nothing there qualifies, so the row is added: %+v", res)
+	}
+	// A zero amount never adopts.
+	handEntered(t, st, "Assets:Bank", "2026-10-11", "free", "Expenses:Food", 0)
+	if res := importRows(t, st, "Assets:Bank", nil, row(4, "2026-10-11", "verification", "", eur(0))); res.Adopted != 0 {
+		t.Errorf("zero amount adopted: %+v", res)
+	}
+}
+
+func TestATransferEnteredByHandIsAdoptedByBothImports(t *testing.T) {
+	st := twoAccounts(t)
+	res, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Savings", Amount: eur(50000), Date: day("2026-10-04")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bank := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-05", "Umbuchung Sparen", "", eur(-50000)))
+	savings := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-05", "Umbuchung", "", eur(50000)))
+	if bank.Adopted != 1 || savings.Adopted != 1 || bank.Inserted+savings.Inserted != 0 || bank.Transfers+savings.Transfers != 0 {
+		t.Fatalf("each statement row takes over its half: bank %+v, savings %+v", bank, savings)
+	}
+	out, in := txOf(t, st, res.ID), txOf(t, st, res.InID)
+	if out.ImportHash == "" || in.ImportHash == "" || out.TransferWith != in.ID || in.TransferWith != out.ID {
+		t.Errorf("both halves keep their link and gain a hash: %+v / %+v", out, in)
+	}
+	if all, _ := st.ListTransactions(ctx, TxFilter{}); len(all) != 2 {
+		t.Errorf("%d transactions, want the two halves and nothing more", len(all))
+	}
+	if balanceOn(t, st, "Assets:Bank", "") != -50000 || balanceOn(t, st, "Assets:Savings", "") != 50000 || balanceOn(t, st, ledger.TransferAccount, "") != 0 {
+		t.Error("balances after importing both statements")
+	}
+	// And importing either again changes nothing.
+	if again := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-05", "Umbuchung Sparen", "", eur(-50000))); again.Duplicates != 1 {
+		t.Errorf("re-import = %+v", again)
+	}
+}
+
+func TestAdoptionComesBeforeTransferPairing(t *testing.T) {
+	st := twoAccounts(t)
+	// The savings account already imported the incoming 500.00, unpaired.
+	importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-04", "Umbuchung", "", eur(50000)))
+	// The bank side was entered by hand, as an expense.
+	mine := handEntered(t, st, "Assets:Bank", "2026-10-04", "to savings", "Expenses:Gifts", -50000)
+	res := importRows(t, st, "Assets:Bank", nil, row(2, "2026-10-04", "Umbuchung Sparen", "", eur(-50000)))
+	if res.Adopted != 1 || res.Transfers != 0 || res.Inserted != 0 {
+		t.Errorf("your own entry is taken over, not paired with the other account's row: %+v", res)
+	}
+	if tx := txOf(t, st, mine); tx.TransferWith != 0 || categoryAccount(t, tx) != "Expenses:Gifts" {
+		t.Errorf("entry = %+v", tx)
+	}
+}
+
+func TestDetachImportUndoesAnAdoption(t *testing.T) {
+	st := twoAccounts(t)
+	mine := handEntered(t, st, "Assets:Bank", "2026-10-03", "REWE", "Expenses:Groceries", -2347)
+	req := ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{row(2, "2026-10-03", "REWE", "", eur(-2347))}}
+	res, err := st.Import(ctx, req)
+	if err != nil || res.Adopted != 1 {
+		t.Fatalf("import = %+v, %v", res, err)
+	}
+	if err := st.DetachImport(ctx, res.AdoptedIDs); err != nil {
+		t.Fatal(err)
+	}
+	if tx := txOf(t, st, mine); tx.ImportHash != "" || tx.Payee != "REWE" {
+		t.Errorf("detached entry = %+v", tx)
+	}
+	// So the same file adopts it again, and nothing is lost either way.
+	if again, _ := st.Import(ctx, req); again.Adopted != 1 || again.Duplicates != 0 {
+		t.Errorf("import after detaching = %+v", again)
+	}
+	if err := st.DetachImport(ctx, []int64{9999}); err == nil {
+		t.Error("detaching a transaction that does not exist must fail")
 	}
 }

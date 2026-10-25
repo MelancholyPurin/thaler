@@ -546,18 +546,24 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			switch {
 			case p.duplicate:
 				res.Duplicates++
+			case p.adopts != nil:
+				res.Adopted++
 			default:
 				res.Inserted++
 				if p.partner != nil {
 					res.Transfers++
 				}
 			}
-			if !ruled[i] && p.partner == nil {
+			if !ruled[i] && p.partner == nil && p.adopts == nil {
 				res.Uncategorized++
 			}
 			row := ImportedRow{Row: rows[i], Category: p.tx.Postings[1].Account, Duplicate: p.duplicate}
 			if p.partner != nil {
 				row.Transfer = &TransferMatch{ID: p.partner.id, Account: p.partner.account, Date: p.partner.date, Was: p.partner.category}
+			}
+			if p.adopts != nil {
+				row.Category = p.adopts.category
+				row.Adopts = &AdoptedEntry{ID: p.adopts.id, Date: p.adopts.date, Payee: p.adopts.payee, Category: p.adopts.category}
 			}
 			res.Rows = append(res.Rows, row)
 		}
@@ -572,11 +578,19 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			return err
 		}
 		for i, p := range plan {
-			if !ruled[i] && p.partner == nil {
+			if !ruled[i] && p.partner == nil && p.adopts == nil {
 				res.Uncategorized++
 			}
 			if p.duplicate {
 				res.Duplicates++
+				continue
+			}
+			if p.adopts != nil {
+				if err := q.setImportHash(ctx, p.adopts.id, p.tx.ImportHash); err != nil {
+					return fmt.Errorf("transaction %d (%s %s): %w", i+1, p.tx.Date.Format(ledger.DateLayout), p.tx.Payee, err)
+				}
+				res.Adopted++
+				res.AdoptedIDs = append(res.AdoptedIDs, p.adopts.id)
 				continue
 			}
 			id, err := storeTransaction(ctx, q, p.tx, 0, &res.Created)
@@ -612,19 +626,23 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 	return res, nil
 }
 
-// transferWindowDays is how many days apart the two halves of a transfer may be
-// booked: banks do not always book both sides on the same day.
-const transferWindowDays = 3
+// matchWindowDays is how many days apart two records of the same money may be
+// dated: the two halves of a transfer, or a hand-entered transaction and the
+// bank's booking of it, which for a card payment can come days later.
+const matchWindowDays = 3
 
 // plannedRow is what an import would do with one row.
 type plannedRow struct {
 	tx        NewTransaction
 	duplicate bool
+	adopts    *adoptionCandidate // the hand-entered transaction this row is the bank's record of, if any
 	partner   *transferCandidate // the stored half this row completes, if any
 }
 
-// planImport decides, for each parsed row, whether it is already stored and
-// whether it is the other half of a transfer between two of your own accounts:
+// planImport decides, for each parsed row, whether it is already stored, whether
+// it is the bank's record of something you entered by hand (it then adopts that
+// entry, whatever category the rules chose), and failing that whether it is the
+// other half of a transfer between two of your own accounts:
 // a stored transaction on another account that moved exactly the opposite
 // amount within a few days and has not been paired or categorized yet. A row a
 // rule categorized stays where the rule put it, unless that is Equity:Transfers.
@@ -632,6 +650,7 @@ type plannedRow struct {
 func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row, txs []NewTransaction, ruled []bool) ([]plannedRow, error) {
 	plan := make([]plannedRow, len(rows))
 	taken := map[int64]bool{}
+	adopted := map[int64]bool{}
 	for i, tx := range txs {
 		p := plannedRow{tx: tx}
 		dup, err := q.importHashExists(ctx, tx.ImportHash)
@@ -639,9 +658,23 @@ func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row
 			return nil, err
 		}
 		p.duplicate = dup
+		if !dup && rows[i].Amount.Minor != 0 {
+			entries, err := q.adoptionCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, matchWindowDays)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range entries {
+				if !adopted[e.id] {
+					e := e
+					p.adopts = &e
+					adopted[e.id] = true
+					break
+				}
+			}
+		}
 		wanted := !ruled[i] || tx.Postings[1].Account == ledger.TransferAccount
-		if !dup && wanted && rows[i].Amount.Minor != 0 {
-			candidates, err := q.transferCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, transferWindowDays)
+		if !dup && p.adopts == nil && wanted && rows[i].Amount.Minor != 0 {
+			candidates, err := q.transferCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, matchWindowDays)
 			if err != nil {
 				return nil, err
 			}
@@ -658,6 +691,27 @@ func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row
 		plan[i] = p
 	}
 	return plan, nil
+}
+
+// DetachImport clears the import hash of each transaction, so that the bank
+// row it stood for is no longer recognised as stored and the transaction is a
+// hand-entered one again.
+func (s *Local) DetachImport(ctx context.Context, ids []int64) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		for _, id := range ids {
+			found, err := q.transactionExists(ctx, id)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return fmt.Errorf("transaction #%d does not exist", id)
+			}
+			if err := q.clearImportHash(ctx, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Recategorize runs rules over every transaction that sits in
