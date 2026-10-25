@@ -30,14 +30,14 @@ type Posting struct {
 }
 
 // CheckBalanced enforces the double-entry rule: a transaction has at least two
-// postings, at least one of them non-zero, and the postings of every currency
-// sum to exactly zero.
+// postings and the postings of every currency sum to exactly zero. An all-zero
+// transaction is allowed because banks book them (card verification charges);
+// interactive entry points reject a zero amount themselves.
 func CheckBalanced(postings []Posting) error {
 	if len(postings) < 2 {
 		return errors.New("a transaction needs at least two postings")
 	}
 	sums := make(map[Currency]int64)
-	nonZero := false
 	for _, p := range postings {
 		if p.Account == "" {
 			return errors.New("posting without an account")
@@ -45,13 +45,7 @@ func CheckBalanced(postings []Posting) error {
 		if p.Amount.Currency == "" {
 			return fmt.Errorf("posting to %s has no currency", p.Account)
 		}
-		if p.Amount.Minor != 0 {
-			nonZero = true
-		}
 		sums[p.Amount.Currency] += p.Amount.Minor
-	}
-	if !nonZero {
-		return errors.New("a transaction must move a non-zero amount")
 	}
 	var off []string
 	for cur, sum := range sums {

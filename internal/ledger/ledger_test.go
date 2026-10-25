@@ -185,6 +185,7 @@ func TestCheckBalanced(t *testing.T) {
 		{{"Assets:Bank", Money{-10000, "EUR"}}, {"Equity:Conversions", Money{10000, "EUR"}},
 			{"Equity:Conversions", Money{-10850, "USD"}}, {"Assets:Cash", Money{10850, "USD"}}},
 		{{"Assets:Bank", Money{-1000, "EUR"}}, {"Expenses:A", Money{600, "EUR"}}, {"Expenses:B", Money{400, "EUR"}}},
+		{{"Assets:Bank", Money{0, "EUR"}}, {"Expenses:Uncategorized", Money{0, "EUR"}}}, // bank verification charge
 	}
 	for i, ps := range good {
 		if err := CheckBalanced(ps); err != nil {
@@ -196,7 +197,6 @@ func TestCheckBalanced(t *testing.T) {
 		"one posting":                         {{"Assets:Bank", Money{100, "EUR"}}},
 		"unbalanced":                          {{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1200, "EUR"}}},
 		"mixed currencies without conversion": {{"Assets:Bank", Money{-1000, "EUR"}}, {"Assets:Cash", Money{1000, "USD"}}},
-		"all zero":                            {{"Assets:Bank", Money{0, "EUR"}}, {"Expenses:Food", Money{0, "EUR"}}},
 		"no currency":                         {{"Assets:Bank", Money{-1, ""}}, {"Expenses:Food", Money{1, ""}}},
 		"no account":                          {{"", Money{-1, "EUR"}}, {"Expenses:Food", Money{1, "EUR"}}},
 	}
