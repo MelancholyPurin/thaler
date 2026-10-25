@@ -884,3 +884,65 @@ func TestEmptyingTheLedgerKeepsTheListUsable(t *testing.T) {
 	}
 	_ = m.View()
 }
+
+func TestImportFolderFromConfig(t *testing.T) {
+	m, st := newModel(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "bank"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "bank", "konto.csv"), []byte(exportCSV), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.downloads = t.TempDir() // empty: only the configured folder has a file
+	m.loadConfig = func() (*config.Config, error) { return &config.Config{ImportDir: "~/bank"}, nil }
+
+	press(m, "i")
+	if view := m.View(); !strings.Contains(view, "konto.csv") || !strings.Contains(view, "~/bank") {
+		t.Fatalf("the configured folder should be listed:\n%s", view)
+	}
+	before := txCount(t, st)
+	press(m, "enter", "enter")
+	if txCount(t, st) != before+3 {
+		t.Errorf("imported %d, want 3", txCount(t, st)-before)
+	}
+}
+
+func TestImportBrowsesATypedFolder(t *testing.T) {
+	m, st := newModel(t)
+	other := t.TempDir()
+	for name, content := range map[string]string{"alt.csv": exportCSV, "notes.txt": "not a bank export"} {
+		if err := os.WriteFile(filepath.Join(other, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	empty := t.TempDir()
+	m.downloads = t.TempDir()
+
+	press(m, "i")
+	typeText(m, empty)
+	if view := m.View(); !strings.Contains(view, "No CSV files in") {
+		t.Errorf("an empty folder should say so:\n%s", view)
+	}
+	press(m, "enter")
+	if !strings.Contains(m.imp.err, "choose a CSV file") {
+		t.Errorf("enter on an empty folder must not try to read the folder: err %q", m.imp.err)
+	}
+
+	m.imp.file.SetValue(other + "/")
+	m.imp.refreshFiles()
+	view := m.View()
+	if !strings.Contains(view, "alt.csv") || strings.Contains(view, "notes.txt") {
+		t.Fatalf("the typed folder's CSV files should be listed:\n%s", view)
+	}
+	before := txCount(t, st)
+	press(m, "enter") // the highlighted file, not the folder
+	if m.imp.step != stepReview || m.imp.res.Inserted != 3 {
+		t.Fatalf("step %v, err %q", m.imp.step, m.imp.err)
+	}
+	press(m, "enter")
+	if txCount(t, st) != before+3 {
+		t.Errorf("imported %d, want 3", txCount(t, st)-before)
+	}
+}

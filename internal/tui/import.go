@@ -39,7 +39,7 @@ const (
 	numImportFields
 )
 
-// csvFile is a candidate export found in the downloads folder.
+// csvFile is a candidate export found in a folder.
 type csvFile struct {
 	path, name string
 	modified   time.Time
@@ -56,9 +56,11 @@ type importFlow struct {
 	profile  int
 	err      string
 
-	downloads []csvFile // newest first
-	matches   []csvFile // the downloads that fit what has been typed
-	fileCur   int       // highlighted match, -1 for none
+	dir      string    // the folder listed while nothing is typed
+	files    []csvFile // its CSV files, newest first
+	browsing string    // a folder typed into the field, whose files are listed instead
+	matches  []csvFile // the files that fit what has been typed
+	fileCur  int       // highlighted match, -1 for none
 
 	// the review step
 	path     string
@@ -106,7 +108,11 @@ func (m *Model) openImport() tea.Cmd {
 			f.profile = i
 		}
 	}
-	f.downloads = listCSVs(m.downloads)
+	f.dir = m.downloads
+	if cfg.ImportDir != "" {
+		f.dir = expandHome(cfg.ImportDir)
+	}
+	f.files = listCSVs(f.dir)
 	m.imp = f
 	m.mode = modeImport
 	f.refreshFiles()
@@ -154,9 +160,14 @@ func cleanPath(s string) string {
 		}
 		s = b.String()
 	}
+	return expandHome(s)
+}
+
+// expandHome turns a leading ~ into the home directory.
+func expandHome(s string) string {
 	if s == "~" || strings.HasPrefix(s, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
-			s = filepath.Join(home, s[1:])
+			return filepath.Join(home, s[1:])
 		}
 	}
 	return s
@@ -167,22 +178,28 @@ func looksLikePath(s string) bool {
 	return strings.ContainsRune(s, filepath.Separator) || strings.HasPrefix(s, "~") || strings.HasPrefix(s, ".")
 }
 
-// refreshFiles recomputes which downloads fit what has been typed.
+// refreshFiles recomputes which files fit what has been typed. A typed path
+// that is a folder lists that folder's CSV files; any other path is taken as it
+// is, and plain letters search the files of the default folder.
 func (f *importFlow) refreshFiles() {
 	typed := f.typedPath()
 	f.matches = f.matches[:0]
+	f.browsing = ""
 	switch {
 	case typed == "":
-		f.matches = append(f.matches, f.downloads...)
+		f.matches = append(f.matches, f.files...)
 	case looksLikePath(typed):
-		// a path, not a search
+		if info, err := os.Stat(typed); err == nil && info.IsDir() {
+			f.browsing = typed
+			f.matches = append(f.matches, listCSVs(typed)...)
+		}
 	default:
 		type scored struct {
 			csvFile
 			score int
 		}
 		var hits []scored
-		for _, d := range f.downloads {
+		for _, d := range f.files {
 			if s, ok := fuzzyScore(typed, d.name); ok {
 				hits = append(hits, scored{d, s})
 			}
@@ -198,14 +215,17 @@ func (f *importFlow) refreshFiles() {
 	}
 }
 
-// chosenPath is the file to import: a typed path, else the highlighted download.
+// chosenPath is the file to import: a typed path, else the highlighted file.
 func (f *importFlow) chosenPath() string {
 	typed := f.typedPath()
-	if typed != "" && looksLikePath(typed) {
+	if typed != "" && looksLikePath(typed) && f.browsing == "" {
 		return typed
 	}
 	if f.fileCur >= 0 && f.fileCur < len(f.matches) {
 		return f.matches[f.fileCur].path
+	}
+	if f.browsing != "" {
+		return "" // a folder with nothing to pick
 	}
 	return typed
 }
@@ -470,24 +490,29 @@ func (m *Model) importPopup() string {
 	return box("Import a bank export", lines, w, h, true, "enter review · tab next field · esc cancel")
 }
 
-// importFileList is the list of downloads under the fields, or a hint.
+// importFileList is the list of files under the fields, or a hint.
 func (m *Model) importFileList(w, h int) []string {
 	f := m.imp
 	typed := f.typedPath()
 	switch {
-	case typed != "" && looksLikePath(typed):
+	case f.browsing != "" && len(f.matches) == 0:
+		return []string{dim.Render("No CSV files in " + tildePath(f.browsing) + ".")}
+	case f.browsing == "" && typed != "" && looksLikePath(typed):
 		return []string{dim.Render("enter reads this file")}
-	case len(f.downloads) == 0:
+	case f.browsing == "" && len(f.files) == 0:
 		return []string{
-			dim.Render("No CSV files in " + tildePath(m.downloads) + "."),
-			dim.Render("Paste or drag the file's path into the File field."),
+			dim.Render("No CSV files in " + tildePath(f.dir) + "."),
+			dim.Render("Paste or drag a file's path (or a folder's) into the File field."),
 		}
 	case len(f.matches) == 0:
-		return []string{dim.Render("No download matches. Paste or drag the file's path instead.")}
+		return []string{dim.Render("No file matches. Paste or drag the file's path instead.")}
 	}
-	header := "CSV files in " + tildePath(m.downloads) + ", newest first"
-	if typed != "" {
-		header = "Matching downloads"
+	header := "CSV files in " + tildePath(f.dir) + ", newest first"
+	switch {
+	case f.browsing != "":
+		header = "CSV files in " + tildePath(f.browsing) + ", newest first"
+	case typed != "":
+		header = "Matching files in " + tildePath(f.dir)
 	}
 	out := []string{dim.Render(fit(header, w))}
 	start := 0

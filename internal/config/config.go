@@ -15,8 +15,10 @@ import (
 
 // Config is the content of config.toml.
 type Config struct {
-	Profiles []importer.Profile `toml:"profile"`
-	Rules    []importer.Rule    `toml:"rule"`
+	// ImportDir is the folder the TUI lists bank exports from; default ~/Downloads.
+	ImportDir string             `toml:"import_dir"`
+	Profiles  []importer.Profile `toml:"profile"`
+	Rules     []importer.Rule    `toml:"rule"`
 }
 
 // Load reads the config file at path. A missing file is not an error unless

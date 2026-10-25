@@ -1,6 +1,10 @@
 # Copy this file to ~/.config/thaler/config.toml (or pass --config PATH).
 # Unknown keys are rejected, so a typo cannot silently disable a rule.
 
+# The folder the interface lists bank exports from when you press `i` to import
+# (default: ~/Downloads). You can always type or drop another file or folder.
+# import_dir = "~/Documents/bank-exports"
+
 # ---------------------------------------------------------------------------
 # Categorisation rules for `thaler cli import`.
 #

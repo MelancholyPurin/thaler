@@ -127,7 +127,7 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 
 **Importing a bank export** works from the interface too. Press `i`:
 
-- **File:** the CSV files in `~/Downloads` are listed, newest first, so the export you just downloaded is already highlighted. Type a few letters to narrow the list, or paste or drag a file path into the field.
+- **File:** the CSV files in `~/Downloads` are listed, newest first, so the export you just downloaded is already highlighted. Type a few letters to narrow the list, or paste or drag a file path into the field. Type or drop a *folder* path (say `~/Desktop`) to list that folder's CSV files instead. To list a different folder every time, set `import_dir = "~/Documents/bank-exports"` in `config.toml`.
 - **Account** (default: the one selected in the Accounts panel) and **profile** (default: `sparkasse`, or one from `config.toml`) are changed with `tab` and `←` `→`.
 - `enter` shows a **review** and writes nothing: how many rows are new, how many were imported before, how many no rule matched, and each row with the category the rules chose. A second `enter` imports. If some rows cannot be read, they are listed and `y` imports the rest.
 - Afterwards the account's uncategorized rows are shown, ready for `c`, and `z` takes the whole import back.

@@ -103,7 +103,7 @@ type Model struct {
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
 
 	loadConfig  ConfigLoader
-	downloads   string // where bank exports usually land; offered when importing
+	downloads   string // where bank exports usually land; offered when importing unless config.toml says otherwise
 	imp         *importFlow
 	lastProfile string // import profile used last in this session
 
