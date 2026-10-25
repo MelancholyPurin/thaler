@@ -112,14 +112,21 @@ Use --dry-run first to see what would happen without writing anything.`,
 					if r.Duplicate {
 						status = "dup"
 					}
+					category := r.Category
+					if r.Transfer != nil {
+						category = fmt.Sprintf("⇄ #%d %s", r.Transfer.ID, r.Transfer.Account)
+					}
 					lines = append(lines, column{
-						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(r.Category, 28), truncate(r.Row.Payee, 40)),
+						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(category, 28), truncate(r.Row.Payee, 40)),
 						amount: signed(r.Row.Amount),
 					})
 				}
 				printColumns(out, "", lines)
 				fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
 					res.Inserted, res.Duplicates, parsed.Skipped)
+				if res.Transfers > 0 {
+					fmt.Fprintf(out, "%d new row(s) would be paired as the other half of a transfer with a transaction on another account.\n", res.Transfers)
+				}
 				return nil
 			}
 
@@ -127,6 +134,10 @@ Use --dry-run first to see what would happen without writing anything.`,
 				res.Inserted, acc.Name, res.Duplicates, parsed.Skipped)
 			for _, name := range res.Created {
 				fmt.Fprintf(out, "Created new account %s\n", name)
+			}
+			if res.Transfers > 0 {
+				fmt.Fprintf(out, "%d row(s) were paired as the other half of a transfer with a transaction on another account (%s).\n",
+					res.Transfers, ledger.TransferAccount)
 			}
 			if res.Uncategorized > 0 {
 				fmt.Fprintf(out, "%d row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a %s\n",

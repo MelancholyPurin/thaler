@@ -35,11 +35,14 @@ category = "Income:Salary"
 contains = "ENTGELTABSCHLUSS"
 category = "Expenses:BankFees"
 
-# A transfer to your own savings account: the category can be any account,
-# including an Assets account (it must exist already: thaler cli account add ...).
+# Money moved between your own accounts. Use Equity:Transfers for it: it is not
+# income or spending, and when you import the other account's export the two
+# halves are paired automatically (same amount, within three days). Thaler also
+# pairs them without a rule; a rule just marks one that has no other half yet.
+# Do not point such a rule at an Assets account: both exports would then book it.
 # [[rule]]
 # contains = "Umbuchung Sparen"
-# category = "Assets:Sparkasse-Savings"
+# category = "Equity:Transfers"
 
 # ---------------------------------------------------------------------------
 # Custom CSV profile, only needed for banks other than the built-in

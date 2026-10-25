@@ -117,3 +117,44 @@ func TestAccountBalanceCommand(t *testing.T) {
 		t.Error("an unknown account must fail")
 	}
 }
+
+func TestImportPairsTransfersAcrossAccounts(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "t.db")
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(cfg, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	header := `"Buchungstag";"Buchungstext";"Verwendungszweck";"Beguenstigter/Zahlungspflichtiger";"Betrag";"Waehrung";"Info"` + "\n"
+	bank := filepath.Join(dir, "bank.csv")
+	savings := filepath.Join(dir, "savings.csv")
+	if err := os.WriteFile(bank, []byte(header+`"04.10.26";"UMBUCHUNG";"Sparen";"Umbuchung Sparen";"-500,00";"EUR";"Umsatz gebucht"`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(savings, []byte(header+`"05.10.26";"UMBUCHUNG";"Sparen";"Umbuchung";"500,00";"EUR";"Umsatz gebucht"`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []string{"Assets:Bank", "Assets:Savings"} {
+		if _, err := run(t, db, "cli", "account", "add", a, "-c", "EUR"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := run(t, db, "cli", "import", bank, "-a", "Assets:Bank", "--config", cfg); err != nil || strings.Contains(out, "paired") {
+		t.Fatalf("first import = %q, %v", out, err)
+	}
+
+	out, err := run(t, db, "cli", "import", savings, "-a", "Assets:Savings", "--dry-run", "--config", cfg)
+	if err != nil || !strings.Contains(out, "⇄ #1 Assets:Bank") || !strings.Contains(out, "1 new row(s) would be paired") {
+		t.Fatalf("dry run = %q, %v", out, err)
+	}
+	out, err = run(t, db, "cli", "import", savings, "-a", "Assets:Savings", "--config", cfg)
+	if err != nil || !strings.Contains(out, "1 row(s) were paired") || strings.Contains(out, "matched no rule") {
+		t.Fatalf("import = %q, %v", out, err)
+	}
+	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Equity:Transfers") != 2 || strings.Contains(out, "Uncategorized") {
+		t.Errorf("both halves belong in Equity:Transfers:\n%s (%v)", out, err)
+	}
+	if out, err = run(t, db, "cli", "check"); err != nil || !strings.Contains(out, "OK") {
+		t.Errorf("check = %q, %v", out, err)
+	}
+}
