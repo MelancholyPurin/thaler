@@ -1502,3 +1502,96 @@ func TestCheckFindsOneSidedTransferLinks(t *testing.T) {
 	}
 	_ = a
 }
+
+func TestTransferBooksALinkedPair(t *testing.T) {
+	st := twoAccounts(t)
+	res, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Savings", Amount: eur(5000), Date: day("2026-10-05"), Memo: "monthly"})
+	if err != nil || res.ID == 0 || res.InID == 0 || res.ID == res.InID || res.CrossCurrency {
+		t.Fatalf("transfer = %+v, %v", res, err)
+	}
+	out, in := txOf(t, st, res.ID), txOf(t, st, res.InID)
+	if out.Payee != "Transfer to Savings" || in.Payee != "Transfer from Bank" || out.Description != "monthly" || in.Description != "monthly" {
+		t.Errorf("payees %q / %q, descriptions %q / %q", out.Payee, in.Payee, out.Description, in.Description)
+	}
+	if src, cat, ok := out.Legs(); !ok || src.Account != "Assets:Bank" || src.Amount != eur(-5000) || cat.Account != ledger.TransferAccount {
+		t.Errorf("outgoing half = %+v", out.Postings)
+	}
+	if src, cat, ok := in.Legs(); !ok || src.Account != "Assets:Savings" || src.Amount != eur(5000) || cat.Account != ledger.TransferAccount {
+		t.Errorf("incoming half = %+v", in.Postings)
+	}
+	if out.TransferWith != in.ID || in.TransferWith != out.ID {
+		t.Errorf("the halves must point at each other: %d -> %d, %d -> %d", out.ID, out.TransferWith, in.ID, in.TransferWith)
+	}
+	if got := balanceOn(t, st, ledger.TransferAccount, ""); got != 0 {
+		t.Errorf("%s = %d; the halves cancel", ledger.TransferAccount, got)
+	}
+	// Neither income nor spending.
+	report, _ := st.BudgetReport(ctx, BudgetRequest{From: "2026-10-01", To: "2026-10-31", RateDate: "2026-10-31"})
+	if report.IncomeTotal.Minor != 0 || report.ExpenseTotal.Minor != 0 {
+		t.Errorf("a transfer is not income or spending: %v / %v", report.IncomeTotal, report.ExpenseTotal)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+}
+
+func TestCrossCurrencyTransferBooksAPairThroughConversions(t *testing.T) {
+	st := twoAccounts(t)
+	mustAccount(t, st, "Assets:Dollars", "USD")
+	res, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Dollars", Amount: eur(10000), ToAmount: usd(10850), Date: day("2026-10-05")})
+	if err != nil || !res.CrossCurrency || res.In != usd(10850) || res.InID == 0 {
+		t.Fatalf("transfer = %+v, %v", res, err)
+	}
+	out, in := txOf(t, st, res.ID), txOf(t, st, res.InID)
+	if categoryAccount(t, out) != ledger.ConversionAccount || categoryAccount(t, in) != ledger.ConversionAccount {
+		t.Errorf("both halves go through %s: %s, %s", ledger.ConversionAccount, categoryAccount(t, out), categoryAccount(t, in))
+	}
+	if out.TransferWith != in.ID || in.TransferWith != out.ID {
+		t.Error("the halves must be linked")
+	}
+	if balanceOn(t, st, "Assets:Bank", "") != -10000 || balanceOn(t, st, "Assets:Dollars", "") != 10850 {
+		t.Error("balances after the transfer")
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 0 {
+		t.Errorf("Check = %v", problems)
+	}
+
+	// A harmless edit keeps the pair; recategorizing a half dissolves it.
+	nt, _ := out.NewTransaction()
+	nt.Payee = "Wechsel"
+	if _, err := st.ReplaceTransaction(ctx, out.ID, nt); err != nil || txOf(t, st, out.ID).TransferWith != in.ID {
+		t.Errorf("renaming must keep the pair: %v", err)
+	}
+	if _, err := st.SetCategories(ctx, []CategoryChange{{TransactionID: out.ID, Category: "Expenses:Fees"}}); err != nil {
+		t.Fatal(err)
+	}
+	if o, i := txOf(t, st, out.ID), txOf(t, st, in.ID); o.TransferWith != 0 || i.TransferWith != 0 || categoryAccount(t, i) != ledger.UncategorizedIncome {
+		t.Errorf("the pair should be dissolved and the other half uncategorized: %+v / %+v", o, i)
+	}
+}
+
+func TestATransferWritesNothingWhenItFails(t *testing.T) {
+	st := twoAccounts(t)
+	// The incoming account exists but a posting on a missing Assets account
+	// fails halfway; nothing may be left behind.
+	if _, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Savings", Amount: eur(100), Date: time.Time{}}); err == nil {
+		t.Fatal("a transfer without a date must fail")
+	}
+	if txs, _ := st.ListTransactions(ctx, TxFilter{}); len(txs) != 0 {
+		t.Errorf("%d transactions left behind by a failed transfer", len(txs))
+	}
+}
+
+func TestAManualTransferIsNotPairedWithAnImportedRowYet(t *testing.T) {
+	// Documents what is not done: the halves of a transfer entered by hand are
+	// already linked, so a bank row for the same money is imported as a new
+	// transaction. Adopting the manual entry is a separate feature.
+	st := twoAccounts(t)
+	if _, err := st.Transfer(ctx, TransferRequest{From: "Assets:Bank", To: "Assets:Savings", Amount: eur(5000), Date: day("2026-10-05")}); err != nil {
+		t.Fatal(err)
+	}
+	res := importRows(t, st, "Assets:Savings", nil, row(2, "2026-10-05", "Umbuchung", "", eur(5000)))
+	if res.Inserted != 1 || res.Transfers != 0 {
+		t.Errorf("import = %+v", res)
+	}
+}
