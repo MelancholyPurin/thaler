@@ -193,6 +193,7 @@ The schema lives in `internal/core/migrations/`. Add `YYYYMMDD_name.up.sql` file
 - **One database connection.** Fine for a single-user CLI. The TUI calls the service directly from its update loop (milliseconds on a local file); a network backend would need those calls moved into background commands, and this pool setting revisited.
 - **Recategorizing re-books the category leg only.** A transaction's category is its single Income/Expenses/Equity posting; the amount, date and your own account never change. Transactions with no such posting or several (transfers, FX conversions) are refused.
 - **Backups are plain SQLite files.** Encryption (age) is not implemented; keep them on an encrypted disk for now.
+- **Rows have a uuid and a version, accounts have an owner.** Integer ids stay what the code uses; the uuid is the identity that survives export, restore and sync. `version` goes up on every edit so a stale client can be refused later. `accounts.owner_id` is NULL for shared accounts and a user for private ones. The `users` table exists but nothing reads these columns yet.
 - **Dates are ISO strings**, money is `int64` minor units, exchange rates are exact rationals (`math/big`). No floats touch stored or reported amounts.
 
 ## Roadmap

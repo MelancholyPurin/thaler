@@ -674,7 +674,12 @@ func (s *Local) Check(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(problems, mismatched...), nil
+	problems = append(problems, mismatched...)
+	unnamed, err := q.missingIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(problems, unnamed...), nil
 }
 
 // Backup writes a consistent snapshot of the database to dest using

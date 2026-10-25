@@ -2,8 +2,10 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -585,29 +587,44 @@ func TestDeleteReplaceRestore(t *testing.T) {
 }
 
 func TestMigrateAdoptsLegacyUserVersion(t *testing.T) {
-	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "legacy.db")
+	// The pre-schema_migrations state: only the initial schema, version in the pragma.
+	old, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	initSQL, err := migrationFS.ReadFile("migrations/20261022_init.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{string(initSQL), `PRAGMA user_version = 1`} {
+		if _, err := old.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old.Close()
+
 	s, err := Open(ctx, path)
 	if err != nil {
-		t.Fatal(err)
-	}
-	// Recreate the pre-schema_migrations state: schema present, version in the pragma.
-	if _, err := s.repo.db.ExecContext(ctx, `DROP TABLE schema_migrations`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.repo.db.ExecContext(ctx, `PRAGMA user_version = 1`); err != nil {
-		t.Fatal(err)
-	}
-	s.Close()
-
-	s, err = Open(ctx, path)
-	if err != nil {
-		t.Fatalf("reopening a legacy database: %v", err)
+		t.Fatalf("opening a legacy database: %v", err)
 	}
 	defer s.Close()
-	var n int
-	if err := s.repo.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("schema_migrations rows = %d, err %v; want 1", n, err)
+	// The initial schema is adopted, not re-run; everything after it is applied.
+	var names []string
+	rows, err := s.repo.db.QueryContext(ctx, `SELECT name FROM schema_migrations ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, n)
+	}
+	if len(names) != 2 || names[0] != "20261022_init.up.sql" {
+		t.Fatalf("schema_migrations = %v; want the initial schema adopted and the later one applied", names)
 	}
 }
 
@@ -857,5 +874,172 @@ func TestBudgetReport(t *testing.T) {
 	b, _ = st.BudgetReport(ctx, BudgetRequest{})
 	if b.IncomeTotal != eur(200000+2000) {
 		t.Errorf("all time uses today's rate: %+v", b.IncomeTotal)
+	}
+}
+
+var uuidV4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+// txIdentity reads the columns that identify and version a transaction.
+func txIdentity(t *testing.T, st *Local, id int64) (uuid string, version int, updatedAt sql.NullString) {
+	t.Helper()
+	err := st.repo.db.QueryRowContext(ctx,
+		`SELECT uuid, version, updated_at FROM transactions WHERE id = ?`, id).Scan(&uuid, &version, &updatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return uuid, version, updatedAt
+}
+
+func TestIdentityAndVersions(t *testing.T) {
+	st := newLocal(t)
+	mustAccount(t, st, "Assets:Bank", "EUR")
+	mustAccount(t, st, "Assets:Cash", "EUR")
+	add, err := st.AddTransaction(ctx, NewTransaction{
+		Date: day("2026-10-01"), Payee: "shop",
+		Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-500)}, {Account: "Expenses:Food", Amount: eur(500)}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	uuid1, version, updated := txIdentity(t, st, add.ID)
+	if !uuidV4.MatchString(uuid1) || version != 1 || updated.Valid {
+		t.Fatalf("new transaction: uuid %q version %d updated_at %v; want a v4 uuid, version 1, never edited", uuid1, version, updated)
+	}
+	var accountUUIDs []string
+	rows, err := st.repo.db.QueryContext(ctx, `SELECT uuid FROM accounts`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			t.Fatal(err)
+		}
+		accountUUIDs = append(accountUUIDs, u)
+	}
+	rows.Close()
+	seen := map[string]bool{}
+	for _, u := range accountUUIDs {
+		if !uuidV4.MatchString(u) || seen[u] {
+			t.Errorf("account uuid %q is malformed or repeated", u)
+		}
+		seen[u] = true
+	}
+
+	// Editing the fields and re-categorising are both edits; the uuid never moves.
+	if _, err := st.ReplaceTransaction(ctx, add.ID, NewTransaction{
+		Date: day("2026-10-02"), Payee: "market",
+		Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-500)}, {Account: "Expenses:Food", Amount: eur(500)}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if u, version, updated := txIdentity(t, st, add.ID); u != uuid1 || version != 2 || !updated.Valid {
+		t.Errorf("after replace: uuid %q version %d updated_at %v; want the same uuid, version 2, an edit time", u, version, updated)
+	}
+	if _, err := st.SetCategories(ctx, []CategoryChange{{TransactionID: add.ID, Category: "Expenses:Dining"}}); err != nil {
+		t.Fatal(err)
+	}
+	if u, version, _ := txIdentity(t, st, add.ID); u != uuid1 || version != 3 {
+		t.Errorf("after recategorising: uuid %q version %d; want the same uuid, version 3", u, version)
+	}
+
+	// Check flags a writer that skipped the uuid.
+	if problems, err := st.Check(ctx); err != nil || len(problems) != 0 {
+		t.Fatalf("Check on a healthy ledger = %v, %v", problems, err)
+	}
+	if _, err := st.repo.db.ExecContext(ctx, `UPDATE transactions SET uuid = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if problems, _ := st.Check(ctx); len(problems) != 1 || !strings.Contains(problems[0], "has no uuid") {
+		t.Errorf("Check = %v; want one missing-uuid problem", problems)
+	}
+}
+
+// A database created before the users migration keeps its data, and its rows
+// get identities.
+func TestMigrationBackfillsExistingRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	initSQL, err := migrationFS.ReadFile("migrations/20261022_init.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		string(initSQL),
+		`CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT '')`,
+		`INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`,
+		`INSERT INTO accounts (name, type, currency) VALUES ('Assets:Bank', 'Assets', 'EUR'), ('Expenses:Food', 'Expenses', NULL)`,
+		`INSERT INTO transactions (date, payee) VALUES ('2026-10-01', 'a'), ('2026-10-02', 'b')`,
+		`INSERT INTO postings (transaction_id, account_id, amount, currency)
+		 VALUES (1, 1, -100, 'EUR'), (1, 2, 100, 'EUR'), (2, 1, -200, 'EUR'), (2, 2, 200, 'EUR')`,
+	} {
+		if _, err := old.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("building the old database: %v", err)
+		}
+	}
+	old.Close()
+
+	st, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("migrating an existing database: %v", err)
+	}
+	defer st.Close()
+
+	for _, table := range []string{"accounts", "transactions"} {
+		var total, distinct, wellFormed, versioned, shared int
+		err := st.repo.db.QueryRowContext(ctx, `SELECT COUNT(*), COUNT(DISTINCT uuid),
+			SUM(uuid GLOB '????????-????-4???-[89ab]???-????????????'), SUM(version = 1 AND updated_at IS NULL AND created_by IS NULL),
+			`+map[string]string{"accounts": "SUM(owner_id IS NULL)", "transactions": "COUNT(*)"}[table]+`
+			FROM `+table).Scan(&total, &distinct, &wellFormed, &versioned, &shared)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != 2 || distinct != 2 || wellFormed != 2 || versioned != 2 || shared != 2 {
+			t.Errorf("%s: %d rows, %d distinct uuids, %d well formed, %d at version 1, %d shared; want all 2",
+				table, total, distinct, wellFormed, versioned, shared)
+		}
+	}
+	var users int
+	if err := st.repo.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&users); err != nil || users != 0 {
+		t.Errorf("users = %d, err %v; the migration must not invent anyone", users, err)
+	}
+	if problems, err := st.Check(ctx); err != nil || len(problems) != 0 {
+		t.Errorf("Check after migrating = %v, %v", problems, err)
+	}
+	if got, err := st.ListTransactions(ctx, TxFilter{}); err != nil || len(got) != 2 {
+		t.Errorf("transactions after migrating = %d, err %v; want 2", len(got), err)
+	}
+}
+
+func TestUsers(t *testing.T) {
+	st := newLocal(t)
+	exec := func(q string, args ...any) error {
+		_, err := st.repo.db.ExecContext(ctx, q, args...)
+		return err
+	}
+	if err := exec(`INSERT INTO users (name) VALUES ('Santiago')`); err != nil {
+		t.Fatal(err)
+	}
+	var u string
+	if err := st.repo.db.QueryRowContext(ctx, `SELECT uuid FROM users`).Scan(&u); err != nil || !uuidV4.MatchString(u) {
+		t.Errorf("user uuid = %q, err %v; want a v4 uuid", u, err)
+	}
+	if err := exec(`INSERT INTO users (name) VALUES ('santiago')`); err == nil {
+		t.Error("names differing only in case must collide")
+	}
+	if err := exec(`INSERT INTO users (name) VALUES ('  ')`); err == nil {
+		t.Error("a blank name must be refused")
+	}
+	// A private account points at a real user.
+	mustAccount(t, st, "Assets:Bank", "EUR")
+	if err := exec(`UPDATE accounts SET owner_id = 1`); err != nil {
+		t.Errorf("owning an account: %v", err)
+	}
+	if err := exec(`UPDATE accounts SET owner_id = 99`); err == nil {
+		t.Error("an account cannot belong to a user that does not exist")
 	}
 }

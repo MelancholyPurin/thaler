@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"uuid"
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
 	"github.com/melancholypurin/thaler/internal/ledger"
@@ -23,6 +24,9 @@ import (
 // connection pool is limited to one connection: thaler is a small tool, and one
 // connection avoids "database is locked" surprises. Never run a second query
 // while iterating over rows, or the call will block forever.
+
+// nowSQL is the timestamp format of every created_at and updated_at column.
+const nowSQL = `strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
 
 type repository struct {
 	db *sql.DB
@@ -115,7 +119,8 @@ func (q queries) insertAccount(ctx context.Context, name string, typ ledger.Acco
 	if cur != "" {
 		c = string(cur)
 	}
-	res, err := q.db.ExecContext(ctx, `INSERT INTO accounts (name, type, currency) VALUES (?, ?, ?)`, name, string(typ), c)
+	res, err := q.db.ExecContext(ctx, `INSERT INTO accounts (uuid, name, type, currency) VALUES (?, ?, ?, ?)`,
+		uuid.NewV4().String(), name, string(typ), c)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return Account{}, fmt.Errorf("%w: %s", ErrAccountExists, name)
@@ -203,17 +208,20 @@ func (q queries) insertTransaction(ctx context.Context, id int64, nt NewTransact
 		rowID = id
 	}
 	res, err := q.db.ExecContext(ctx,
-		`INSERT INTO transactions (id, date, payee, description, import_hash) VALUES (?, ?, ?, ?, ?)`,
-		rowID, nt.Date.Format(ledger.DateLayout), nt.Payee, nt.Description, hash)
+		`INSERT INTO transactions (id, uuid, date, payee, description, import_hash) VALUES (?, ?, ?, ?, ?, ?)`,
+		rowID, uuid.NewV4().String(), nt.Date.Format(ledger.DateLayout), nt.Payee, nt.Description, hash)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-// updateTransaction rewrites date, payee and description; the import hash stays.
+// updateTransaction rewrites date, payee and description; the import hash and
+// uuid stay. It counts as an edit, so version goes up.
 func (q queries) updateTransaction(ctx context.Context, id int64, nt NewTransaction) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE transactions SET date = ?, payee = ?, description = ? WHERE id = ?`,
+	_, err := q.db.ExecContext(ctx, `UPDATE transactions
+		SET date = ?, payee = ?, description = ?, version = version + 1, updated_at = `+nowSQL+`
+		WHERE id = ?`,
 		nt.Date.Format(ledger.DateLayout), nt.Payee, nt.Description, id)
 	return err
 }
@@ -275,7 +283,14 @@ func (q queries) categoryPostings(ctx context.Context, txID int64) ([]categoryPo
 	return out, rows.Err()
 }
 
+// moveStoredPosting books a posting on another account. That edits the
+// transaction it belongs to, so its version goes up.
 func (q queries) moveStoredPosting(ctx context.Context, postingID, accountID int64) error {
+	if _, err := q.db.ExecContext(ctx, `UPDATE transactions
+		SET version = version + 1, updated_at = `+nowSQL+`
+		WHERE id = (SELECT transaction_id FROM postings WHERE id = ?)`, postingID); err != nil {
+		return err
+	}
 	_, err := q.db.ExecContext(ctx, `UPDATE postings SET account_id = ? WHERE id = ?`, accountID, postingID)
 	return err
 }
@@ -507,6 +522,29 @@ func (q queries) currencyMismatches(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 		out = append(out, fmt.Sprintf("transaction #%d posts %s to %s, which holds %s", id, posCur, account, accCur))
+	}
+	return out, rows.Err()
+}
+
+// missingIdentity describes every account and transaction without a uuid. The
+// column cannot be NOT NULL (SQLite cannot add such a column to a populated
+// table), so this is what catches a writer that forgot to set it.
+func (q queries) missingIdentity(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT 'account ' || name FROM accounts WHERE uuid IS NULL
+		UNION ALL
+		SELECT 'transaction #' || id FROM transactions WHERE uuid IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var what string
+		if err := rows.Scan(&what); err != nil {
+			return nil, err
+		}
+		out = append(out, what+" has no uuid")
 	}
 	return out, rows.Err()
 }
