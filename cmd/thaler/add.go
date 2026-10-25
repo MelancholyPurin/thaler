@@ -118,8 +118,10 @@ exchange rate you actually got:
 
   thaler cli transfer --from Assets:Sparkasse --to Assets:Cash-USD --amount 100 --to-amount 108.50
 
-Cross-currency transfers are booked through Equity:Conversions so that every
-currency balances on its own.`,
+A transfer is two linked transactions, one on each account, like the two bank
+statements of a real transfer; they are booked to Equity:Transfers, or to
+Equity:Conversions when the currencies differ, so that every currency balances
+on its own and a transfer is neither income nor spending.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -169,7 +171,7 @@ currency balances on its own.`,
 					res.In, src.Currency, rate, dst.Currency, src.Currency, dst.Currency, rate)
 			}
 			w := cmd.OutOrStdout()
-			fmt.Fprintf(w, "#%d  %s  %s\n", res.ID, when.Format(ledger.DateLayout), summary)
+			fmt.Fprintf(w, "#%d and #%d  %s  %s\n", res.ID, res.InID, when.Format(ledger.DateLayout), summary)
 			for _, name := range res.Created {
 				fmt.Fprintf(w, "Created new account %s\n", name)
 			}

@@ -158,3 +158,34 @@ func TestImportPairsTransfersAcrossAccounts(t *testing.T) {
 		t.Errorf("check = %q, %v", out, err)
 	}
 }
+
+func TestTransferCommandBooksALinkedPair(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "t.db")
+	for _, args := range [][]string{
+		{"cli", "account", "add", "Assets:Bank", "-c", "EUR"},
+		{"cli", "account", "add", "Assets:Savings", "-c", "EUR"},
+		{"cli", "account", "add", "Assets:Dollars", "-c", "USD"},
+	} {
+		if _, err := run(t, db, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := run(t, db, "cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "500", "-d", "2026-10-05")
+	if err != nil || !strings.Contains(out, "#1 and #2") || !strings.Contains(out, "Transferred 500.00 EUR") {
+		t.Fatalf("transfer = %q, %v", out, err)
+	}
+	out, err = run(t, db, "cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Dollars", "--amount", "100", "--to-amount", "108.50", "-d", "2026-10-06")
+	if err != nil || !strings.Contains(out, "#3 and #4") || !strings.Contains(out, "effective rate 1 EUR = 1.0850 USD") {
+		t.Fatalf("cross-currency transfer = %q, %v", out, err)
+	}
+	if out, err = run(t, db, "cli", "list", "-n", "0"); err != nil || strings.Count(out, "Transfer to ")+strings.Count(out, "Transfer from ") != 4 ||
+		!strings.Contains(out, "Equity:Transfers") || !strings.Contains(out, "Equity:Conversions") {
+		t.Errorf("list:\n%s (%v)", out, err)
+	}
+	if out, err = run(t, db, "cli", "balance"); err != nil || !strings.Contains(out, "-600.00 EUR") || !strings.Contains(out, "108.50 USD") {
+		t.Errorf("balance:\n%s (%v)", out, err)
+	}
+	if out, err = run(t, db, "cli", "check"); err != nil || !strings.Contains(out, "OK") {
+		t.Errorf("check = %q, %v", out, err)
+	}
+}
