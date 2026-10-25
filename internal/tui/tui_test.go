@@ -87,7 +87,7 @@ func newModel(t *testing.T) (*Model, *core.Local) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	m, err := newWithClock(ctx, st, Options{LoadConfig: testConfig}, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -848,7 +848,7 @@ func emptyModel(t *testing.T) (*Model, *core.Local) {
 	if _, err := st.AddAccount(ctx, "Assets:Bank", "EUR"); err != nil {
 		t.Fatal(err)
 	}
-	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	m, err := newWithClock(ctx, st, Options{LoadConfig: testConfig}, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -976,7 +976,7 @@ func noAccountsModel(t *testing.T) (*Model, *core.Local) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	m, err := newWithClock(ctx, st, testConfig, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
+	m, err := newWithClock(ctx, st, Options{LoadConfig: testConfig}, func() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1152,5 +1152,118 @@ func TestAccountPopupCancels(t *testing.T) {
 	press(m, "esc")
 	if accs, _ := st.ListAccounts(ctx); m.mode != modeList || len(accs) != 0 {
 		t.Errorf("esc must write nothing: mode %v, %d accounts", m.mode, len(accs))
+	}
+}
+
+// ---- config ------------------------------------------------------------------
+
+func TestEditorCommand(t *testing.T) {
+	env := func(vars map[string]string) func(string) string {
+		return func(k string) string { return vars[k] }
+	}
+	none := func(string) (string, error) { return "", errors.New("not found") }
+	only := func(name string) func(string) (string, error) {
+		return func(n string) (string, error) {
+			if n == name {
+				return "/usr/bin/" + n, nil
+			}
+			return "", errors.New("not found")
+		}
+	}
+	for name, tc := range map[string]struct {
+		vars map[string]string
+		look func(string) (string, error)
+		want []string // nil: an error
+	}{
+		"visual wins":    {map[string]string{"VISUAL": "hx", "EDITOR": "nano"}, none, []string{"hx", "/c.toml"}},
+		"editor":         {map[string]string{"EDITOR": "nano"}, none, []string{"nano", "/c.toml"}},
+		"with arguments": {map[string]string{"EDITOR": "code --wait"}, none, []string{"code", "--wait", "/c.toml"}},
+		"blank is unset": {map[string]string{"VISUAL": "  ", "EDITOR": "vim"}, none, []string{"vim", "/c.toml"}},
+		"falls back":     {nil, only("vi"), []string{"vi", "/c.toml"}},
+		"prefers nano":   {nil, func(string) (string, error) { return "x", nil }, []string{"nano", "/c.toml"}},
+		"nothing at all": {nil, none, nil},
+	} {
+		cmd, err := editorCommand(env(tc.vars), tc.look, "/c.toml")
+		switch {
+		case tc.want == nil && err == nil:
+			t.Errorf("%s: want an error, got %v", name, cmd.Args)
+		case tc.want == nil && !strings.Contains(err.Error(), "$EDITOR"):
+			t.Errorf("%s: the error should say what to set, got %v", name, err)
+		case tc.want != nil && (err != nil || strings.Join(cmd.Args, " ") != strings.Join(tc.want, " ")):
+			t.Errorf("%s: got %v, %v; want %v", name, cmd, err, tc.want)
+		}
+	}
+}
+
+func TestConfigKeyOpensTheEditor(t *testing.T) {
+	m, _ := newModel(t)
+	path := filepath.Join(t.TempDir(), "thaler", "config.toml")
+	m.opts = Options{ConfigPath: path, ConfigTemplate: "[[rule]]\ncontains = \"x\"\ncategory = \"Expenses:X\"\n"}
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "true")
+
+	for _, screenKey := range []string{"L", "B", "F", "R"} { // every screen
+		press(m, screenKey)
+		_ = os.Remove(path)
+		_, cmd := m.Update(key("C"))
+		if cmd == nil {
+			t.Fatalf("screen %v: C should start the editor, status %q", m.screen, m.status)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(body), "# contains") || strings.Contains(string(body), "\ncontains") {
+			t.Errorf("the file should exist with the sample switched off: %q, %v", body, err)
+		}
+	}
+
+	// An existing file is left alone.
+	if err := os.WriteFile(path, []byte("# mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.Update(key("C"))
+	if body, _ := os.ReadFile(path); string(body) != "# mine\n" {
+		t.Errorf("C overwrote the config: %q", body)
+	}
+}
+
+func TestConfigKeyWithoutAnEditor(t *testing.T) {
+	m, _ := newModel(t)
+	m.opts = Options{ConfigPath: filepath.Join(t.TempDir(), "config.toml")}
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "")
+	t.Setenv("PATH", "")
+	if _, cmd := m.Update(key("C")); cmd != nil || !m.statusIsError || !strings.Contains(m.status, "$EDITOR") {
+		t.Errorf("cmd %v, status %q", cmd, m.status)
+	}
+}
+
+func TestAfterEditingTheConfig(t *testing.T) {
+	m, _ := newModel(t)
+	m.loadConfig = func() (*config.Config, error) {
+		return &config.Config{Rules: make([]importer.Rule, 3), Profiles: make([]importer.Profile, 1)}, nil
+	}
+	m.Update(configEditedMsg{})
+	if m.statusIsError || !strings.Contains(m.status, "3 rule(s), 1 bank profile(s)") {
+		t.Errorf("status = %q", m.status)
+	}
+	m.loadConfig = func() (*config.Config, error) { return nil, errors.New("config.toml: unknown key(s): [rule.typo]") }
+	m.Update(configEditedMsg{})
+	if !m.statusIsError || !strings.Contains(m.status, "unknown key") {
+		t.Errorf("a mistake must be reported: %q", m.status)
+	}
+	m.Update(configEditedMsg{err: errors.New("exit status 1")})
+	if !m.statusIsError || !strings.Contains(m.status, "editor failed") {
+		t.Errorf("status = %q", m.status)
+	}
+}
+
+func TestConfigKeyIsPlainTextInAForm(t *testing.T) {
+	m, _ := newModel(t)
+	m.opts = Options{ConfigPath: filepath.Join(t.TempDir(), "config.toml")}
+	press(m, "a", "C")
+	if m.mode != modeForm || m.form.amount.Value() != "C" {
+		t.Errorf("the letter belongs to the form: mode %v, amount %q", m.mode, m.form.amount.Value())
+	}
+	if _, err := os.Stat(m.opts.ConfigPath); err == nil {
+		t.Error("typing in a form must not create the config")
 	}
 }

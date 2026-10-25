@@ -57,11 +57,15 @@ func (a *app) config() (*config.Config, error) {
 // loadConfig reads the config file afresh. The TUI uses it so that rules edited
 // while it is open apply to the next import.
 func (a *app) loadConfig() (*config.Config, error) {
-	path, explicit := a.cfgFlag, a.cfgFlag != ""
-	if !explicit {
-		path = config.DefaultConfigPath()
+	return config.Load(a.configPath(), a.cfgFlag != "")
+}
+
+// configPath is the --config file, or else the default location.
+func (a *app) configPath() string {
+	if a.cfgFlag != "" {
+		return a.cfgFlag
 	}
-	return config.Load(path, explicit)
+	return config.DefaultConfigPath()
 }
 
 func (a *app) close() {

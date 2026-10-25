@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -37,6 +38,43 @@ func Load(path string, mustExist bool) (*Config, error) {
 		return nil, fmt.Errorf("%s: unknown key(s): %v", path, unknown)
 	}
 	return &c, nil
+}
+
+const newFileHeader = "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n"
+
+// Ensure creates the config file from the example text if it does not exist,
+// with every active line commented out so that it changes nothing until the
+// user switches lines on.
+func Ensure(path, example string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(newFileHeader + commentOut(example)); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// commentOut puts "# " in front of every line that is not already a comment or
+// blank, so a template full of sample rules starts out switched off.
+func commentOut(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		if t := strings.TrimSpace(l); t != "" && !strings.HasPrefix(t, "#") {
+			lines[i] = "# " + l
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // DefaultDBPath is $THALER_DB if set, else <data dir>/thaler.db.

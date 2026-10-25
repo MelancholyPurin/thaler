@@ -26,6 +26,15 @@ import (
 // import starts, so rules edited while it is open take effect without a restart.
 type ConfigLoader func() (*config.Config, error)
 
+// Options is what the interface needs besides the service.
+type Options struct {
+	LoadConfig ConfigLoader
+	// ConfigPath is the config file C opens in the user's editor, and
+	// ConfigTemplate is what a file that does not exist yet starts from.
+	ConfigPath     string
+	ConfigTemplate string
+}
+
 type mode int
 
 const (
@@ -104,6 +113,7 @@ type Model struct {
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
 
 	loadConfig  ConfigLoader
+	opts        Options
 	downloads   string // where bank exports usually land; offered when importing unless config.toml says otherwise
 	imp         *importFlow
 	acct        *accountForm
@@ -122,12 +132,12 @@ type Model struct {
 }
 
 // New loads the data and returns a ready model.
-func New(ctx context.Context, svc core.Service, load ConfigLoader) (*Model, error) {
-	return newWithClock(ctx, svc, load, time.Now)
+func New(ctx context.Context, svc core.Service, opts Options) (*Model, error) {
+	return newWithClock(ctx, svc, opts, time.Now)
 }
 
-func newWithClock(ctx context.Context, svc core.Service, load ConfigLoader, now func() time.Time) (*Model, error) {
-	m := &Model{ctx: ctx, svc: svc, loadConfig: load, width: 100, height: 30, now: now}
+func newWithClock(ctx context.Context, svc core.Service, opts Options, now func() time.Time) (*Model, error) {
+	m := &Model{ctx: ctx, svc: svc, loadConfig: opts.LoadConfig, opts: opts, width: 100, height: 30, now: now}
 	if home, err := os.UserHomeDir(); err == nil {
 		m.downloads = filepath.Join(home, "Downloads")
 	}
@@ -146,8 +156,8 @@ func newWithClock(ctx context.Context, svc core.Service, load ConfigLoader, now 
 }
 
 // Run starts the interface and blocks until the user quits.
-func Run(ctx context.Context, svc core.Service, load ConfigLoader) error {
-	m, err := New(ctx, svc, load)
+func Run(ctx context.Context, svc core.Service, opts Options) error {
+	m, err := New(ctx, svc, opts)
 	if err != nil {
 		return err
 	}
@@ -232,6 +242,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clampAll()
 		return m, nil
+	case configEditedMsg:
+		m.configEdited(msg.err)
+		return m, nil
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -268,6 +281,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		m.mode = modeHelp
 		return m, nil
+	case "C":
+		return m, m.editConfig()
 	case "f1", "L":
 		m.setScreen(screenLedger)
 		return m, nil

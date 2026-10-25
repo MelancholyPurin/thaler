@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
+	"github.com/melancholypurin/thaler"
 	"github.com/melancholypurin/thaler/internal/tui"
 )
 
@@ -20,5 +21,9 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return tui.Run(ctx, svc, a.loadConfig)
+	return tui.Run(ctx, svc, tui.Options{
+		LoadConfig:     a.loadConfig,
+		ConfigPath:     a.configPath(),
+		ConfigTemplate: thaler.ConfigExample,
+	})
 }
