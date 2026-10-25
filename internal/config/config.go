@@ -65,6 +65,61 @@ func Ensure(path, example string) error {
 	return f.Close()
 }
 
+// AppendRule adds a "contains" rule to the end of the config file, creating the
+// file from the example first if there is none. The file is only appended to,
+// so the user's comments and the order of their rules are untouched; and since
+// the first matching rule wins, a rule added here is the last resort.
+func AppendRule(path, example string, r importer.Rule) error {
+	if strings.TrimSpace(r.Contains) == "" || r.Regex != "" || r.Category == "" {
+		return errors.New("a rule needs text to look for and a category")
+	}
+	if err := Ensure(path, example); err != nil {
+		return err
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var add strings.Builder
+	if len(body) > 0 && body[len(body)-1] != '\n' {
+		add.WriteString("\n")
+	}
+	add.WriteString("\n[[rule]]\ncontains = " + tomlString(strings.TrimSpace(r.Contains)) + "\ncategory = " + tomlString(r.Category) + "\n")
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(add.String()); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// tomlString quotes s as a TOML basic string.
+func tomlString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, `\u%04X`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
 // commentOut puts "# " in front of every line that is not already a comment or
 // blank, so a template full of sample rules starts out switched off.
 func commentOut(text string) string {

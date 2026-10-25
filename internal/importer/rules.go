@@ -56,18 +56,25 @@ func NewRuleset(rules []Rule) (*Ruleset, error) {
 
 // Match returns the category of the first rule that matches any of fields.
 func (s *Ruleset) Match(fields ...string) (string, bool) {
+	_, category, ok := s.Find(fields...)
+	return category, ok
+}
+
+// Find is Match that also says which rule it was: the index into the rules the
+// set was built from.
+func (s *Ruleset) Find(fields ...string) (index int, category string, ok bool) {
 	text := strings.Join(fields, " ")
 	lower := strings.ToLower(text)
-	for _, r := range s.rules {
+	for i, r := range s.rules {
 		if r.re != nil {
 			if r.re.MatchString(text) {
-				return r.category, true
+				return i, r.category, true
 			}
 			continue
 		}
 		if strings.Contains(lower, r.contains) {
-			return r.category, true
+			return i, r.category, true
 		}
 	}
-	return "", false
+	return 0, "", false
 }
