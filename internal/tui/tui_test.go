@@ -2000,3 +2000,79 @@ func TestTransferNeedsTwoAccounts(t *testing.T) {
 		t.Errorf("one account: mode %v, status %q", m.mode, m.status)
 	}
 }
+
+// ---- your own entries and the bank's rows ------------------------------------
+
+func TestImportTakesOverEntriesYouMadeByHand(t *testing.T) {
+	m, st := newModel(t) // REWE 20.00 on 2 October is a hand-entered, uncategorized transaction
+	mine := txByPayee(t, st, "REWE")
+	writeExport(t, m, "umsaetze.csv", exportHeader+
+		"03.10.26;Einkauf;REWE Markt;-20,00;EUR;Umsatz gebucht\n"+ // the bank's record of it
+		"05.10.26;;Neuer Laden;-7,00;EUR;Umsatz gebucht\n")
+	before := txCount(t, st)
+
+	press(m, "i", "enter")
+	view := m.View()
+	for _, want := range []string{"1 new", "1 matched your entries", fmt.Sprintf("↔ #%d REWE", mine.ID)} {
+		if !strings.Contains(view, want) {
+			t.Errorf("review is missing %q:\n%s", want, view)
+		}
+	}
+	if tx, _ := st.GetTransaction(ctx, mine.ID); tx.ImportHash != "" {
+		t.Fatal("reviewing must change nothing")
+	}
+
+	press(m, "enter")
+	if txCount(t, st) != before+1 {
+		t.Errorf("%d new transactions, want 1: the other row took over the entry", txCount(t, st)-before)
+	}
+	tx, _ := st.GetTransaction(ctx, mine.ID)
+	if tx.ImportHash == "" || tx.Payee != "REWE" || tx.Date != "2026-10-02" {
+		t.Errorf("your entry keeps what you typed and gains the bank row: %+v", tx)
+	}
+	if !strings.Contains(m.status, "Imported 1") || !strings.Contains(m.status, "1 matched your entries") {
+		t.Errorf("status = %q", m.status)
+	}
+
+	// z lets go of the entry and removes the new row.
+	press(m, "z")
+	if tx, _ := st.GetTransaction(ctx, mine.ID); tx.ImportHash != "" || txCount(t, st) != before {
+		t.Errorf("after undo: hash %q, %d transactions (want %d)", tx.ImportHash, txCount(t, st), before)
+	}
+	// So the same file takes it over again.
+	press(m, "i", "enter")
+	if view := m.View(); !strings.Contains(view, "1 matched your entries") {
+		t.Errorf("after undo the file matches again:\n%s", view)
+	}
+}
+
+func TestAnImportThatOnlyMatchesYourEntriesIsStillAnImport(t *testing.T) {
+	m, st := newModel(t)
+	mine := txByPayee(t, st, "REWE")
+	writeExport(t, m, "umsaetze.csv", exportHeader+"03.10.26;;REWE Markt;-20,00;EUR;Umsatz gebucht\n")
+	before := txCount(t, st)
+
+	press(m, "i", "enter")
+	press(m, "enter")
+	if m.mode != modeList || !strings.Contains(m.status, "Matched 1 of your entries") {
+		t.Fatalf("mode %v, status %q; matching alone must not be reported as 'nothing new'", m.mode, m.status)
+	}
+	if tx, _ := st.GetTransaction(ctx, mine.ID); tx.ImportHash == "" || txCount(t, st) != before {
+		t.Errorf("hash %q, %d transactions", tx.ImportHash, txCount(t, st)-before)
+	}
+	press(m, "z")
+	if tx, _ := st.GetTransaction(ctx, mine.ID); tx.ImportHash != "" {
+		t.Error("undo should let go of the entry")
+	}
+
+	// Once adopted, the file is a plain duplicate.
+	press(m, "i", "enter", "enter") // adopt again
+	press(m, "i", "enter")
+	if view := m.View(); !strings.Contains(view, "1 already imported") || strings.Contains(view, "matched your entries") {
+		t.Errorf("a re-import:\n%s", view)
+	}
+	press(m, "enter")
+	if !strings.Contains(m.status, "Nothing new") {
+		t.Errorf("status = %q", m.status)
+	}
+}

@@ -364,7 +364,7 @@ func (m *Model) updateImportReview(key string) {
 		f.step, f.err = stepChoose, ""
 	case "enter":
 		switch {
-		case f.res.Inserted == 0:
+		case f.res.Inserted+f.res.Adopted == 0:
 			m.closeImport()
 			m.setStatus(fmt.Sprintf("Nothing new: all %d rows were already imported", f.res.Duplicates), false)
 		case len(f.problems) > 0:
@@ -373,7 +373,7 @@ func (m *Model) updateImportReview(key string) {
 			m.finishImport()
 		}
 	case "y":
-		if f.res.Inserted > 0 {
+		if f.res.Inserted+f.res.Adopted > 0 {
 			m.finishImport()
 		}
 	default:
@@ -402,18 +402,22 @@ func (m *Model) finishImport() {
 	newUncat := f.newUncat
 	m.closeImport()
 
-	if len(res.IDs) > 0 {
-		ids := res.IDs
-		// The stored halves this import paired go back to where they were first,
-		// then what the import added goes.
+	if len(res.IDs)+len(res.AdoptedIDs) > 0 {
+		ids, adopted := res.IDs, res.AdoptedIDs
+		// What the import did is taken back in reverse: your own entries let go
+		// of the bank rows they took over, the halves it paired go back to where
+		// they were, and what it added goes.
 		var unpair []core.CategoryChange
 		for _, l := range res.Linked {
 			unpair = append(unpair, core.CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
 		}
 		m.undo = append(m.undo, undoOp{
-			label: fmt.Sprintf("the import of %d transactions", len(ids)),
+			label: fmt.Sprintf("the import of %d transactions", len(ids)+len(adopted)),
 			run: func() error {
 				var errs []error
+				if len(adopted) > 0 {
+					errs = append(errs, m.svc.DetachImport(m.ctx, adopted))
+				}
 				if len(unpair) > 0 {
 					_, err := m.svc.SetCategories(m.ctx, unpair)
 					errs = append(errs, err)
@@ -441,6 +445,11 @@ func (m *Model) finishImport() {
 	m.applyFilter(false)
 
 	msg := fmt.Sprintf("Imported %d into %s", res.Inserted, shortName(acc.Name))
+	if res.Inserted == 0 {
+		msg = fmt.Sprintf("Matched %d of your entries on %s with the bank's rows", res.Adopted, shortName(acc.Name))
+	} else if res.Adopted > 0 {
+		msg += fmt.Sprintf(" · %d matched your entries", res.Adopted)
+	}
 	if res.Duplicates > 0 {
 		msg += fmt.Sprintf(" · %d already there", res.Duplicates)
 	}
@@ -556,6 +565,9 @@ func (m *Model) importReviewPopup(w, h int) string {
 	listH := h - 5 // minus the border, the summary, its rule and the message line
 
 	parts := []string{fmt.Sprintf("%d new", f.res.Inserted), fmt.Sprintf("%d already imported", f.res.Duplicates)}
+	if f.res.Adopted > 0 {
+		parts = append(parts, accent.Render(fmt.Sprintf("%d matched your entries", f.res.Adopted)))
+	}
 	if f.res.Transfers > 0 {
 		noun := "transfers"
 		if f.res.Transfers == 1 {
@@ -606,7 +618,7 @@ func (m *Model) importReviewPopup(w, h int) string {
 
 	footer := "enter import · esc back"
 	switch {
-	case f.res.Inserted == 0:
+	case f.res.Inserted+f.res.Adopted == 0:
 		footer = "enter close · esc back"
 	case len(f.problems) > 0:
 		footer = "y import the rest · esc back"
@@ -637,6 +649,9 @@ func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
 	if r.Transfer != nil {
 		category = "⇄ " + shortName(r.Transfer.Account)
 	}
+	if r.Adopts != nil {
+		category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, clean(r.Adopts.Payee))
+	}
 	date := r.Row.Date.Format(ledger.DateLayout)
 	payee := fit(clean(r.Row.Payee), payeeW)
 	amount := fitRight(importAmount(r.Row.Amount), amtW)
@@ -649,7 +664,7 @@ func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
 	}
 	catText := fit(category, catW)
 	switch {
-	case r.Transfer != nil:
+	case r.Transfer != nil, r.Adopts != nil:
 		catText = accent.Render(catText)
 	case r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome:
 		catText = warn.Render(catText)
