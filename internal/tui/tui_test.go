@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
 
 var ctx = context.Background()
@@ -38,9 +38,9 @@ func TestFuzzyScore(t *testing.T) {
 // newModel builds a model on an in-memory store with a few transactions:
 // two uncategorized spendings in October, categorized ones in September and
 // October, and a transfer. The clock is fixed at 2026-10-22.
-func newModel(t *testing.T) (*Model, *store.Store) {
+func newModel(t *testing.T) (*Model, *core.Local) {
 	t.Helper()
-	st, err := store.Open(ctx, ":memory:")
+	st, err := core.Open(ctx, ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func newModel(t *testing.T) (*Model, *store.Store) {
 	add := func(date, payee, category string, cents int64) {
 		t.Helper()
 		d, _ := time.Parse(ledger.DateLayout, date)
-		_, err := st.AddTransaction(ctx, store.NewTransaction{
+		_, err := st.AddTransaction(ctx, core.NewTransaction{
 			Date: d, Payee: payee,
 			Postings: []ledger.Posting{
 				{Account: "Assets:Bank", Amount: ledger.Money{Minor: -cents, Currency: "EUR"}},
@@ -69,7 +69,7 @@ func newModel(t *testing.T) (*Model, *store.Store) {
 	add("2026-10-02", "REWE", ledger.UncategorizedExpense, 2000)
 	add("2026-10-03", "Kino", ledger.UncategorizedExpense, 1200)
 	d, _ := time.Parse(ledger.DateLayout, "2026-10-04")
-	if _, err := st.AddTransaction(ctx, store.NewTransaction{
+	if _, err := st.AddTransaction(ctx, core.NewTransaction{
 		Date: d, Payee: "to savings",
 		Postings: []ledger.Posting{
 			{Account: "Assets:Bank", Amount: ledger.Money{Minor: -500, Currency: "EUR"}},
@@ -222,7 +222,7 @@ func TestCategorizeSuggestsSamePayee(t *testing.T) {
 	if m.mode != modeList || len(m.view) != 1 {
 		t.Fatalf("after applying: mode %v, %d uncategorized left, want 1", m.mode, len(m.view))
 	}
-	txs, _ := st.ListTransactions(ctx, store.TxFilter{Account: "Expenses:Groceries"})
+	txs, _ := st.ListTransactions(ctx, core.TxFilter{Account: "Expenses:Groceries"})
 	if len(txs) != 3 { // Edeka in September, REWE in October, and the one just categorized
 		t.Errorf("Expenses:Groceries has %d transactions, want 3", len(txs))
 	}
@@ -315,16 +315,16 @@ func TestBudgetScreen(t *testing.T) {
 			t.Errorf("October budget view lacks %q", want)
 		}
 	}
-	if m.budget.expenseTotal.Minor != 4200 || len(m.budget.expenses) != 2 {
+	if m.budget.ExpenseTotal.Minor != 4200 || len(m.budget.Expenses) != 2 {
 		t.Errorf("October expenses = %+v", m.budget)
 	}
 	press(m, "down") // months list: All time, Oct, Sep
-	if m.period != "2026-09" || m.budget.expenseTotal.Minor != 3000 {
-		t.Errorf("down: period %q, spent %d, want September with 3000", m.period, m.budget.expenseTotal.Minor)
+	if m.period != "2026-09" || m.budget.ExpenseTotal.Minor != 3000 {
+		t.Errorf("down: period %q, spent %d, want September with 3000", m.period, m.budget.ExpenseTotal.Minor)
 	}
 	press(m, "g")
-	if m.period != "" || m.budget.expenseTotal.Minor != 7200 {
-		t.Errorf("g: period %q, spent %d, want all time with 7200", m.period, m.budget.expenseTotal.Minor)
+	if m.period != "" || m.budget.ExpenseTotal.Minor != 7200 {
+		t.Errorf("g: period %q, spent %d, want all time with 7200", m.period, m.budget.ExpenseTotal.Minor)
 	}
 	press(m, "L")
 	if len(m.view) != 5 {
@@ -335,9 +335,9 @@ func TestBudgetScreen(t *testing.T) {
 func ctrlU() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlU} }
 
 // txByPayee finds the newest transaction of a payee.
-func txByPayee(t *testing.T, st *store.Store, payee string) store.TxView {
+func txByPayee(t *testing.T, st core.Service, payee string) core.TxView {
 	t.Helper()
-	txs, err := st.ListTransactions(ctx, store.TxFilter{})
+	txs, err := st.ListTransactions(ctx, core.TxFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func txByPayee(t *testing.T, st *store.Store, payee string) store.TxView {
 		}
 	}
 	t.Fatalf("no transaction from %q", payee)
-	return store.TxView{}
+	return core.TxView{}
 }
 
 func TestQuickAddFastPath(t *testing.T) {
@@ -401,7 +401,7 @@ func TestQuickAddDefaultsToMostRecentAccount(t *testing.T) {
 	m, st := newModel(t)
 	// The newest transaction in the database was booked on Savings, which is
 	// not the first account alphabetically.
-	_, err := st.AddTransaction(ctx, store.NewTransaction{
+	_, err := st.AddTransaction(ctx, core.NewTransaction{
 		Date: time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC), Payee: "Cash tip",
 		Postings: []ledger.Posting{
 			{Account: "Assets:Savings", Amount: ledger.Money{Minor: -200, Currency: "EUR"}},
@@ -463,7 +463,7 @@ func TestQuickAddDefaultsToUncategorized(t *testing.T) {
 
 func TestQuickAddValidation(t *testing.T) {
 	m, st := newModel(t)
-	before, _ := st.ListTransactions(ctx, store.TxFilter{})
+	before, _ := st.ListTransactions(ctx, core.TxFilter{})
 	press(m, "a")
 	typeText(m, "abc")
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
@@ -483,7 +483,7 @@ func TestQuickAddValidation(t *testing.T) {
 		t.Errorf("a bad date must be rejected: err %q", m.form.err)
 	}
 	press(m, "esc")
-	after, _ := st.ListTransactions(ctx, store.TxFilter{})
+	after, _ := st.ListTransactions(ctx, core.TxFilter{})
 	if len(after) != len(before) {
 		t.Errorf("a rejected or cancelled form must not store anything: %d -> %d", len(before), len(after))
 	}
@@ -571,9 +571,9 @@ func TestUndoStack(t *testing.T) {
 	press(m, "a")
 	typeText(m, "2")
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-	before, _ := st.ListTransactions(ctx, store.TxFilter{})
+	before, _ := st.ListTransactions(ctx, core.TxFilter{})
 	press(m, "z") // undo the add
-	after, _ := st.ListTransactions(ctx, store.TxFilter{})
+	after, _ := st.ListTransactions(ctx, core.TxFilter{})
 	if len(after) != len(before)-1 {
 		t.Errorf("undo of an add: %d -> %d transactions", len(before), len(after))
 	}

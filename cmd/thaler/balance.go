@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/spf13/cobra"
 
-	"github.com/melancholypurin/thaler/internal/ledger"
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 func (a *app) balanceCmd() *cobra.Command {
@@ -27,73 +26,30 @@ equity accounts are listed too (income and equity show as negative credits).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := cmd.OutOrStdout()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			base, err := st.BaseCurrency(ctx)
+			report, err := svc.BalanceReport(ctx, core.BalanceRequest{AsOf: asOf, IncludeAll: all})
 			if err != nil {
 				return err
 			}
-			book, err := st.RateBook(ctx)
-			if err != nil {
-				return err
-			}
-
-			date, asOfArg := todayISO(), ""
-			if asOf != "" {
-				d, err := ledger.ParseDate(asOf)
-				if err != nil {
-					return err
-				}
-				date = d.Format(ledger.DateLayout)
-				asOfArg = date
-			}
-			balances, err := st.Balances(ctx, asOfArg)
-			if err != nil {
-				return err
-			}
-
-			net := ledger.Money{Currency: base}
-			missing := make(map[ledger.Currency]bool)
-			var lines []column
-			for _, b := range balances {
-				countsTowardNetWorth := b.Type == ledger.Assets || b.Type == ledger.Liabilities
-				if !countsTowardNetWorth && !all {
-					continue
-				}
-				lines = append(lines, column{label: b.Account, amount: b.Amount.String()})
-				if !countsTowardNetWorth {
-					continue
-				}
-				converted, ok := book.Convert(b.Amount, base, date)
-				if !ok {
-					missing[b.Amount.Currency] = true
-					continue
-				}
-				if net, err = net.Add(converted); err != nil {
-					return err
-				}
-			}
-
-			if len(lines) == 0 {
+			if len(report.Lines) == 0 {
 				fmt.Fprintln(out, "No balances yet. Create an account and add or import transactions (see README).")
 				return nil
 			}
-			fmt.Fprintf(out, "Balances as of %s\n\n", date)
+			lines := make([]column, 0, len(report.Lines))
+			for _, b := range report.Lines {
+				lines = append(lines, column{label: b.Account, amount: b.Amount.String()})
+			}
+			fmt.Fprintf(out, "Balances as of %s\n\n", report.Date)
 			printColumns(out, "  ", lines)
-			fmt.Fprintf(out, "\nNet worth: %s\n", net)
+			fmt.Fprintf(out, "\nNet worth: %s\n", report.NetWorth.Total)
 
-			if len(missing) > 0 {
-				names := make([]string, 0, len(missing))
-				for c := range missing {
-					names = append(names, string(c))
-				}
-				sort.Strings(names)
-				for _, c := range names {
-					fmt.Fprintf(out, "warning: no exchange rate %s -> %s, so %s accounts are not in the net worth; add one with: thaler cli rate set %s %s <rate>\n",
-						c, base, c, c, base)
-				}
+			base := report.NetWorth.Base
+			for _, c := range report.NetWorth.Missing {
+				fmt.Fprintf(out, "warning: no exchange rate %s -> %s, so %s accounts are not in the net worth; add one with: thaler cli rate set %s %s <rate>\n",
+					c, base, c, c, base)
 			}
 			return nil
 		},

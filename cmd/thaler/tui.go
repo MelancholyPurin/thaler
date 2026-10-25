@@ -16,9 +16,9 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 		return errors.New("the interactive interface needs a terminal; for scripts use: thaler cli --help")
 	}
 	ctx := cmd.Context()
-	st, err := a.store(ctx)
+	svc, err := a.service(ctx)
 	if err != nil {
 		return err
 	}
-	return tui.Run(ctx, st)
+	return tui.Run(ctx, svc)
 }

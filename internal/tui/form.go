@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
 
 type formField int
@@ -29,8 +29,8 @@ const maxSuggestions = 6
 
 // form is the popup for adding or editing one transaction.
 type form struct {
-	editing int64        // id of the transaction being edited, 0 when adding
-	old     store.TxView // as it was before the edit, for undo
+	editing int64       // id of the transaction being edited, 0 when adding
+	old     core.TxView // as it was before the edit, for undo
 	field   formField
 
 	amount, payee, category, date textinput.Model
@@ -321,7 +321,7 @@ func (m *Model) saveForm() {
 		return
 	}
 
-	nt := store.NewTransaction{
+	nt := core.NewTransaction{
 		Date:        when,
 		Payee:       clean(f.payee.Value()),
 		Description: f.old.Description,
@@ -340,16 +340,16 @@ func (m *Model) saveForm() {
 			fail("%v", err)
 			return
 		}
-		if _, err := m.st.ReplaceTransaction(m.ctx, id, nt); err != nil {
+		if _, err := m.svc.ReplaceTransaction(m.ctx, id, nt); err != nil {
 			fail("%v", err)
 			return
 		}
 		undo = undoOp{
 			label: fmt.Sprintf("edit of #%d", id),
-			run:   func() error { _, err := m.st.ReplaceTransaction(m.ctx, id, old); return err },
+			run:   func() error { _, err := m.svc.ReplaceTransaction(m.ctx, id, old); return err },
 		}
 	} else {
-		res, err := m.st.AddTransaction(m.ctx, nt)
+		res, err := m.svc.AddTransaction(m.ctx, nt)
 		if err != nil {
 			fail("%v", err)
 			return
@@ -357,7 +357,7 @@ func (m *Model) saveForm() {
 		id = res.ID
 		undo = undoOp{
 			label: fmt.Sprintf("adding #%d", id),
-			run:   func() error { return m.st.DeleteTransaction(m.ctx, id) },
+			run:   func() error { return m.svc.DeleteTransaction(m.ctx, id) },
 		}
 	}
 	m.undo = append(m.undo, undo)

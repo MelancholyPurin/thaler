@@ -20,17 +20,17 @@ happen when reports are produced. Any three-letter code works (EUR, USD, MXN, ..
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := cmd.OutOrStdout()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			base, err := st.BaseCurrency(ctx)
+			base, err := svc.BaseCurrency(ctx)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "Base currency: %s\n", base)
 
-			accs, err := st.ListAccounts(ctx)
+			accs, err := svc.ListAccounts(ctx)
 			if err != nil {
 				return err
 			}
@@ -43,10 +43,11 @@ happen when reports are produced. Any three-letter code works (EUR, USD, MXN, ..
 			if len(used) == 0 {
 				return nil
 			}
-			book, err := st.RateBook(ctx)
+			rates, err := svc.Rates(ctx)
 			if err != nil {
 				return err
 			}
+			book := ledger.NewRateBook(rates)
 			names := make([]string, 0, len(used))
 			for c := range used {
 				names = append(names, string(c))
@@ -75,11 +76,11 @@ happen when reports are produced. Any three-letter code works (EUR, USD, MXN, ..
 			if err != nil {
 				return err
 			}
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			if err := st.SetBaseCurrency(ctx, c); err != nil {
+			if err := svc.SetBaseCurrency(ctx, c); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Base currency is now %s\n", c)
@@ -124,12 +125,12 @@ rate on or before that date is used.`,
 			if err != nil {
 				return err
 			}
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
 			day := when.Format(ledger.DateLayout)
-			if err := st.SetRate(ctx, day, base, quote, text); err != nil {
+			if err := svc.SetRate(ctx, day, base, quote, text); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "On %s: 1 %s = %s %s\n", day, base, text, quote)
@@ -144,11 +145,11 @@ rate on or before that date is used.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			rates, err := st.Rates(ctx)
+			rates, err := svc.Rates(ctx)
 			if err != nil {
 				return err
 			}

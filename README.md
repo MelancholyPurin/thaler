@@ -168,20 +168,29 @@ Write negative amounts as `--amount=-12.50`. Amounts accept `12.50`, `12,50` and
 ## Layout
 
 ```
-cmd/thaler/              cobra commands (thin: parse flags, call the packages below, print)
+cmd/thaler/           cobra commands (thin: parse flags, call core.Service, print) and wiring
 internal/ledger/      Money, account naming, double-entry validation, FX rates   (stdlib only)
 internal/importer/    CSV profiles, Windows-1252 decoding, dedupe keys, rules    (stdlib only)
-internal/store/       SQLite access, embedded migrations, backup, consistency check
+internal/core/        the application layer, see below
 internal/config/      config.toml loading and default paths
 internal/tui/         Bubble Tea interface: panel layer, lists, fuzzy search, category picker, detail pane
 ```
 
-The schema lives in `internal/store/migrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
+`internal/core` is the only code that touches the database. The TUI and the CLI depend on its `Service` interface and nothing else, so a client for a remote server can replace the local SQLite backend later without changing them.
+
+```
+core/api.go           Service interface and the types that cross it
+core/service.go       Local, the SQLite-backed Service: all rules (validation, import, reports)
+core/repository.go    Local's SQL; unexported, so nothing outside core can bypass the rules
+core/migrations.go    schema versioning
+```
+
+The schema lives in `internal/core/migrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
 
 ## Decisions worth knowing
 
-- **No sqlc, no goose (yet).** Queries are plain SQL in `store.go` and migrations are plain `YYYYMMDD_name.up.sql` files tracked in a `schema_migrations` table, so moving to sqlc/goose later is mechanical.
-- **One database connection.** Fine for a single-user CLI. The TUI queries the database directly from its update loop (milliseconds on a local file); anything slow would need to move into background commands and this pool setting revisited.
+- **No sqlc, no goose (yet).** Queries are plain SQL in `core/repository.go` and migrations are plain `YYYYMMDD_name.up.sql` files tracked in a `schema_migrations` table, so moving to sqlc/goose later is mechanical.
+- **One database connection.** Fine for a single-user CLI. The TUI calls the service directly from its update loop (milliseconds on a local file); a network backend would need those calls moved into background commands, and this pool setting revisited.
 - **Recategorizing re-books the category leg only.** A transaction's category is its single Income/Expenses/Equity posting; the amount, date and your own account never change. Transactions with no such posting or several (transfers, FX conversions) are refused.
 - **Backups are plain SQLite files.** Encryption (age) is not implemented; keep them on an encrypted disk for now.
 - **Dates are ISO strings**, money is `int64` minor units, exchange rates are exact rationals (`math/big`). No floats touch stored or reported amounts.

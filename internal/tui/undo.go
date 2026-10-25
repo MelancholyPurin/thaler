@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/melancholypurin/thaler/internal/store"
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 // undoOp reverses one change made in this session.
@@ -55,19 +55,19 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) deleteTx(tx store.TxView) {
+func (m *Model) deleteTx(tx core.TxView) {
 	old, err := tx.NewTransaction()
 	if err != nil {
 		m.setStatus(err.Error(), true)
 		return
 	}
-	if err := m.st.DeleteTransaction(m.ctx, tx.ID); err != nil {
+	if err := m.svc.DeleteTransaction(m.ctx, tx.ID); err != nil {
 		m.setStatus(err.Error(), true)
 		return
 	}
 	m.undo = append(m.undo, undoOp{
 		label: fmt.Sprintf("deleting #%d", tx.ID),
-		run:   func() error { return m.st.RestoreTransaction(m.ctx, tx.ID, old) },
+		run:   func() error { return m.svc.RestoreTransaction(m.ctx, tx.ID, old) },
 	})
 	if err := m.reload(); err != nil {
 		m.setStatus(err.Error(), true)

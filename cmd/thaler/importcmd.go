@@ -1,16 +1,31 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
+
+var errNothingImported = errors.New("nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows")
+
+// printProblems lists the rows that could not be used, at most ten of them.
+func printProblems(out io.Writer, problems []string) {
+	fmt.Fprintf(out, "%d row(s) could not be used:\n", len(problems))
+	for i, p := range problems {
+		if i == 10 {
+			fmt.Fprintf(out, "  ... and %d more\n", len(problems)-10)
+			break
+		}
+		fmt.Fprintf(out, "  %s\n", p)
+	}
+}
 
 func (a *app) importCmd() *cobra.Command {
 	var account, profileName string
@@ -31,7 +46,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := cmd.OutOrStdout()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
@@ -43,11 +58,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 			if err != nil {
 				return err
 			}
-			rules, err := importer.NewRuleset(cfg.Rules)
-			if err != nil {
-				return fmt.Errorf("config rules: %w", err)
-			}
-			acc, err := st.GetAccount(ctx, account)
+			acc, err := svc.GetAccount(ctx, account)
 			if err != nil {
 				return err
 			}
@@ -60,105 +71,66 @@ Use --dry-run first to see what would happen without writing anything.`,
 				return err
 			}
 			defer f.Close()
-			res, err := importer.Parse(f, profile, acc.Currency)
+			parsed, err := importer.Parse(f, profile, acc.Currency)
 			if err != nil {
 				return err
 			}
 
-			problems := append([]importer.RowError(nil), res.Errors...)
-			var rows []importer.Row
-			for _, r := range res.Rows {
-				if r.Amount.Currency != acc.Currency {
-					problems = append(problems, importer.RowError{
-						Line: r.Line,
-						Err:  fmt.Errorf("currency %s does not match %s (%s)", r.Amount.Currency, acc.Name, acc.Currency),
-					})
-					continue
-				}
-				rows = append(rows, r)
+			var problems []string
+			for _, e := range parsed.Errors {
+				problems = append(problems, e.Error())
+			}
+			if len(problems) > 0 && !ignoreErrors {
+				printProblems(out, problems)
+				return errNothingImported
+			}
+			res, err := svc.Import(ctx, core.ImportRequest{
+				Account:        acc.Name,
+				Rows:           parsed.Rows,
+				Rules:          cfg.Rules,
+				DryRun:         dryRun,
+				IgnoreRejected: ignoreErrors,
+			})
+			for _, r := range res.Rejected {
+				problems = append(problems, fmt.Sprintf("line %d: %s", r.Line, r.Reason))
+			}
+			if errors.Is(err, core.ErrRowsRejected) {
+				printProblems(out, problems)
+				return errNothingImported
+			}
+			if err != nil {
+				return err
 			}
 			if len(problems) > 0 {
-				fmt.Fprintf(out, "%d row(s) could not be used:\n", len(problems))
-				for i, p := range problems {
-					if i == 10 {
-						fmt.Fprintf(out, "  ... and %d more\n", len(problems)-10)
-						break
-					}
-					fmt.Fprintf(out, "  %v\n", p)
-				}
-				if !ignoreErrors {
-					return fmt.Errorf("nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows")
-				}
-			}
-
-			dedupe := importer.NewDeduper(strconv.FormatInt(acc.ID, 10))
-			txs := make([]store.NewTransaction, 0, len(rows))
-			categories := make([]string, 0, len(rows))
-			uncategorized := 0
-			for _, r := range rows {
-				category, ok := rules.Match(r.Payee, r.Purpose, r.BookingText)
-				if !ok {
-					uncategorized++
-					category = ledger.UncategorizedExpense
-					if r.Amount.Minor > 0 {
-						category = ledger.UncategorizedIncome
-					}
-				}
-				description := r.Purpose
-				if description == "" {
-					description = r.BookingText
-				}
-				txs = append(txs, store.NewTransaction{
-					Date:        r.Date,
-					Payee:       r.Payee,
-					Description: description,
-					ImportHash:  dedupe.Key(r),
-					Postings: []ledger.Posting{
-						{Account: acc.Name, Amount: r.Amount},
-						{Account: category, Amount: r.Amount.Neg()},
-					},
-				})
-				categories = append(categories, category)
+				printProblems(out, problems)
 			}
 
 			if dryRun {
-				newCount, dupCount := 0, 0
-				lines := make([]column, 0, len(txs))
-				for i, tx := range txs {
-					exists, err := st.HasImportHash(ctx, tx.ImportHash)
-					if err != nil {
-						return err
-					}
+				lines := make([]column, 0, len(res.Rows))
+				for _, r := range res.Rows {
 					status := "new"
-					if exists {
+					if r.Duplicate {
 						status = "dup"
-						dupCount++
-					} else {
-						newCount++
 					}
 					lines = append(lines, column{
-						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, tx.Date.Format(ledger.DateLayout), truncate(categories[i], 28), truncate(tx.Payee, 40)),
-						amount: signed(tx.Postings[0].Amount),
+						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(r.Category, 28), truncate(r.Row.Payee, 40)),
+						amount: signed(r.Row.Amount),
 					})
 				}
 				printColumns(out, "", lines)
 				fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
-					newCount, dupCount, res.Skipped)
+					res.Inserted, res.Duplicates, parsed.Skipped)
 				return nil
 			}
 
-			batch, err := st.AddTransactions(ctx, txs)
-			if err != nil {
-				return err
-			}
 			fmt.Fprintf(out, "Imported %d new transaction(s) into %s; %d already present (skipped); %d pending row(s) ignored.\n",
-				batch.Inserted, acc.Name, batch.Duplicates, res.Skipped)
-			for _, name := range batch.Created {
+				res.Inserted, acc.Name, res.Duplicates, parsed.Skipped)
+			for _, name := range res.Created {
 				fmt.Fprintf(out, "Created new account %s\n", name)
 			}
-			if uncategorized > 0 {
+			if res.Uncategorized > 0 {
 				fmt.Fprintf(out, "%d row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a %s\n",
-					uncategorized, ledger.UncategorizedExpense)
+					res.Uncategorized, ledger.UncategorizedExpense)
 			}
 			return nil
 		},

@@ -2,91 +2,21 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-// budgetLine is the total of one category over the selected period, converted
-// into the base currency.
-type budgetLine struct {
-	name   string
-	amount ledger.Money
-}
-
-// budgetData is what the Budget screen shows: where the money came from and
-// where it went in the selected period. Targets and envelopes come later.
-type budgetData struct {
-	income, expenses          []budgetLine // largest first
-	incomeTotal, expenseTotal ledger.Money
-	missing                   []ledger.Currency // no exchange rate, so left out
-}
-
-// refreshBudget recomputes the Budget screen's figures for the current period.
+// refreshBudget loads the Budget screen's figures for the current period: where
+// the money came from and where it went. Targets and envelopes come later.
 func (m *Model) refreshBudget() error {
 	from, to := periodRange(m.period)
-	totals, err := m.st.CategoryTotals(m.ctx, from, to)
+	report, err := m.svc.BudgetReport(m.ctx, core.BudgetRequest{From: from, To: to, RateDate: m.now().Format(ledger.DateLayout)})
 	if err != nil {
 		return err
 	}
-	book, err := m.st.RateBook(m.ctx)
-	if err != nil {
-		return err
-	}
-	base := m.netWorth.Base
-	rateDate := m.now().Format(ledger.DateLayout)
-	if to != "" && to < rateDate {
-		rateDate = to
-	}
-
-	b := budgetData{
-		incomeTotal:  ledger.Money{Currency: base},
-		expenseTotal: ledger.Money{Currency: base},
-	}
-	byName := make(map[string]*budgetLine)
-	missing := make(map[ledger.Currency]bool)
-	for _, t := range totals {
-		amount, ok := book.Convert(t.Amount, base, rateDate)
-		if !ok {
-			missing[t.Amount.Currency] = true
-			continue
-		}
-		if t.Type == ledger.Income {
-			amount = amount.Neg() // income is stored as credits
-		}
-		line := byName[t.Account]
-		if line == nil {
-			line = &budgetLine{name: t.Account, amount: ledger.Money{Currency: base}}
-			byName[t.Account] = line
-		}
-		line.amount.Minor += amount.Minor
-		if t.Type == ledger.Income {
-			b.incomeTotal.Minor += amount.Minor
-		} else {
-			b.expenseTotal.Minor += amount.Minor
-		}
-	}
-	for _, line := range byName {
-		if typ, _ := ledger.TypeOf(line.name); typ == ledger.Income {
-			b.income = append(b.income, *line)
-		} else {
-			b.expenses = append(b.expenses, *line)
-		}
-	}
-	for _, list := range [][]budgetLine{b.income, b.expenses} {
-		sort.Slice(list, func(i, j int) bool {
-			if list[i].amount.Minor != list[j].amount.Minor {
-				return list[i].amount.Minor > list[j].amount.Minor
-			}
-			return list[i].name < list[j].name
-		})
-	}
-	for c := range missing {
-		b.missing = append(b.missing, c)
-	}
-	sort.Slice(b.missing, func(i, j int) bool { return b.missing[i] < b.missing[j] })
-	m.budget = b
+	m.budget = report
 	return nil
 }
 
@@ -115,60 +45,60 @@ func (m *Model) updateBudget(key string) {
 
 func (m *Model) budgetDetail(w int) []string {
 	var lines []string
-	net := ledger.Money{Minor: m.budget.incomeTotal.Minor - m.budget.expenseTotal.Minor, Currency: m.netWorth.Base}
+	net := ledger.Money{Minor: m.budget.IncomeTotal.Minor - m.budget.ExpenseTotal.Minor, Currency: m.netWorth.Base}
 	lines = append(lines, bold.Render(periodLabel(m.period)), "")
-	lines = append(lines, leftRight("Income", accent.Render(m.budget.incomeTotal.String()), w))
-	lines = append(lines, leftRight("Spent", m.budget.expenseTotal.String(), w))
+	lines = append(lines, leftRight("Income", accent.Render(m.budget.IncomeTotal.String()), w))
+	lines = append(lines, leftRight("Spent", m.budget.ExpenseTotal.String(), w))
 	netText := net.String()
 	if net.Minor < 0 {
 		netText = warn.Render(netText)
 	}
 	lines = append(lines, leftRight("Net", bold.Render(netText), w))
-	for _, c := range m.budget.missing {
+	for _, c := range m.budget.Missing {
 		lines = append(lines, warn.Render(fmt.Sprintf("no exchange rate %s → %s: left out. thaler cli rate set %s %s RATE", c, m.netWorth.Base, c, m.netWorth.Base)))
 	}
 
 	lines = append(lines, "", dim.Render("Spending"))
-	lines = append(lines, categoryRows(m.budget.expenses, m.budget.expenseTotal, w, false)...)
-	if len(m.budget.expenses) == 0 {
+	lines = append(lines, categoryRows(m.budget.Expenses, m.budget.ExpenseTotal, w, false)...)
+	if len(m.budget.Expenses) == 0 {
 		lines = append(lines, dim.Render("  nothing spent in this period"))
 	}
-	if len(m.budget.income) > 0 {
+	if len(m.budget.Income) > 0 {
 		lines = append(lines, "", dim.Render("Income"))
-		lines = append(lines, categoryRows(m.budget.income, m.budget.incomeTotal, w, true)...)
+		lines = append(lines, categoryRows(m.budget.Income, m.budget.IncomeTotal, w, true)...)
 	}
 	lines = append(lines, "", dim.Render("Targets and envelopes will appear here as columns next to these figures."))
 	return lines
 }
 
 // categoryRows draws one line per category: name, amount, share bar.
-func categoryRows(list []budgetLine, total ledger.Money, w int, isIncome bool) []string {
+func categoryRows(list []core.BudgetLine, total ledger.Money, w int, isIncome bool) []string {
 	const barW = 12
 	amtW := 0
 	for _, l := range list {
-		amtW = max(amtW, len(l.amount.Decimal()))
+		amtW = max(amtW, len(l.Amount.Decimal()))
 	}
 	nameW := max(8, w-amtW-barW-4)
 	var out []string
 	for _, l := range list {
 		filled := 0
 		if total.Minor > 0 {
-			filled = int((l.amount.Minor*barW + total.Minor/2) / total.Minor)
+			filled = int((l.Amount.Minor*barW + total.Minor/2) / total.Minor)
 		}
 		filled = max(0, min(barW, filled))
-		if filled == 0 && l.amount.Minor > 0 {
+		if filled == 0 && l.Amount.Minor > 0 {
 			filled = 1
 		}
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
-		name := shortName(l.name)
-		if l.name == ledger.UncategorizedExpense || l.name == ledger.UncategorizedIncome {
+		name := shortName(l.Name)
+		if l.Name == ledger.UncategorizedExpense || l.Name == ledger.UncategorizedIncome {
 			name = warn.Render(name)
 		}
 		style := dim
 		if isIncome {
 			style = accent
 		}
-		out = append(out, "  "+fit(name, nameW)+" "+fitRight(l.amount.Decimal(), amtW)+" "+style.Render(bar))
+		out = append(out, "  "+fit(name, nameW)+" "+fitRight(l.Amount.Decimal(), amtW)+" "+style.Render(bar))
 	}
 	return out
 }

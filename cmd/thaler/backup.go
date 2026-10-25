@@ -20,7 +20,7 @@ with age) before copying it anywhere else.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
@@ -28,7 +28,7 @@ with age) before copying it anywhere else.`,
 			if len(args) == 1 {
 				dest = args[0]
 			}
-			if err := st.Backup(ctx, dest); err != nil {
+			if err := svc.Backup(ctx, dest); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Backup written to %s (not encrypted)\n", dest)
@@ -48,11 +48,11 @@ Exits with an error if a problem is found.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			problems, err := st.Check(ctx)
+			problems, err := svc.Check(ctx)
 			if err != nil {
 				return err
 			}

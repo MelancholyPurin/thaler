@@ -6,9 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/melancholypurin/thaler/internal/importer"
-	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 func (a *app) categoryCmd() *cobra.Command {
@@ -25,11 +23,11 @@ exist yet. Find transaction ids with: thaler cli list`,
 			if err != nil || id <= 0 {
 				return fmt.Errorf("invalid transaction id %q", args[0])
 			}
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			created, err := st.SetCategories(ctx, []store.CategoryChange{{TransactionID: id, Category: args[1]}})
+			created, err := svc.SetCategories(ctx, []core.CategoryChange{{TransactionID: id, Category: args[1]}})
 			if err != nil {
 				return err
 			}
@@ -59,7 +57,7 @@ text of a row with a purpose at import time may not match here.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := cmd.OutOrStdout()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
@@ -67,56 +65,32 @@ text of a row with a purpose at import time may not match here.`,
 			if err != nil {
 				return err
 			}
-			rules, err := importer.NewRuleset(cfg.Rules)
-			if err != nil {
-				return fmt.Errorf("config rules: %w", err)
-			}
-
-			var (
-				changes []store.CategoryChange
-				lines   []column
-				total   int
-			)
-			for _, uncategorized := range []string{ledger.UncategorizedExpense, ledger.UncategorizedIncome} {
-				txs, err := st.ListTransactions(ctx, store.TxFilter{Account: uncategorized})
-				if err != nil {
-					return err
-				}
-				for _, tx := range txs {
-					source, current, ok := tx.Legs()
-					if !ok || current.Account != uncategorized {
-						continue
-					}
-					total++
-					category, ok := rules.Match(tx.Payee, tx.Description)
-					if !ok || category == uncategorized {
-						continue
-					}
-					changes = append(changes, store.CategoryChange{TransactionID: tx.ID, Category: category})
-					lines = append(lines, column{
-						label:  fmt.Sprintf("%s  #%-5d %-28s  %s", tx.Date, tx.ID, truncate(category, 28), truncate(tx.Payee, 40)),
-						amount: signed(source.Amount),
-					})
-				}
-			}
-
-			if len(changes) == 0 {
-				fmt.Fprintf(out, "No rule matches any of the %d uncategorized transaction(s).\n", total)
-				return nil
-			}
-			printColumns(out, "", lines)
-			if dryRun {
-				fmt.Fprintf(out, "\nDry run: %d of %d uncategorized transaction(s) would move. Nothing was written.\n", len(changes), total)
-				return nil
-			}
-			created, err := st.SetCategories(ctx, changes)
+			res, err := svc.Recategorize(ctx, core.RecategorizeRequest{Rules: cfg.Rules, DryRun: dryRun})
 			if err != nil {
 				return err
 			}
-			for _, name := range created {
+
+			if len(res.Moves) == 0 {
+				fmt.Fprintf(out, "No rule matches any of the %d uncategorized transaction(s).\n", res.Uncategorized)
+				return nil
+			}
+			lines := make([]column, 0, len(res.Moves))
+			for _, m := range res.Moves {
+				lines = append(lines, column{
+					label:  fmt.Sprintf("%s  #%-5d %-28s  %s", m.Date, m.TransactionID, truncate(m.Category, 28), truncate(m.Payee, 40)),
+					amount: signed(m.Amount),
+				})
+			}
+			printColumns(out, "", lines)
+			if dryRun {
+				fmt.Fprintf(out, "\nDry run: %d of %d uncategorized transaction(s) would move. Nothing was written.\n", len(res.Moves), res.Uncategorized)
+				return nil
+			}
+			for _, name := range res.Created {
 				fmt.Fprintf(out, "Created new account %s\n", name)
 			}
-			fmt.Fprintf(out, "\nMoved %d of %d uncategorized transaction(s); %d still uncategorized.\n", len(changes), total, total-len(changes))
+			fmt.Fprintf(out, "\nMoved %d of %d uncategorized transaction(s); %d still uncategorized.\n",
+				len(res.Moves), res.Uncategorized, res.Uncategorized-len(res.Moves))
 			return nil
 		},
 	}

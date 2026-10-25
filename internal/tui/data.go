@@ -3,23 +3,23 @@ package tui
 import (
 	"strings"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
 
 // row is one transaction prepared for display.
 type row struct {
-	tx            store.TxView
-	source        store.PostingView // leg on your own account
-	category      store.PostingView // leg on the category
-	simple        bool              // false for transfers and splits, which cannot be recategorized here
+	tx            core.TxView
+	source        core.PostingView // leg on your own account
+	category      core.PostingView // leg on the category
+	simple        bool             // false for transfers and splits, which cannot be recategorized here
 	uncategorized bool
 	text          string // everything the search looks at
 }
 
 // acctEntry is one asset or liability account with figures for its panel.
 type acctEntry struct {
-	account store.Account
+	account core.Account
 	balance ledger.Money
 	txCount int
 	uncat   int
@@ -34,7 +34,7 @@ func shortName(name string) string {
 	return name
 }
 
-func newRow(tx store.TxView) row {
+func newRow(tx core.TxView) row {
 	r := row{tx: tx}
 	if src, cat, ok := tx.Legs(); ok {
 		r.source, r.category, r.simple = src, cat, true
@@ -44,7 +44,7 @@ func newRow(tx store.TxView) row {
 		for i, p := range tx.Postings {
 			names[i] = p.Account
 		}
-		r.category = store.PostingView{Account: strings.Join(names, " → ")}
+		r.category = core.PostingView{Account: strings.Join(names, " → ")}
 		if len(tx.Postings) > 0 {
 			r.source = tx.Postings[0]
 		}
@@ -62,23 +62,20 @@ func signed(m ledger.Money) string {
 
 // reload reads everything the interface shows from the database.
 func (m *Model) reload() error {
-	txs, err := m.st.ListTransactions(m.ctx, store.TxFilter{})
+	txs, err := m.svc.ListTransactions(m.ctx, core.TxFilter{})
 	if err != nil {
 		return err
 	}
-	accs, err := m.st.ListAccounts(m.ctx)
+	accs, err := m.svc.ListAccounts(m.ctx)
 	if err != nil {
 		return err
 	}
-	balances, err := m.st.Balances(m.ctx, "")
+	report, err := m.svc.BalanceReport(m.ctx, core.BalanceRequest{})
 	if err != nil {
 		return err
 	}
-	nw, err := m.st.NetWorth(m.ctx, "")
-	if err != nil {
-		return err
-	}
-	m.netWorth = nw
+	balances := report.Lines
+	m.netWorth = report.NetWorth
 
 	m.rows = m.rows[:0]
 	m.counts = make(map[string]int)

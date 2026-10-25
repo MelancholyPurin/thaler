@@ -2,9 +2,10 @@
 // column of panels on the left (home, accounts, transaction history) and a
 // detail pane on the right that shows whatever is selected. Built on Bubble Tea.
 //
-// Database calls are made directly inside Update. The store is a local SQLite
-// file and every query takes milliseconds, so the extra machinery of
-// asynchronous commands would only add states that can go wrong.
+// Service calls are made directly inside Update. The local backend is a SQLite
+// file and every call takes milliseconds, so the extra machinery of
+// asynchronous commands would only add states that can go wrong. A network
+// backend would need them moved into background commands.
 package tui
 
 import (
@@ -15,7 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/melancholypurin/thaler/internal/store"
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 type mode int
@@ -60,21 +61,21 @@ type pickItem struct {
 // Model is the Bubble Tea model of the whole interface.
 type Model struct {
 	ctx context.Context
-	st  *store.Store
+	svc core.Service
 
 	// data, see reload
 	rows          []row // newest first
 	accounts      []acctEntry
 	categories    []string // category accounts that exist, for the picker
 	counts        map[string]int
-	netWorth      store.NetWorth
+	netWorth      core.NetWorth
 	multiCurrency bool
 
 	// view state
 	screen    screen
 	period    string   // "2026-10", or "" for all time; scopes every screen
 	months    []string // months that have transactions, plus the current one, newest first
-	budget    budgetData
+	budget    core.BudgetReport
 	budgetTop listState // scroll position of the months list on the Budget screen
 	now       func() time.Time
 	focus     pane
@@ -91,7 +92,7 @@ type Model struct {
 	lastAccount string // account of the last transaction added in this session
 	lastEntered string // account of the most recently entered transaction in the database
 	undo        []undoOp
-	confirmTx   store.TxView // transaction waiting for a delete confirmation
+	confirmTx   core.TxView // transaction waiting for a delete confirmation
 
 	picker       textinput.Model
 	pickItems    []pickItem
@@ -106,12 +107,12 @@ type Model struct {
 }
 
 // New loads the data and returns a ready model.
-func New(ctx context.Context, st *store.Store) (*Model, error) {
-	return newWithClock(ctx, st, time.Now)
+func New(ctx context.Context, svc core.Service) (*Model, error) {
+	return newWithClock(ctx, svc, time.Now)
 }
 
-func newWithClock(ctx context.Context, st *store.Store, now func() time.Time) (*Model, error) {
-	m := &Model{ctx: ctx, st: st, width: 100, height: 30, now: now}
+func newWithClock(ctx context.Context, svc core.Service, now func() time.Time) (*Model, error) {
+	m := &Model{ctx: ctx, svc: svc, width: 100, height: 30, now: now}
 	m.period = now().Format(monthLayout)
 	m.filter = textinput.New()
 	m.filter.Prompt = "/ "
@@ -127,8 +128,8 @@ func newWithClock(ctx context.Context, st *store.Store, now func() time.Time) (*
 }
 
 // Run starts the interface and blocks until the user quits.
-func Run(ctx context.Context, st *store.Store) error {
-	m, err := New(ctx, st)
+func Run(ctx context.Context, svc core.Service) error {
+	m, err := New(ctx, svc)
 	if err != nil {
 		return err
 	}
@@ -372,7 +373,7 @@ func (m *Model) applyCategory(category string) {
 	if r, ok := m.findRow(id); ok {
 		previous = r.category.Account
 	}
-	if _, err := m.st.SetCategories(m.ctx, []store.CategoryChange{{TransactionID: id, Category: category}}); err != nil {
+	if _, err := m.svc.SetCategories(m.ctx, []core.CategoryChange{{TransactionID: id, Category: category}}); err != nil {
 		m.setStatus(err.Error(), true)
 		return
 	}
@@ -380,7 +381,7 @@ func (m *Model) applyCategory(category string) {
 		m.undo = append(m.undo, undoOp{
 			label: fmt.Sprintf("categorizing #%d", id),
 			run: func() error {
-				_, err := m.st.SetCategories(m.ctx, []store.CategoryChange{{TransactionID: id, Category: previous}})
+				_, err := m.svc.SetCategories(m.ctx, []core.CategoryChange{{TransactionID: id, Category: previous}})
 				return err
 			},
 		})

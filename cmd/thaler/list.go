@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
 
 func (a *app) listCmd() *cobra.Command {
@@ -18,11 +18,11 @@ func (a *app) listCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			filter := store.TxFilter{Account: account, Limit: limit}
+			filter := core.TxFilter{Account: account, Limit: limit}
 			if from != "" {
 				d, err := ledger.ParseDate(from)
 				if err != nil {
@@ -37,7 +37,7 @@ func (a *app) listCmd() *cobra.Command {
 				}
 				filter.To = d.Format(ledger.DateLayout)
 			}
-			txs, err := st.ListTransactions(ctx, filter)
+			txs, err := svc.ListTransactions(ctx, filter)
 			if err != nil {
 				return err
 			}

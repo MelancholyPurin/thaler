@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/melancholypurin/thaler/internal/config"
-	"github.com/melancholypurin/thaler/internal/store"
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 // app holds state shared by all commands. The database and config file are
@@ -17,7 +17,7 @@ import (
 type app struct {
 	dbFlag  string
 	cfgFlag string
-	st      *store.Store
+	svc     core.Service
 	cfg     *config.Config
 }
 
@@ -28,16 +28,18 @@ func (a *app) dbPath() string {
 	return config.DefaultDBPath()
 }
 
-func (a *app) store(ctx context.Context) (*store.Store, error) {
-	if a.st != nil {
-		return a.st, nil
+// service opens the database on first use. Everything the commands do goes
+// through core.Service, so they work the same against a remote backend later.
+func (a *app) service(ctx context.Context) (core.Service, error) {
+	if a.svc != nil {
+		return a.svc, nil
 	}
-	st, err := store.Open(ctx, a.dbPath())
+	svc, err := core.Open(ctx, a.dbPath())
 	if err != nil {
 		return nil, err
 	}
-	a.st = st
-	return st, nil
+	a.svc = svc
+	return svc, nil
 }
 
 func (a *app) config() (*config.Config, error) {
@@ -57,8 +59,8 @@ func (a *app) config() (*config.Config, error) {
 }
 
 func (a *app) close() {
-	if a.st != nil {
-		_ = a.st.Close()
+	if a.svc != nil {
+		_ = a.svc.Close()
 	}
 }
 

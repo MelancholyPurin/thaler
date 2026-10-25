@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
-	"github.com/melancholypurin/thaler/internal/store"
 )
 
 func (a *app) accountCmd() *cobra.Command {
@@ -23,7 +23,7 @@ and equity accounts accept any currency unless you give one.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
@@ -33,7 +33,7 @@ and equity accounts accept any currency unless you give one.`,
 					return err
 				}
 			}
-			acc, err := st.AddAccount(ctx, args[0], cur)
+			acc, err := svc.AddAccount(ctx, args[0], cur)
 			if err != nil {
 				return err
 			}
@@ -49,11 +49,11 @@ and equity accounts accept any currency unless you give one.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			st, err := a.store(ctx)
+			svc, err := a.service(ctx)
 			if err != nil {
 				return err
 			}
-			accs, err := st.ListAccounts(ctx)
+			accs, err := svc.ListAccounts(ctx)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ and equity accounts accept any currency unless you give one.`,
 	return root
 }
 
-func describeAccount(a store.Account) string {
+func describeAccount(a core.Account) string {
 	if a.Currency == "" {
 		return string(a.Type) + ", any currency"
 	}
