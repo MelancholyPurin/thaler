@@ -35,6 +35,10 @@ type Options struct {
 	// ConfigTemplate is what a file that does not exist yet starts from.
 	ConfigPath     string
 	ConfigTemplate string
+	// DatabasePath is shown in the backup popup, and BackupDir is the folder
+	// backups go to by default and the one it counts them in.
+	DatabasePath string
+	BackupDir    string
 }
 
 type mode int
@@ -49,6 +53,7 @@ const (
 	modeImport               // importing a bank export
 	modeAccount              // creating an account or setting its balance
 	modeTransfer             // moving money between two accounts
+	modeBackup               // writing a backup of the database
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -121,6 +126,7 @@ type Model struct {
 	imp         *importFlow
 	acct        *accountForm
 	xfer        *transferForm
+	bkp         *backupForm
 	lastProfile string // import profile used last in this session
 
 	picker       textinput.Model
@@ -256,6 +262,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				in.Width = m.transferWidth()
 			}
 		}
+		if m.bkp != nil {
+			m.bkp.dest.Width = m.backupInputWidth()
+		}
 		if m.acct != nil {
 			for _, in := range []*textinput.Model{&m.acct.name, &m.acct.currency, &m.acct.balance, &m.acct.asOf} {
 				in.Width = m.accountWidth()
@@ -288,6 +297,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateAccount(msg)
 		case modeTransfer:
 			return m.updateTransfer(msg)
+		case modeBackup:
+			return m.updateBackup(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -306,6 +317,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "C":
 		return m, m.editConfig()
+	case "S":
+		return m, m.openBackup()
 	case "f1", "L":
 		m.setScreen(screenLedger)
 		return m, nil

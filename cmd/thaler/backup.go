@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/melancholypurin/thaler/internal/config"
 )
 
 func (a *app) backupCmd() *cobra.Command {
@@ -24,7 +26,7 @@ with age) before copying it anywhere else.`,
 			if err != nil {
 				return err
 			}
-			dest := filepath.Join(filepath.Dir(a.dbPath()), "backups", "thaler-"+time.Now().Format("20060102-150405")+".db")
+			dest := filepath.Join(config.BackupDir(a.dbPath()), config.BackupName(time.Now()))
 			if len(args) == 1 {
 				dest = args[0]
 			}

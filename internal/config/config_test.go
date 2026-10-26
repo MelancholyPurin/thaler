@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -400,6 +401,55 @@ func Test_AppendRule(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.wantRules, loaded.Rules); diff != "" {
 				t.Errorf("rules read back (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_BackupDir(t *testing.T) {
+	tcs := []struct {
+		name string
+		db   string
+		want string
+	}{
+		{name: "next to the database", db: "/data/thaler/thaler.db", want: "/data/thaler/backups"},
+		{name: "wherever the database was put", db: "/tmp/test/my.db", want: "/tmp/test/backups"},
+		{name: "a relative path", db: "thaler.db", want: "backups"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := BackupDir(tc.db)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_BackupName(t *testing.T) {
+	tcs := []struct {
+		name string
+		when time.Time
+		want string
+	}{
+		{name: "a timestamp that sorts by time", when: time.Date(2026, 10, 22, 9, 5, 7, 0, time.UTC), want: "thaler-20261022-090507.db"},
+		{name: "the start of a year", when: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC), want: "thaler-20270101-000000.db"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := BackupName(tc.when)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			// and every name it makes is one the glob finds again
+			if ok, _ := filepath.Match(BackupGlob, got); !ok {
+				t.Errorf("%q does not match %q", got, BackupGlob)
 			}
 		})
 	}

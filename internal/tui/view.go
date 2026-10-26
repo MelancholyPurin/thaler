@@ -39,6 +39,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.accountPopup())
 	case modeTransfer:
 		screen = m.centerPopup(screen, m.transferPopup())
+	case modeBackup:
+		screen = m.centerPopup(screen, m.backupPopup())
 	}
 	return screen
 }
@@ -284,7 +286,7 @@ func (m *Model) ledgerHint() string {
 	var hint string
 	switch m.focus {
 	case paneHome:
-		hint = "a add · x transfer · i import · n new account · enter transactions · ? help · q quit"
+		hint = "a add · x transfer · i import · n new account · S backup · enter transactions · ? help · q quit"
 	case paneAccounts:
 		hint = "↑/↓ pick account · a add · x transfer · b balance · n new · enter transactions · ? help · q quit"
 	default:
@@ -371,6 +373,7 @@ func (m *Model) helpPopup() string {
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},
 		{"u", "only uncategorized / all"},
+		{"S", "back up the database: write a snapshot and see when the last one was made"},
 		{"C", "edit config.toml (rules, import folder, bank profiles) in $EDITOR"},
 		{"?", "this help"},
 		{"q  ctrl+c", "quit"},
