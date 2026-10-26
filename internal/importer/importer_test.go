@@ -104,7 +104,7 @@ func Test_Parse(t *testing.T) {
 	}{
 		{
 			name:     "the sparkasse sample",
-			input:    func(t *testing.T) string { return readSample(t) },
+			input:    readSample,
 			profile:  Sparkasse,
 			fallback: "EUR",
 			want:     ParseResult{Rows: sampleRows(), Skipped: 1}, // the pending REWE booking
