@@ -15,20 +15,46 @@ import (
 )
 
 // The backup popup writes a snapshot of the database where you say, by default
-// into the backups folder next to it, and shows when the last one was made.
+// into the backups folder next to it, and shows when the last one was made. With
+// a passphrase the snapshot is encrypted.
 
 // backupFile is a backup found in the backups folder.
 type backupFile struct {
-	path string
-	when time.Time
-	size int64
+	path      string
+	when      time.Time
+	size      int64
+	encrypted bool
 }
 
+type backupField int
+
+const (
+	bfDest backupField = iota
+	bfPass
+	bfRepeat
+	numBackupFields
+)
+
 type backupForm struct {
+	field  backupField
 	dest   textinput.Model
+	pass   textinput.Model
+	repeat textinput.Model
 	files  []backupFile // in the backups folder, newest first
 	dbSize int64        // the database file, 0 when it is not a file (in memory)
 	err    string
+}
+
+func (f *backupForm) encrypting() bool { return f.pass.Value() != "" }
+
+func (f *backupForm) input(field backupField) *textinput.Model {
+	switch field {
+	case bfPass:
+		return &f.pass
+	case bfRepeat:
+		return &f.repeat
+	}
+	return &f.dest
 }
 
 const backupLabelWidth = 13
@@ -44,14 +70,19 @@ func (m *Model) backupInputWidth() int {
 // listBackups is every backup in dir, newest first. A folder that is missing
 // or unreadable simply has none.
 func listBackups(dir string) []backupFile {
-	paths, _ := filepath.Glob(filepath.Join(dir, config.BackupGlob))
 	var files []backupFile
-	for _, p := range paths {
-		info, err := os.Stat(p)
-		if err != nil || !info.Mode().IsRegular() {
-			continue
+	for _, glob := range config.BackupGlobs {
+		paths, _ := filepath.Glob(filepath.Join(dir, glob))
+		for _, p := range paths {
+			info, err := os.Stat(p)
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			files = append(files, backupFile{
+				path: p, when: info.ModTime(), size: info.Size(),
+				encrypted: strings.HasSuffix(p, config.EncryptedSuffix),
+			})
 		}
-		files = append(files, backupFile{path: p, when: info.ModTime(), size: info.Size()})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].when.After(files[j].when) })
 	return files
@@ -69,14 +100,39 @@ func (m *Model) openBackup() tea.Cmd {
 	}
 	f.dest = newInput("")
 	f.dest.CharLimit = 0 // paths are long; set before the value, or it is cut at 80
-	f.dest.Width = m.backupInputWidth()
+	f.pass, f.repeat = newInput(""), newInput("")
+	for _, in := range []*textinput.Model{&f.pass, &f.repeat} {
+		in.CharLimit = 0
+		in.EchoMode = textinput.EchoPassword
+		in.EchoCharacter = '•'
+	}
+	m.sizeBackup(f)
 	f.dest.SetValue(filepath.Join(m.opts.BackupDir, config.BackupName(m.now())))
 	m.bkp = f
 	m.mode = modeBackup
-	return f.dest.Focus()
+	return m.focusBackup(bfDest)
+}
+
+func (m *Model) sizeBackup(f *backupForm) {
+	for _, in := range []*textinput.Model{&f.dest, &f.pass, &f.repeat} {
+		in.Width = m.backupInputWidth()
+	}
+}
+
+func (m *Model) focusBackup(field backupField) tea.Cmd {
+	f := m.bkp
+	f.field = field
+	f.dest.Blur()
+	f.pass.Blur()
+	f.repeat.Blur()
+	return f.input(field).Focus()
 }
 
 func (m *Model) updateBackup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	f := m.bkp
+	move := func(d int) (tea.Model, tea.Cmd) {
+		return m, m.focusBackup((f.field + backupField(d) + numBackupFields) % numBackupFields)
+	}
 	switch msg.String() {
 	case "esc":
 		m.mode, m.bkp = modeList, nil
@@ -84,17 +140,23 @@ func (m *Model) updateBackup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter", "ctrl+s":
 		m.saveBackup()
 		return m, nil
+	case "tab", "down":
+		return move(1)
+	case "shift+tab", "up":
+		return move(-1)
 	}
 	var cmd tea.Cmd
-	m.bkp.dest, cmd = m.bkp.dest.Update(msg)
-	m.bkp.err = ""
+	in := f.input(f.field)
+	*in, cmd = in.Update(msg)
+	f.err = ""
 	return m, cmd
 }
 
 // backupTarget turns what was typed into the file to write: ~ is your home
-// folder, a relative path is relative to where Thaler was started, and a folder
-// gets the usual timestamped file name inside it.
-func (m *Model) backupTarget(typed string) (string, error) {
+// folder, a relative path is relative to where Thaler was started, a folder
+// gets the usual timestamped file name inside it, and an encrypted backup ends
+// in .age.
+func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
 	typed = strings.TrimSpace(typed)
 	if typed == "" {
 		return "", fmt.Errorf("say where to write the backup")
@@ -113,26 +175,49 @@ func (m *Model) backupTarget(typed string) (string, error) {
 	if info, err := os.Stat(dest); err == nil && info.IsDir() {
 		dest = filepath.Join(dest, config.BackupName(m.now()))
 	}
+	if encrypt {
+		dest = config.EncryptedName(dest)
+	}
 	return dest, nil
 }
 
 func (m *Model) saveBackup() {
 	f := m.bkp
-	dest, err := m.backupTarget(f.dest.Value())
+	if f.encrypting() && f.pass.Value() != f.repeat.Value() {
+		f.err = "the two passphrases differ: type it again in Repeat"
+		m.focusBackup(bfRepeat)
+		return
+	}
+	if !f.encrypting() && f.repeat.Value() != "" {
+		f.err = "Repeat is filled in but Passphrase is empty"
+		m.focusBackup(bfPass)
+		return
+	}
+	dest, err := m.backupTarget(f.dest.Value(), f.encrypting())
 	if err != nil {
 		f.err = err.Error()
 		return
 	}
-	if err := m.svc.Backup(m.ctx, dest); err != nil {
+	if f.encrypting() {
+		err = m.svc.BackupEncrypted(m.ctx, dest, f.pass.Value())
+	} else {
+		err = m.svc.Backup(m.ctx, dest)
+	}
+	if err != nil {
 		f.err = err.Error()
 		return
 	}
+	encrypted := f.encrypting()
 	m.mode, m.bkp = modeList, nil
 	size := "?"
 	if info, err := os.Stat(dest); err == nil {
 		size = humanSize(info.Size())
 	}
-	m.setStatus(fmt.Sprintf("Backed up (%s, checked, not encrypted) → %s", size, tailFit(dest, max(24, m.width-56))), false)
+	how := "checked, NOT encrypted"
+	if encrypted {
+		how = "checked, encrypted"
+	}
+	m.setStatus(fmt.Sprintf("Backed up (%s, %s) → %s", size, how, tailFit(dest, max(24, m.width-56))), false)
 }
 
 func (m *Model) backupPopup() string {
@@ -141,6 +226,12 @@ func (m *Model) backupPopup() string {
 	iw := w - 2
 	label := func(s string) string { return dim.Render(fit("  "+s, backupLabelWidth)) }
 	value := func(s string) string { return fit(s, iw-backupLabelWidth-1) }
+	field := func(name string, which backupField, in textinput.Model) string {
+		if f.field == which {
+			return accent.Render(fit("▸ "+name, backupLabelWidth)) + " " + in.View()
+		}
+		return label(name) + " " + in.View()
+	}
 
 	db := m.opts.DatabasePath
 	if f.dbSize > 0 {
@@ -150,6 +241,11 @@ func (m *Model) backupPopup() string {
 	if len(f.files) > 0 {
 		b := f.files[0]
 		last = fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), humanSize(b.size))
+		if b.encrypted {
+			last += " · encrypted"
+		} else {
+			last += " · not encrypted"
+		}
 	}
 	folder := m.opts.BackupDir
 	switch len(f.files) {
@@ -164,18 +260,37 @@ func (m *Model) backupPopup() string {
 		label("Last backup") + " " + value(last),
 		label("Folder") + " " + value(tailFit(folder, iw-backupLabelWidth-1)),
 		dim.Render(strings.Repeat("─", iw)),
-		accent.Render(fit("▸ Save to", backupLabelWidth)) + " " + f.dest.View(),
+		field("Save to", bfDest, f.dest),
+		field("Passphrase", bfPass, f.pass),
+		field("Repeat", bfRepeat, f.repeat),
 		"",
-		dim.Render(fit("A plain SQLite file, NOT encrypted: keep it on an", iw)),
-		dim.Render(fit("encrypted disk, or encrypt it before copying it away.", iw)),
-		dim.Render(fit("A folder is fine too: it gets a timestamped name.", iw)),
 	}
-	h := 14
+	for _, h := range m.backupHints() {
+		lines = append(lines, dim.Render(fit(h, iw)))
+	}
+	h := 15
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	return box("Back up the database", lines, w, h, true, "enter back up · esc cancel")
+	return box("Back up the database", lines, w, h, true, "enter back up · tab next field · esc cancel")
+}
+
+// backupHints say what the backup will be and what that means for you.
+func (m *Model) backupHints() []string {
+	f := m.bkp
+	if f.encrypting() {
+		return []string{
+			"Encrypted with age; the file gets the ending .age.",
+			"Lose the passphrase and the backup cannot be opened.",
+			"Open it again with: thaler cli decrypt FILE",
+		}
+	}
+	return []string{
+		"A plain SQLite file, NOT encrypted. Type a passphrase to",
+		"encrypt it, or keep it on an encrypted disk. A folder in",
+		"Save to gets a timestamped name.",
+	}
 }
 
 // tailFit shortens s to w cells by cutting from the left, which keeps the part

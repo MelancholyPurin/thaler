@@ -18,6 +18,7 @@ import (
 // folder is "{dir}/backups", on a ledger with one transaction in it.
 func backupModel(t *testing.T, dir string) *Model {
 	t.Helper()
+	cheapScrypt(t)
 	st := openLedger(t)
 	openAccounts(t, st, "Assets:Bank EUR")
 	book(t, st, "2026-10-03", "Kino", "Assets:Bank", "Expenses:Fun", -1200)
@@ -31,6 +32,15 @@ func backupModel(t *testing.T, dir string) *Model {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	return m
+}
+
+// cheapScrypt makes encrypting fast for the rest of the test: it matters here
+// that a backup can be opened again, not how slow guessing a passphrase is.
+func cheapScrypt(t *testing.T) {
+	t.Helper()
+	old := core.ScryptWorkFactor
+	core.ScryptWorkFactor = 8
+	t.Cleanup(func() { core.ScryptWorkFactor = old })
 }
 
 // openFile opens the database file at path, as a restore would.
@@ -61,6 +71,8 @@ func filesUnder(t *testing.T, dir string) []string {
 	return out
 }
 
+var backupFieldNames = map[backupField]string{bfDest: "path", bfPass: "passphrase", bfRepeat: "repeat"}
+
 var (
 	sizeInStatus = regexp.MustCompile(`\(\d+(\.\d)? (B|KB|MB),`)
 	pathInStatus = regexp.MustCompile(`→ .*?([^/]+)$`)
@@ -70,6 +82,7 @@ var (
 func Test_Update_backup(t *testing.T) {
 	type observed struct {
 		Mode   string
+		Field  string // the field with the keyboard, while the popup is open
 		Dest   string // what the popup would write to, while it is open
 		Err    string
 		Status string
@@ -83,19 +96,19 @@ func Test_Update_backup(t *testing.T) {
 	}{
 		{
 			name: "S opens the popup on a timestamped file in the backups folder", script: func(string) string { return "S" },
-			want: observed{Mode: "backup", Dest: "{dir}/backups/thaler-20261022-120000.db"},
+			want: observed{Mode: "backup", Field: "path", Dest: "{dir}/backups/thaler-20261022-120000.db"},
 		},
 		{
 			name: "enter writes it", script: func(string) string { return "S enter" },
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …thaler-20261022-120000.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …thaler-20261022-120000.db",
 				Files: []string{"backups/thaler-20261022-120000.db"},
 			},
 		},
 		{
 			name: "ctrl+s does too", script: func(string) string { return "S ctrl+s" },
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …thaler-20261022-120000.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …thaler-20261022-120000.db",
 				Files: []string{"backups/thaler-20261022-120000.db"},
 			},
 		},
@@ -109,7 +122,7 @@ func Test_Update_backup(t *testing.T) {
 				return "S ctrl+u raw:" + filepath.Join(dir, "elsewhere", "mine.db") + " enter"
 			},
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …mine.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …mine.db",
 				Files: []string{"elsewhere/mine.db"},
 			},
 		},
@@ -117,7 +130,7 @@ func Test_Update_backup(t *testing.T) {
 			name:   "a folder gets the timestamped name inside it",
 			script: func(dir string) string { return "S ctrl+u raw:" + dir + " enter" },
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …thaler-20261022-120000.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …thaler-20261022-120000.db",
 				Files: []string{"thaler-20261022-120000.db"},
 			},
 		},
@@ -125,8 +138,72 @@ func Test_Update_backup(t *testing.T) {
 			name:   "~ is the home folder",
 			script: func(string) string { return "S ctrl+u raw:~/saved.db enter" },
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …saved.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …saved.db",
 				Files: []string{"saved.db"},
+			},
+		},
+		{
+			name: "tab goes to the passphrase", script: func(string) string { return "S tab" },
+			want: observed{Mode: "backup", Field: "passphrase", Dest: "{dir}/backups/thaler-20261022-120000.db"},
+		},
+		{
+			name: "and on to the repeat", script: func(string) string { return "S tab tab" },
+			want: observed{Mode: "backup", Field: "repeat", Dest: "{dir}/backups/thaler-20261022-120000.db"},
+		},
+		{
+			name: "down wraps round to the path", script: func(string) string { return "S down down down" },
+			want: observed{Mode: "backup", Field: "path", Dest: "{dir}/backups/thaler-20261022-120000.db"},
+		},
+		{
+			name: "shift+tab goes back, round to the repeat", script: func(string) string { return "S shift+tab" },
+			want: observed{Mode: "backup", Field: "repeat", Dest: "{dir}/backups/thaler-20261022-120000.db"},
+		},
+		{
+			name: "a passphrase, typed twice, encrypts the backup and gives it the ending .age", script: func(string) string { return "S tab text:correct_horse tab text:correct_horse enter" },
+			want: observed{
+				Mode: "list", Status: "Backed up ({size}, checked, encrypted) → …thaler-20261022-120000.db.age",
+				Files: []string{"backups/thaler-20261022-120000.db.age"},
+			},
+		},
+		{
+			name: "a typed path gets the ending too",
+			script: func(dir string) string {
+				return "S ctrl+u raw:" + filepath.Join(dir, "mine.db") + " tab text:pw tab text:pw enter"
+			},
+			want: observed{
+				Mode: "list", Status: "Backed up ({size}, checked, encrypted) → …mine.db.age",
+				Files: []string{"mine.db.age"},
+			},
+		},
+		{
+			name: "and not twice",
+			script: func(dir string) string {
+				return "S ctrl+u raw:" + filepath.Join(dir, "mine.age") + " tab text:pw tab text:pw enter"
+			},
+			want: observed{
+				Mode: "list", Status: "Backed up ({size}, checked, encrypted) → …mine.age",
+				Files: []string{"mine.age"},
+			},
+		},
+		{
+			name: "passphrases that differ write nothing, and the cursor goes to the repeat", script: func(string) string { return "S tab text:secret tab text:sekret enter" },
+			want: observed{Mode: "backup", Field: "repeat", Dest: "{dir}/backups/thaler-20261022-120000.db", Err: "the two passphrases differ: type it again in Repeat"},
+		},
+		{
+			name: "a passphrase typed only once is not enough", script: func(string) string { return "S tab text:secret enter" },
+			want: observed{Mode: "backup", Field: "repeat", Dest: "{dir}/backups/thaler-20261022-120000.db", Err: "the two passphrases differ: type it again in Repeat"},
+		},
+		{
+			name: "a repeat without a passphrase is refused rather than ignored", script: func(string) string { return "S tab tab text:secret enter" },
+			want: observed{Mode: "backup", Field: "passphrase", Dest: "{dir}/backups/thaler-20261022-120000.db", Err: "Repeat is filled in but Passphrase is empty"},
+		},
+		{
+			name: "a passphrase does not change an existing file", existing: map[string]string{"backups/thaler-20261022-120000.db.age": "precious"},
+			script: func(string) string { return "S tab text:pw tab text:pw enter" },
+			want: observed{
+				Mode: "backup", Field: "repeat", Dest: "{dir}/backups/thaler-20261022-120000.db",
+				Err:   "{dir}/backups/thaler-20261022-120000.db.age already exists",
+				Files: []string{"backups/thaler-20261022-120000.db.age"},
 			},
 		},
 		{
@@ -134,20 +211,20 @@ func Test_Update_backup(t *testing.T) {
 			existing: map[string]string{"backups/thaler-20261022-120000.db": "precious"},
 			script:   func(string) string { return "S enter" },
 			want: observed{
-				Mode: "backup", Dest: "{dir}/backups/thaler-20261022-120000.db",
+				Mode: "backup", Field: "path", Dest: "{dir}/backups/thaler-20261022-120000.db",
 				Err:   "{dir}/backups/thaler-20261022-120000.db already exists",
 				Files: []string{"backups/thaler-20261022-120000.db"},
 			},
 		},
 		{
 			name: "an empty path is refused", script: func(string) string { return "S ctrl+u enter" },
-			want: observed{Mode: "backup", Err: "say where to write the backup"},
+			want: observed{Mode: "backup", Field: "path", Err: "say where to write the backup"},
 		},
 		{
 			name:   "typing clears the message, so it can be tried again",
 			script: func(dir string) string { return "S ctrl+u enter raw:" + filepath.Join(dir, "x.db") + " enter" },
 			want: observed{
-				Mode: "list", Status: "Backed up ({size}, checked, not encrypted) → …x.db",
+				Mode: "list", Status: "Backed up ({size}, checked, NOT encrypted) → …x.db",
 				Files: []string{"x.db"},
 			},
 		},
@@ -175,6 +252,7 @@ func Test_Update_backup(t *testing.T) {
 			got := observed{Mode: modeNames[m.mode], Status: m.status}
 			if m.bkp != nil {
 				got.Dest, got.Err = m.bkp.dest.Value(), m.bkp.err
+				got.Field = backupFieldNames[m.bkp.field]
 			}
 			got.Status = sizeInStatus.ReplaceAllString(got.Status, "({size},")
 			got.Status = pathInStatus.ReplaceAllString(got.Status, "→ …$1")
@@ -224,6 +302,52 @@ func Test_Update_backup_contents(t *testing.T) {
 	}
 }
 
+// An encrypted backup opens again with its passphrase, and only with it.
+func Test_Update_backup_encryptedContents(t *testing.T) {
+	type observed struct {
+		Ledger []string
+		Err    string
+	}
+	tcs := []struct {
+		name       string
+		passphrase string
+		want       observed
+	}{
+		{
+			name: "the right passphrase", passphrase: "correct horse",
+			want: observed{Ledger: []string{"2026-10-03 Kino | Assets:Bank -12.00 | Expenses:Fun 12.00"}},
+		},
+		{
+			name: "a wrong one", passphrase: "wrong horse",
+			want: observed{Err: "decrypting {src}: incorrect passphrase"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := backupModel(t, dir)
+			play(m, "S tab text:correct_horse tab text:correct_horse enter")
+			src := filepath.Join(dir, "backups", "thaler-20261022-120000.db.age")
+			dest := filepath.Join(dir, "restored.db")
+
+			// when
+			err := core.DecryptBackup(ctx, src, dest, tc.passphrase)
+
+			// then
+			var got observed
+			if err != nil {
+				got.Err = strings.ReplaceAll(err.Error(), src, "{src}")
+			} else {
+				got.Ledger = storedLines(t, openFile(t, dest))
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 // Without a known backups folder S says so instead of writing somewhere.
 func Test_Update_backup_unknownFolder(t *testing.T) {
 	// given
@@ -268,6 +392,18 @@ func Test_backupPopup(t *testing.T) {
 			},
 			shows: []string{"· 3 days ago ·", "· 3 backups"},
 			hides: []string{"21 days ago", "never"},
+		},
+		{
+			name:  "a plain one says so",
+			files: map[string]time.Time{"thaler-20261022-090000.db": day(0)},
+			shows: []string{"· not encrypted"},
+			hides: []string{"· encrypted"},
+		},
+		{
+			name:  "an encrypted one says so, and counts",
+			files: map[string]time.Time{"thaler-20261022-090000.db.age": day(0), "thaler-20261001-090000.db": day(21)},
+			shows: []string{"· 1 B · encrypted", "· 2 backups"},
+			hides: []string{"not encrypted"},
 		},
 		{
 			name:  "yesterday",
@@ -387,6 +523,50 @@ func Test_tailFit(t *testing.T) {
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+// A passphrase is never shown as it is typed, and the popup says what the
+// backup is going to be.
+func Test_backupPopup_passphrase(t *testing.T) {
+	tcs := []struct {
+		name   string
+		script string
+		shows  []string
+		hides  []string
+	}{
+		{
+			name: "none: a plain backup", script: "S",
+			shows: []string{"NOT encrypted", "Passphrase", "Repeat"},
+			hides: []string{"Encrypted with age", "••"},
+		},
+		{
+			name: "typed once", script: "S tab text:hunter2",
+			shows: []string{"•••••••", "Encrypted with age", "ending .age", "cannot be opened", "thaler cli decrypt"},
+			hides: []string{"hunter2", "NOT encrypted"},
+		},
+		{
+			name: "typed twice", script: "S tab text:hunter2 tab text:hunter2",
+			shows: []string{"•••••••", "Encrypted with age"},
+			hides: []string{"hunter2"},
+		},
+		{
+			name: "cleared again", script: "S tab text:hunter2 ctrl+u",
+			shows: []string{"NOT encrypted"},
+			hides: []string{"hunter2", "Encrypted with age"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m := backupModel(t, t.TempDir())
+
+			// when
+			play(m, tc.script)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
 		})
 	}
 }
