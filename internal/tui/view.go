@@ -289,7 +289,7 @@ func (m *Model) ledgerHint() string {
 	case paneAccounts:
 		hint = "↑/↓ pick account · a add · x transfer · b balance · n new · enter transactions · ? help · q quit"
 	default:
-		hint = "a add · i import · c categorize · e edit · d delete · z undo · / search · ? help · q quit"
+		hint = "a add · i import · c categorize · e edit · r rename · d delete · z undo · / search · ? help · q quit"
 	}
 	return hint
 }
@@ -368,6 +368,7 @@ func (m *Model) helpPopup() string {
 		{"n  b", "new account / set the selected account's balance"},
 		{"c, then tab", "categorize, and make a rule so this payee is always categorized this way"},
 		{"c  e  d", "categorize / edit / delete the selected transaction"},
+		{"r", "rename the selected transaction: edit it, starting on its title"},
 		{"z", "undo the last change"},
 		{"/", "fuzzy search the transactions (esc clears)"},
 		{"u", "only uncategorized / all"},
@@ -389,14 +390,14 @@ func (m *Model) formPopup() string {
 	f := m.form
 	w := min(max(m.width-6, 30), 72)
 	iw := w - 2
-	h := min(15, max(m.height-2, 9))
-	listH := max(h-9, 0)
+	h := min(16, max(m.height-2, 10))
+	listH := max(h-10, 0)
 
 	label := func(name string, field formField) string {
 		if f.field == field {
-			return accent.Render(fit("▸ "+name, 11))
+			return accent.Render(fit("▸ "+name, formLabelWidth))
 		}
-		return dim.Render(fit("  "+name, 11))
+		return dim.Render(fit("  "+name, formLabelWidth))
 	}
 	acc := m.accounts[f.account].account
 	accText := fmt.Sprintf("%s · %s", acc.Name, acc.Currency)
@@ -414,6 +415,7 @@ func (m *Model) formPopup() string {
 		label("Payee", fieldPayee) + " " + f.payee.View(),
 		label("Category", fieldCategory) + " " + f.category.View(),
 		label("Date", fieldDate) + " " + f.date.View(),
+		label("Description", fieldDescription) + " " + f.description.View(),
 		dim.Render(strings.Repeat("─", iw)),
 	}
 	lines = append(lines, m.formSuggestions(iw, listH)...)
@@ -430,7 +432,7 @@ func (m *Model) formPopup() string {
 	if f.editing != 0 {
 		title = fmt.Sprintf("Edit transaction #%d", f.editing)
 	}
-	return box(title, lines, w, h, true, "enter next · ctrl+s save · esc cancel")
+	return box(title, lines, w, h, true, f.footer())
 }
 
 // formSuggestions is the list under the fields: payees, categories, or a hint.
@@ -482,6 +484,8 @@ func (m *Model) formSuggestions(w, h int) []string {
 		return []string{dim.Render("12.50 is an expense · +2450 is income")}
 	case fieldDate:
 		return []string{dim.Render("empty = today · y yesterday · -2 two days ago · 2026-10-20")}
+	case fieldDescription:
+		return []string{dim.Render("optional: a note about what it was for; shown beside the transaction")}
 	default:
 		return []string{dim.Render("↑ ↓ or ◂ ▸ pick the account the money moves in or out of")}
 	}
