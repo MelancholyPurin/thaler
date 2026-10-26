@@ -107,6 +107,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `enter` | open the next panel (Home, Accounts) / categorize (Transactions) |
 | `a` | add a transaction (see below) |
 | `i` | import a bank export (see below) |
+| `S` | back up the database: see when the last backup was made and write a new one (see below) |
 | `C` | open `config.toml` in your editor (rules, import folder, bank profiles) |
 | `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
@@ -155,6 +156,12 @@ Rules and profiles are read from `config.toml` each time you press `i`, so you c
 
 In the category picker the category you last used for the same payee comes first (marked "same payee"), then the categories of the matching kind (income for money in, expenses for money out), most used first. Type to filter, or type a full new name such as `Expenses:Gifts` to create it. Transfers and split transactions are shown but cannot be recategorized there.
 
+**Backing up.** Press `S` to open the backup popup. It shows the database, when the last backup was made ("2026-10-22 14:00 · 3 days ago"), and how many are in the backups folder, which sits next to the database (`backups/`). `enter` writes a snapshot to the file name in the *Save to* line, which starts out as `thaler-<date>-<time>.db` in that folder. You can type any other path instead (`~` is your home folder), or just a folder, which gets the timestamped name inside it. A file that already exists is never overwritten. After writing, Thaler opens the snapshot and runs SQLite's integrity check on it; a snapshot that fails is removed and reported, so a backup that is announced is one that opens.
+
+**Encrypting a backup.** By default a backup is a plain SQLite file, which anyone who gets hold of it can read. Press `tab` to the *Passphrase* line and type one (it shows as `•`), then `tab` to *Repeat* and type it again, so a typo cannot lock you out. The backup is then written as an [age](https://age-encryption.org) file ending in `.age`, sealed with a key derived from the passphrase by scrypt (it takes a second or two, on purpose). Thaler decrypts the result once before it says it is done, to be sure the passphrase it holds opens it. The unencrypted copy exists only for a moment, in a private folder next to the backup, and is deleted. **There is no way to recover a backup whose passphrase is lost.** The popup and the status line say whether a backup is encrypted, and the *Last backup* line says so for the newest one.
+
+To open an encrypted backup again, `thaler cli decrypt FILE.age [DEST]` asks for the passphrase and writes a plain database (default: the file name without `.age`; an existing file is never overwritten, and a wrong passphrase leaves nothing behind). Use the result with `thaler --db DEST`. Because it is a standard age file, the `age` tool opens it too (`age -d`).
+
 On terminals narrower than 76 columns the detail pane is hidden, and below 14 rows only the focused panel is shown.
 
 ## Multi-currency
@@ -190,7 +197,8 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 | `thaler cli category set ID CATEGORY` | move one transaction to another category (created if new) |
 | `thaler cli balance [--as-of D] [--all]` | balances and net worth |
 | `thaler cli currency [set CODE]`, `thaler cli rate set/list` | base currency and exchange rates |
-| `thaler cli backup [DEST]` | consistent snapshot via `VACUUM INTO` (**not encrypted**) |
+| `thaler cli backup [DEST] [--encrypt \| --passphrase-file F]` | consistent snapshot via `VACUUM INTO`, checked after it is written; **not encrypted** unless `--encrypt` (asks for a passphrase twice) or `--passphrase-file` (first line of a file, for scripts) is given, which writes an age file ending in `.age`; also `S` in the interface |
+| `thaler cli decrypt SRC [DEST] [--passphrase-file F]` | open an encrypted backup as a plain database file, and check it |
 | `thaler cli check` | verifies every transaction balances per currency and the database is intact |
 
 Write negative amounts as `--amount=-12.50`. Amounts accept `12.50`, `12,50` and `1.234,56`; ambiguous input such as `1,234` is rejected rather than guessed.
@@ -222,7 +230,7 @@ The schema lives in `internal/core/migrations/`. Add `YYYYMMDD_name.up.sql` file
 - **No sqlc, no goose (yet).** Queries are plain SQL in `core/repository.go` and migrations are plain `YYYYMMDD_name.up.sql` files tracked in a `schema_migrations` table, so moving to sqlc/goose later is mechanical.
 - **One database connection.** Fine for a single-user CLI. The TUI calls the service directly from its update loop (milliseconds on a local file); a network backend would need those calls moved into background commands, and this pool setting revisited.
 - **Recategorizing re-books the category leg only.** A transaction's category is its single Income/Expenses/Equity posting; the amount, date and your own account never change. Transactions with no such posting or several (transfers, FX conversions) are refused.
-- **Backups are plain SQLite files.** Encryption (age) is not implemented; keep them on an encrypted disk for now.
+- **Backups are plain SQLite files unless you encrypt them.** Encryption is by passphrase only (age with scrypt); there are no key files or public-key recipients yet, so an unattended encrypted backup needs the passphrase in a file (`--passphrase-file`). The live database itself is not encrypted: use full-disk encryption for that.
 - **Rows have a uuid and a version, accounts have an owner.** Integer ids stay what the code uses; the uuid is the identity that survives export, restore and sync. `version` goes up on every edit so a stale client can be refused later. `accounts.owner_id` is NULL for shared accounts and a user for private ones. The `users` table exists but nothing reads these columns yet.
 - **Dates are ISO strings**, money is `int64` minor units, exchange rates are exact rationals (`math/big`). No floats touch stored or reported amounts.
 
