@@ -122,6 +122,7 @@ func Test_Backup(t *testing.T) {
 	}{
 		{name: "a new file in a new folder", dest: "backups/thaler.db", wantRestored: true},
 		{name: "a name with a quote in it", dest: "backups/it's a backup.db", wantRestored: true},
+		{name: "a name with characters that mean something in a URI", dest: "backups/what? 100% #1.db"}, // Open refuses such a path, so it is only checked to exist
 		{name: "a file that exists is never overwritten", dest: "thaler-backup.db", existing: true, wantErr: "{dest} already exists"},
 	}
 	for _, tc := range tcs {
@@ -149,6 +150,11 @@ func Test_Backup(t *testing.T) {
 				tc.wantErr = strings.ReplaceAll(tc.wantErr, "{dest}", dest)
 			}
 			checkErr(t, err, tc.wantErr, nil)
+			if tc.wantErr == "" {
+				if _, err := os.Stat(dest); err != nil {
+					t.Errorf("the backup was not written: %v", err)
+				}
+			}
 			if tc.existing {
 				if diff := cmp.Diff("precious", readFile(t, dest)); diff != "" {
 					t.Errorf("the existing file was touched (-want +got):\n%s", diff)
@@ -168,6 +174,62 @@ func Test_Backup(t *testing.T) {
 			}
 			if diff := cmp.Diff("Assets:Bank", got.Name); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// A snapshot is checked after it is written: one that is not a healthy
+// database is an error, not a backup.
+func Test_verifySnapshot(t *testing.T) {
+	tcs := []struct {
+		name    string
+		prepare func(t *testing.T, path string) // writes the file
+		wantErr string                          // a part of the message; "" for none
+	}{
+		{
+			name: "a healthy database",
+			prepare: func(t *testing.T, path string) {
+				st, err := Open(ctx, ":memory:")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer st.Close()
+				if err := st.Backup(ctx, path); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "a file that is not a database",
+			prepare: func(t *testing.T, path string) {
+				if err := os.WriteFile(path, []byte(strings.Repeat("this is not sqlite\n", 200)), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantErr: "file is not a database",
+		},
+		{
+			name:    "no file at all",
+			prepare: func(*testing.T, string) {},
+			wantErr: "unable to open database file",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			path := filepath.Join(t.TempDir(), "snapshot.db")
+			tc.prepare(t, path)
+
+			// when
+			err := verifySnapshot(ctx, path)
+
+			// then
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Errorf("unexpected error: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Errorf("error = %v, want one containing %q", err, tc.wantErr)
 			}
 		})
 	}

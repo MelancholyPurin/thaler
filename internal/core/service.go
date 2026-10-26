@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -1012,7 +1013,9 @@ func (s *Local) Check(ctx context.Context) ([]string, error) {
 }
 
 // Backup writes a consistent snapshot of the database to dest using
-// VACUUM INTO. dest must not exist yet. The snapshot is NOT encrypted.
+// VACUUM INTO, then opens the snapshot and checks it, so a backup that was
+// reported as written can be relied on. dest must not exist yet. The snapshot
+// is NOT encrypted.
 func (s *Local) Backup(ctx context.Context, dest string) error {
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("%s already exists", dest)
@@ -1022,6 +1025,31 @@ func (s *Local) Backup(ctx context.Context, dest string) error {
 	}
 	if err := s.repo.queries().vacuumInto(ctx, dest); err != nil {
 		return fmt.Errorf("backup to %s: %w", dest, err)
+	}
+	if err := verifySnapshot(ctx, dest); err != nil {
+		os.Remove(dest) // a snapshot that fails its check must not sit among the good ones
+		return fmt.Errorf("backup to %s failed its check and was removed: %w", dest, err)
+	}
+	return nil
+}
+
+var uriPath = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")
+
+// verifySnapshot opens the database file at path read-only and runs SQLite's
+// integrity check on it.
+func verifySnapshot(ctx context.Context, path string) error {
+	// In a file: URI, ?, # and % mean something, so a path that has them is escaped.
+	db, err := sql.Open("sqlite", "file:"+uriPath.Replace(path)+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	result, err := queries{db}.integrityCheck(ctx)
+	if err != nil {
+		return err
+	}
+	if result != "ok" {
+		return errors.New(result)
 	}
 	return nil
 }
