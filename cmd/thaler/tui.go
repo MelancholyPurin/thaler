@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/melancholypurin/thaler"
+	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/tui"
 )
 
@@ -25,5 +26,7 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 		LoadConfig:     a.loadConfig,
 		ConfigPath:     a.configPath(),
 		ConfigTemplate: thaler.ConfigExample,
+		DatabasePath:   a.dbPath(),
+		BackupDir:      config.BackupDir(a.dbPath()),
 	})
 }
