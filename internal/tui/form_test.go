@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 func Test_parseFormDate(t *testing.T) {
@@ -403,6 +405,165 @@ func Test_Update_editForm_zeroAmounts(t *testing.T) {
 				if diff := cmp.Diff(tc.wantAmt, m.form.amount.Value()); diff != "" {
 					t.Errorf("amount in the form (-want +got):\n%s", diff)
 				}
+			}
+		})
+	}
+}
+
+// descriptionOf is the description of a payee's newest transaction.
+func descriptionOf(t *testing.T, st core.Service, payee string) string {
+	t.Helper()
+	return txByPayee(t, st, payee).Description
+}
+
+var formFieldNames = map[formField]string{
+	fieldAmount: "amount", fieldPayee: "payee", fieldCategory: "category", fieldDate: "date",
+	fieldDescription: "description", fieldAccount: "account",
+}
+
+// The title of a transaction (its payee) can be renamed, and a description can be
+// added, when creating a transaction and when editing one. r renames: it opens
+// the edit form already on the title.
+func Test_Update_form_titleAndDescription(t *testing.T) {
+	type observed struct {
+		Flow
+		Field       string // the field with the keyboard, while the form is open
+		Title       string // the payee of the transaction the script is about
+		Description string
+	}
+	const (
+		kino = "2026-10-03 Kino | Assets:Bank -12.00 | Expenses:Uncategorized 12.00"
+		shop = "2026-10-05 Bakery | Assets:Bank -3.20 | Expenses:Groceries 3.20"
+	)
+	long := strings.Repeat("Sammelbuchung ", 30) // a bank purpose far longer than an input
+	tcs := []struct {
+		name   string
+		start  string // the payee to select first, "" to select none
+		script string
+		about  string // the payee to report on afterwards
+		want   observed
+	}{
+		{
+			name: "a description can be typed when adding", script: "a text:3 enter text:Kiosk enter tab tab text:Sunday_paper ctrl+s", about: "Kiosk",
+			want: observed{
+				Flow:  Flow{Mode: "list", Status: "Added #8  Kiosk  -3.00 EUR → Expenses:Groceries", Added: []string{"2026-10-22 Kiosk | Assets:Bank -3.00 | Expenses:Groceries 3.00"}},
+				Title: "Kiosk", Description: "Sunday paper",
+			},
+		},
+		{
+			name: "...and the quick path has no extra step: amount, payee, category", script: "a text:8.40 enter text:Kiosk enter enter", about: "Kiosk",
+			want: observed{
+				Flow:  Flow{Mode: "list", Status: "Added #8  Kiosk  -8.40 EUR → Expenses:Groceries", Added: []string{"2026-10-22 Kiosk | Assets:Bank -8.40 | Expenses:Groceries 8.40"}},
+				Title: "Kiosk",
+			},
+		},
+		{
+			name: "r opens the edit form on the title", start: "Kino", script: "r", about: "Kino",
+			want: observed{Flow: Flow{Mode: "form"}, Field: "payee", Title: "Kino"},
+		},
+		{
+			name: "r then a new name renames it", start: "Kino", script: "r ctrl+u text:Cinema ctrl+s", about: "Cinema",
+			want: observed{
+				Flow: Flow{
+					Mode: "list", Status: "Updated #4  Cinema  -12.00 EUR → Expenses:Uncategorized",
+					Added: []string{"2026-10-03 Cinema | Assets:Bank -12.00 | Expenses:Uncategorized 12.00"}, Removed: []string{kino},
+				},
+				Title: "Cinema",
+			},
+		},
+		{
+			name: "e still opens on the amount, and tab reaches the description", start: "Kino", script: "e tab tab tab tab", about: "Kino",
+			want: observed{Flow: Flow{Mode: "form"}, Field: "description", Title: "Kino"},
+		},
+		{
+			name: "a description added to an existing transaction", start: "Kino", script: "e tab tab tab tab text:Seen_with_Anna ctrl+s", about: "Kino",
+			want: observed{
+				Flow:  Flow{Mode: "list", Status: "Updated #4  Kino  -12.00 EUR → Expenses:Uncategorized"},
+				Title: "Kino", Description: "Seen with Anna",
+			},
+		},
+		{
+			name: "the form opens with the description it has", start: "Bakery", script: "e tab tab tab tab", about: "Bakery",
+			want: observed{Flow: Flow{Mode: "form"}, Field: "description", Title: "Bakery", Description: "weekly shop"},
+		},
+		{
+			name: "editing something else keeps the description", start: "Bakery", script: "e ctrl+u text:4 ctrl+s", about: "Bakery",
+			want: observed{
+				Flow: Flow{
+					Mode: "list", Status: "Updated #6  Bakery  -4.00 EUR → Expenses:Groceries",
+					Added: []string{"2026-10-05 Bakery | Assets:Bank -4.00 | Expenses:Groceries 4.00"}, Removed: []string{shop},
+				},
+				Title: "Bakery", Description: "weekly shop",
+			},
+		},
+		{
+			name: "a description can be cleared", start: "Bakery", script: "e tab tab tab tab ctrl+u ctrl+s", about: "Bakery",
+			want: observed{Flow: Flow{Mode: "list", Status: "Updated #6  Bakery  -3.20 EUR → Expenses:Groceries"}, Title: "Bakery"},
+		},
+		{
+			name: "extra spaces in a description are tidied", start: "Kino", script: "e tab tab tab tab text:a___b ctrl+s", about: "Kino",
+			want: observed{Flow: Flow{Mode: "list", Status: "Updated #4  Kino  -12.00 EUR → Expenses:Uncategorized"}, Title: "Kino", Description: "a b"},
+		},
+		{
+			name: "a long bank purpose is not cut off by editing something else", start: "Sammler", script: "e ctrl+s", about: "Sammler",
+			want: observed{Flow: Flow{Mode: "list", Status: "Updated #7  Sammler  -1.00 EUR → Expenses:Uncategorized"}, Title: "Sammler", Description: strings.TrimSpace(long)},
+		},
+		{
+			name: "z puts back the old title and description", start: "Kino", script: "r ctrl+u text:Cinema tab tab tab text:a_note ctrl+s z", about: "Kino",
+			want: observed{Flow: Flow{Mode: "list", Status: "Undid edit of #4"}, Title: "Kino"},
+		},
+		{
+			name: "esc leaves it as it was", start: "Kino", script: "r ctrl+u text:Cinema esc", about: "Kino",
+			want: observed{Flow: Flow{Mode: "list"}, Title: "Kino"},
+		},
+		{
+			name: "a transfer cannot be renamed here", start: "to savings", script: "r", about: "to savings",
+			want: observed{Flow: Flow{Mode: "list", Status: "transfers and split transactions cannot be edited here", StatusIsError: true}, Title: "to savings"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := newModel(t)
+			d := func(date string) time.Time { v, _ := ledger.ParseDate(date); return v }
+			for _, n := range []struct{ date, payee, description string }{
+				{"2026-10-05", "Bakery", "weekly shop"},
+				{"2026-10-06", "Sammler", long},
+			} {
+				cat, amount := "Expenses:Groceries", int64(320)
+				if n.payee == "Sammler" {
+					cat, amount = ledger.UncategorizedExpense, 100
+				}
+				if _, err := st.AddTransaction(ctx, core.NewTransaction{
+					Date: d(n.date), Payee: n.payee, Description: n.description,
+					Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-amount)}, {Account: cat, Amount: eur(amount)}},
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := m.reload(); err != nil {
+				t.Fatal(err)
+			}
+			m.applyFilter(false)
+			before := storedLines(t, st)
+			if tc.start != "" {
+				selectPayee(t, m, tc.start)
+			}
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{Flow: observe(t, m, st, before), Title: tc.about, Description: descriptionOf(t, st, tc.about)}
+			if m.form != nil {
+				got.Field = formFieldNames[m.form.field]
+			}
+			// The long purpose is checked by its length so a failure stays readable.
+			if tc.about == "Sammler" {
+				got.Added, got.Removed = nil, nil
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

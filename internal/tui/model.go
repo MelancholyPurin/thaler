@@ -246,9 +246,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.picker.Width = max(10, min(msg.Width-10, 60))
 		m.pickRule.Width = max(10, min(msg.Width-6, 66)-2-10)
 		if m.form != nil {
-			for _, in := range []*textinput.Model{&m.form.amount, &m.form.payee, &m.form.category, &m.form.date} {
-				in.Width = m.inputWidth()
-			}
+			m.sizeForm(m.form)
 		}
 		if m.imp != nil {
 			m.imp.file.Width = m.importWidth()
@@ -365,7 +363,7 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		m.setFocus(paneTransactions)
 		return m, nil
 	case "a":
-		return m, m.openForm(false)
+		return m, m.openForm(false, fieldAmount)
 	case "i":
 		return m, m.openImport()
 	case "x":
@@ -413,7 +411,9 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		case "c", "enter":
 			return m, m.openPicker()
 		case "e":
-			return m, m.openForm(true)
+			return m, m.openForm(true, fieldAmount)
+		case "r":
+			return m, m.openForm(true, fieldPayee)
 		case "d":
 			m.confirmDelete()
 		}

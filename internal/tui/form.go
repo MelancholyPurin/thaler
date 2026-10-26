@@ -21,6 +21,7 @@ const (
 	fieldPayee
 	fieldCategory
 	fieldDate
+	fieldDescription
 	fieldAccount
 	numFields
 )
@@ -34,7 +35,8 @@ type form struct {
 	field   formField
 
 	amount, payee, category, date textinput.Model
-	account                       int // index into Model.accounts
+	description                   textinput.Model // optional, kept as typed on one line
+	account                       int             // index into Model.accounts
 
 	payeeItems []payeeStat
 	payeeCur   int // highlighted payee suggestion, -1 for none
@@ -53,13 +55,25 @@ func newInput(value string) textinput.Model {
 	return in
 }
 
-func (m *Model) inputWidth() int { return max(8, min(max(m.width-6, 30), 72)-2-12-1) } // minus the cursor cell
+func (m *Model) inputWidth() int { return max(8, min(max(m.width-6, 30), 72)-2-formLabelWidth-1-1) } // minus the border, the label, a space and the cursor cell
+
+// formLabelWidth is the width of the field names down the left of the form.
+const formLabelWidth = 13
+
+// sizeForm sets the width of the form's inputs for the terminal. The amount
+// leaves room for the Expense or Income tag beside it.
+func (m *Model) sizeForm(f *form) {
+	for _, in := range []*textinput.Model{&f.payee, &f.category, &f.date, &f.description} {
+		in.Width = m.inputWidth()
+	}
+	f.amount.Width = max(4, m.inputWidth()-len("Expense")-1)
+}
 
 // openForm starts adding a transaction, or editing the selected one. The
 // account defaults to the one selected in the Accounts panel, or else the one
 // used last: in this session, or failing that by the most recent transaction
-// in the database.
-func (m *Model) openForm(edit bool) tea.Cmd {
+// in the database. The form opens on the field named by focus.
+func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 	if len(m.accounts) == 0 {
 		m.setStatus("no accounts yet: press n to create one", true)
 		return nil
@@ -68,6 +82,8 @@ func (m *Model) openForm(edit bool) tea.Cmd {
 	f.account = m.defaultAccount()
 	f.amount, f.payee, f.category = newInput(""), newInput(""), newInput("")
 	f.date = newInput(m.now().Format(ledger.DateLayout))
+	f.description = newInput("")
+	f.description.CharLimit = 0 // an imported purpose can be long, and must not be cut when it is edited
 
 	if edit {
 		r, ok := m.selected()
@@ -94,15 +110,14 @@ func (m *Model) openForm(edit bool) tea.Cmd {
 		f.amount.SetValue(text)
 		f.payee.SetValue(r.tx.Payee)
 		f.date.SetValue(r.tx.Date)
+		f.description.SetValue(r.tx.Description)
 		f.keepCat = r.category.Account
 	}
-	for _, in := range []*textinput.Model{&f.amount, &f.payee, &f.category, &f.date} {
-		in.Width = m.inputWidth()
-	}
+	m.sizeForm(f)
 	m.form = f
 	m.mode = modeForm
 	m.refreshForm()
-	return m.focusField(fieldAmount)
+	return m.focusField(focus)
 }
 
 func (m *Model) defaultAccount() int {
@@ -123,6 +138,7 @@ func (m *Model) focusField(field formField) tea.Cmd {
 	f.payee.Blur()
 	f.category.Blur()
 	f.date.Blur()
+	f.description.Blur()
 	switch field {
 	case fieldAmount:
 		return f.amount.Focus()
@@ -132,6 +148,8 @@ func (m *Model) focusField(field formField) tea.Cmd {
 		return f.category.Focus()
 	case fieldDate:
 		return f.date.Focus()
+	case fieldDescription:
+		return f.description.Focus()
 	}
 	return nil
 }
@@ -260,6 +278,8 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		f.catTouched = false
 	case fieldDate:
 		f.date, cmd = f.date.Update(msg)
+	case fieldDescription:
+		f.description, cmd = f.description.Update(msg)
 	}
 	m.refreshForm()
 	return m, cmd
@@ -337,7 +357,7 @@ func (m *Model) saveForm() {
 	nt := core.NewTransaction{
 		Date:        when,
 		Payee:       clean(f.payee.Value()),
-		Description: f.old.Description,
+		Description: clean(f.description.Value()),
 		Postings: []ledger.Posting{
 			{Account: acc.Name, Amount: amount},
 			{Account: category, Amount: amount.Neg()},

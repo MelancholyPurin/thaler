@@ -110,7 +110,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `C` | open `config.toml` in your editor (rules, import folder, bank profiles) |
 | `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
-| `e` / `d` | edit / delete the selected transaction (delete asks first) |
+| `e` / `r` / `d` | edit / rename / delete the selected transaction (`r` opens the edit form on the title; delete asks first) |
 | `z` | undo the last change made in this session: add, edit, delete, categorize or import, repeatable |
 | `/` | fuzzy search over date, payee, description, category and amount (every word must match; `esc` clears) |
 | `u` | show only uncategorized / all |
@@ -125,8 +125,9 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 
 - The **account** is the one selected in the Accounts panel. With "All accounts" selected it is the account you used last (in this session, or else the most recent transaction in the database). Amounts are in that account's currency, so there is no currency to type.
 - **Amount:** `12.50` is an expense, `+2450` is income.
-- **Payee:** typing the start of a known payee highlights it, and Enter completes it. `↑` drops the suggestion if you meant something new.
+- **Payee** is the title the transaction has in the list (rename it later with `r`): typing the start of a known payee highlights it, and Enter completes it. `↑` drops the suggestion if you meant something new.
 - **Category:** the category that payee went to last time is offered first (marked "same payee"), then categories of the right kind by how often you use them. Type to filter, or type a full new name such as `Expenses:Gifts`. The last entry, "decide later", books it as uncategorized.
+- **Description** is optional and comes after the date (`tab` from there; it is not in the way of the quick path above). Use it for a note about what the transaction was for. It is shown beside the transaction, searched by `/`, and for an imported row it starts out as the bank's purpose text, which you can edit or clear.
 - **Date** defaults to today: `y` is yesterday, `-2` is two days ago, or type `2026-10-20` / `20.10.2026`. `tab` moves between fields, `ctrl+s` saves from anywhere and `esc` cancels. Mistakes are reported in the form and nothing is written.
 
 **Creating an account** needs no command line. Press `n`, type a name (`Sparkasse` becomes `Assets:Sparkasse`), pick Assets or Liabilities, and confirm the currency (it starts as your base currency). If you already know what the account holds, fill in **Balance** and **As of**; leave them empty to start from nothing.
