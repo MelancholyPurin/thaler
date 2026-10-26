@@ -568,3 +568,134 @@ func Test_Update_form_titleAndDescription(t *testing.T) {
 		})
 	}
 }
+
+// Every field of the form can be reached and left again, with Enter, the arrows
+// or tab, and the footer says what Enter will do on the field you are on.
+func Test_Update_form_navigation(t *testing.T) {
+	type observed struct {
+		Mode   string
+		Field  string
+		Footer string
+		Saved  bool // the script ended by saving a change
+	}
+	const (
+		next = "enter next · tab/shift+tab fields · ctrl+s save · esc cancel"
+		save = "enter save · tab/shift+tab fields · ctrl+s save · esc cancel"
+	)
+	form := func(field, footer string) observed { return observed{Mode: "form", Field: field, Footer: footer} }
+	tcs := []struct {
+		name   string
+		start  string // the payee to select first; "" selects none
+		script string
+		want   observed
+	}{
+		// adding
+		{name: "adding starts on the amount", script: "a", want: form("amount", next)},
+		{name: "enter moves from the amount to the payee", script: "a text:5 enter", want: form("payee", next)},
+		{name: "and from the payee to the category, where Enter saves", script: "a text:5 enter enter", want: form("category", save)},
+		{name: "which it does: the quick path", script: "a text:5 enter enter enter", want: observed{Mode: "list", Saved: true}},
+		{name: "tab reaches the date", script: "a tab tab tab", want: form("date", next)},
+		{name: "Enter on the date moves on to the description instead of saving", script: "a tab tab tab enter", want: form("description", save)},
+		{name: "Enter on the description saves", script: "a text:5 tab tab tab enter enter", want: observed{Mode: "list", Saved: true}},
+		{name: "the account is the last field", script: "a tab tab tab tab tab", want: form("account", save)},
+		// going back and forward with the arrows
+		{name: "down moves on from the amount", script: "a down", want: form("payee", next)},
+		{name: "up on the amount has nowhere to go", script: "a up", want: form("amount", next)},
+		{name: "up goes back from the payee", script: "a down up", want: form("amount", next)},
+		{name: "up on a highlighted suggestion first drops it", script: "a text:5 enter text:rew up", want: form("payee", next)},
+		{name: "and then goes back", script: "a text:5 enter text:rew up up", want: form("amount", next)},
+		{name: "up goes back from the top of the categories", script: "a tab tab up", want: form("payee", next)},
+		{name: "down inside the categories stays on them", script: "a tab tab down", want: form("category", save)},
+		{name: "up and down on the date", script: "a tab tab tab down", want: form("description", save)},
+		{name: "up from the description goes back to the date", script: "a tab tab tab tab up", want: form("date", next)},
+		{name: "arrows on the account change the account, not the field", script: "a tab tab tab tab tab down", want: form("account", save)},
+		{name: "shift+tab goes back a field", script: "a tab shift+tab", want: form("amount", next)},
+		// editing
+		{name: "editing starts on the amount", start: "Kino", script: "e", want: form("amount", next)},
+		{name: "r starts on the title", start: "Kino", script: "r", want: form("payee", next)},
+		{name: "Enter walks to the category, which no longer saves when editing", start: "Kino", script: "e enter enter", want: form("category", next)},
+		{name: "on to the date", start: "Kino", script: "e enter enter enter", want: form("date", next)},
+		{name: "and to the description, where it saves", start: "Kino", script: "e enter enter enter enter", want: form("description", save)},
+		{name: "one more saves the edit", start: "Kino", script: "e enter enter enter enter enter", want: observed{Mode: "list", Saved: true}},
+		{name: "up in the categories first moves up the list: the cursor starts on the current one", start: "Kino", script: "e enter enter up", want: form("category", next)},
+		{name: "and goes back a field once it is at the top", start: "Kino", script: "e enter enter up up up", want: form("payee", next)},
+		{name: "shift+tab does too", start: "Kino", script: "e enter enter shift+tab", want: form("payee", next)},
+		{name: "ctrl+s saves from anywhere", start: "Kino", script: "e enter ctrl+s", want: observed{Mode: "list", Saved: true}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := newModel(t)
+			before := storedLines(t, st)
+			if tc.start != "" {
+				selectPayee(t, m, tc.start)
+			}
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{Mode: modeNames[m.mode]}
+			if m.form != nil {
+				got.Field, got.Footer = formFieldNames[m.form.field], m.form.footer()
+			}
+			added, _ := delta(before, storedLines(t, st))
+			got.Saved = len(added) > 0 || strings.HasPrefix(m.status, "Updated")
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The case that started this: reaching the description with Enter alone while
+// editing, typing in it, and saving.
+func Test_Update_form_reachingTheDescription(t *testing.T) {
+	type observed struct {
+		Mode        string
+		Description string
+		Status      string
+	}
+	tcs := []struct {
+		name   string
+		start  string
+		script string
+		about  string
+		want   observed
+	}{
+		{
+			name: "editing, with Enter all the way", start: "Kino", script: "e enter enter enter enter text:Seen_it enter", about: "Kino",
+			want: observed{"list", "Seen it", "Updated #4  Kino  -12.00 EUR → Expenses:Uncategorized"},
+		},
+		{
+			name: "renaming, then on to the description with Enter", start: "Kino", script: "r ctrl+u text:Cinema enter enter enter text:Date_night enter", about: "Cinema",
+			want: observed{"list", "Date night", "Updated #4  Cinema  -12.00 EUR → Expenses:Uncategorized"},
+		},
+		{
+			name: "adding: tab to it, then Enter saves", script: "a text:3 enter text:Kiosk enter tab tab text:Sunday_paper enter", about: "Kiosk",
+			want: observed{"list", "Sunday paper", "Added #6  Kiosk  -3.00 EUR → Expenses:Groceries"},
+		},
+		{
+			name: "adding: down from the date", script: "a text:3 enter text:Kiosk enter tab down text:Sunday_paper ctrl+s", about: "Kiosk",
+			want: observed{"list", "Sunday paper", "Added #6  Kiosk  -3.00 EUR → Expenses:Groceries"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := newModel(t)
+			if tc.start != "" {
+				selectPayee(t, m, tc.start)
+			}
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{modeNames[m.mode], descriptionOf(t, st, tc.about), m.status}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

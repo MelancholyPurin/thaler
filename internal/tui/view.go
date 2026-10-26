@@ -432,7 +432,7 @@ func (m *Model) formPopup() string {
 	if f.editing != 0 {
 		title = fmt.Sprintf("Edit transaction #%d", f.editing)
 	}
-	return box(title, lines, w, h, true, "enter next · ctrl+s save · esc cancel")
+	return box(title, lines, w, h, true, f.footer())
 }
 
 // formSuggestions is the list under the fields: payees, categories, or a hint.

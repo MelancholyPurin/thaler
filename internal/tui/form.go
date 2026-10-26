@@ -154,6 +154,29 @@ func (m *Model) focusField(field formField) tea.Cmd {
 	return nil
 }
 
+// enterSaves says what Enter does on the field that has the keyboard. Adding is
+// built to be quick (amount, payee, category, Enter), so there Enter on the
+// category saves. Anywhere else Enter moves on, and only the last fields save, so
+// that every field can be reached with Enter alone.
+func (f *form) enterSaves() bool {
+	switch f.field {
+	case fieldCategory:
+		return f.editing == 0
+	case fieldDescription, fieldAccount:
+		return true
+	}
+	return false
+}
+
+// footer is the hint under the form: what Enter does here, and how to move.
+func (f *form) footer() string {
+	verb := "next"
+	if f.enterSaves() {
+		verb = "save"
+	}
+	return "enter " + verb + " · tab/shift+tab fields · ctrl+s save · esc cancel"
+}
+
 func (f *form) isIncome() bool { return strings.HasPrefix(strings.TrimSpace(f.amount.Value()), "+") }
 
 // refreshForm recomputes the suggestions from what has been typed.
@@ -232,24 +255,33 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab":
 		return m, m.moveField(-1)
 	case "enter":
-		switch f.field {
-		case fieldAmount:
-			return m, m.moveField(1)
-		case fieldPayee:
-			return m, m.moveField(1)
-		default:
+		if f.enterSaves() {
 			m.saveForm()
 			return m, nil
 		}
+		return m, m.moveField(1)
 	case "up", "down":
 		d := 1
 		if msg.String() == "up" {
 			d = -1
 		}
 		switch f.field {
+		case fieldAmount, fieldDate, fieldDescription:
+			// Nothing to choose from here, so the arrows move between fields; ↑
+			// on the first field has nowhere to go.
+			if f.field == fieldAmount && d < 0 {
+				return m, nil
+			}
+			return m, m.moveField(d)
 		case fieldPayee:
+			if d < 0 && f.payeeCur < 0 { // no suggestion left to drop: go back
+				return m, m.moveField(-1)
+			}
 			f.payeeCur = max(-1, min(len(f.payeeItems)-1, f.payeeCur+d))
 		case fieldCategory:
+			if d < 0 && f.catCur == 0 { // at the top of the list: go back
+				return m, m.moveField(-1)
+			}
 			f.catCur = max(0, min(len(f.catItems)-1, f.catCur+d))
 			f.catTouched = true
 		case fieldAccount:
