@@ -1,0 +1,40 @@
+# golangci-lint v2. `make lint` runs it with the version pinned in the Makefile.
+version: "2"
+
+linters:
+  # errcheck, govet (which is `go vet`), ineffassign, staticcheck and unused.
+  default: standard
+  enable:
+    - copyloopvar     # loop variables are per iteration since Go 1.22
+    - errorlint       # errors.Is / errors.As instead of == and type assertions
+    - forcetypeassert # no unchecked x.(T)
+    - gocritic
+    - gosec           # this program handles financial data
+    - intrange        # for i := range n
+    - misspell
+    - nilerr          # returning nil after checking err != nil
+    - nolintlint      # a //nolint must say why, and must still be needed
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Tx).Rollback # after a Commit it only reports that it is too late
+    gosec:
+      excludes:
+        - G104 # unchecked errors: errcheck already covers them, with the Close exceptions below
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    presets:
+      - std-error-handling      # Close, Flush, os.Remove and friends in defers and error paths
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters: [gosec] # test fixtures read files, build paths and convert freely
+
+formatters:
+  enable:
+    - gofmt

@@ -26,12 +26,12 @@ func signed(m ledger.Money) string {
 	return m.String()
 }
 
-func truncate(s string, max int) string {
+func truncate(s string, limit int) string {
 	r := []rune(s)
-	if len(r) <= max {
+	if len(r) <= limit {
 		return s
 	}
-	return string(r[:max-1]) + "…"
+	return string(r[:limit-1]) + "…"
 }
 
 // column is one "label ... amount" line of a report.

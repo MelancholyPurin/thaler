@@ -41,7 +41,7 @@ func (m *Model) editConfig() tea.Cmd {
 func editorCommand(getenv func(string) string, lookPath func(string) (string, error), path string) (*exec.Cmd, error) {
 	for _, name := range []string{"VISUAL", "EDITOR"} {
 		if fields := strings.Fields(getenv(name)); len(fields) > 0 {
-			return exec.Command(fields[0], append(fields[1:], path)...), nil
+			return exec.Command(fields[0], append(fields[1:], path)...), nil //nolint:gosec // running the user's own $VISUAL or $EDITOR is the point
 		}
 	}
 	for _, name := range []string{"nano", "vi"} {

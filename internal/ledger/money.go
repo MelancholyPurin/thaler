@@ -72,7 +72,7 @@ func (m Money) IsZero() bool { return m.Minor == 0 }
 func (m Money) Decimal() string {
 	exp := m.Currency.Exponent()
 	neg := m.Minor < 0
-	u := uint64(m.Minor)
+	u := uint64(m.Minor) //nolint:gosec // reinterpreting the bits is the point: see the negation below
 	if neg {
 		u = -u // two's complement negation; also correct for math.MinInt64
 	}
@@ -211,7 +211,7 @@ func validGroups(parts []string) bool {
 }
 
 func allDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			return false
 		}

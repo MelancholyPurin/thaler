@@ -233,8 +233,7 @@ func Test_Update_import_destination(t *testing.T) {
 		Period string
 		Added  int
 	}
-	oldRow := exportHeader[:len(exportHeader)-1] + "\n15.09.26;Bakery;-3,00;EUR;Umsatz gebucht\n"
-	oldRow = "Buchungstag;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info\n15.09.26;Bakery;-3,00;EUR;Umsatz gebucht\n"
+	oldRow := "Buchungstag;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info\n15.09.26;Bakery;-3,00;EUR;Umsatz gebucht\n"
 	tcs := []struct {
 		name  string
 		setup func(t *testing.T, m *Model) (script string) // returns what to press

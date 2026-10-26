@@ -84,7 +84,7 @@ func box(title string, lines []string, w, h int, focused bool, footer string) st
 	var b strings.Builder
 	b.WriteString(top)
 	side := border.Render("│")
-	for i := 0; i < ih; i++ {
+	for i := range ih {
 		line := ""
 		if i < len(lines) {
 			line = lines[i]

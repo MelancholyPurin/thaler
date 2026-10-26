@@ -33,7 +33,7 @@ go build -o thaler ./cmd/thaler
 ./thaler                         # no arguments: the interactive UI
 ```
 
-For development, `make` lists the shortcuts: `make test`, `make lint` (formatting and `go vet`, the same checks as CI), `make check` (both), `make check-coverage` (per-package and total test coverage) and `make build`.
+For development, `make` lists the shortcuts: `make test`, `make lint` (gofmt and golangci-lint with the pinned version and `.golangci.yml`; the same checks as CI, and the first run builds the linter, about a minute), `make check` (both), `make check-coverage` (per-package and total test coverage) and `make build`.
 
 Export your transactions from Sparkasse online banking as CSV, choosing the **CSV-CAMT** format (the CSV-MT940 variant uses the same column names that thaler reads).
 

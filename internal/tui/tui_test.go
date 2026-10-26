@@ -300,21 +300,6 @@ func selectPayee(t *testing.T, m *Model, payee string) {
 	t.Fatalf("%q is not listed", payee)
 }
 
-// balanceOf is what the ledger holds on an account, in minor units.
-func balanceOf(t *testing.T, st core.Service, account string) int64 {
-	t.Helper()
-	report, err := st.BalanceReport(ctx, core.BalanceRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range report.Lines {
-		if l.Account == account {
-			return l.Amount.Minor
-		}
-	}
-	return 0
-}
-
 // checkConsistent fails if the ledger's own check finds anything wrong.
 func checkConsistent(t *testing.T, st core.Service) {
 	t.Helper()

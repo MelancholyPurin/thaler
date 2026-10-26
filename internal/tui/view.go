@@ -179,8 +179,7 @@ func (m *Model) moneyOrDash(v ledger.Money, ok bool) string {
 func (m *Model) transactionsPanel(l layout) string {
 	iw := l.leftW - 2
 	title := "[3] Transactions"
-	switch {
-	case m.scopeAccount() != "":
+	if m.scopeAccount() != "" {
 		title += " · " + shortName(m.scopeAccount())
 	}
 	if m.onlyUncat {

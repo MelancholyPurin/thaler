@@ -1,6 +1,8 @@
 # Shortcuts for working on Thaler. Run `make` to list them.
 
 GO        ?= go
+# Pinned, and run through `go run` so nothing has to be installed (the first run builds it, about a minute).
+GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 BIN       ?= thaler
 COVERFILE ?= coverage.out
 
@@ -19,14 +21,14 @@ test: ## Run the tests
 test-race: ## Run the tests with the race detector (needs a C compiler)
 	$(GO) test -race ./...
 
-lint: ## Check formatting and run go vet, the same checks as CI
+lint: ## Check formatting and run golangci-lint (see .golangci.yml), the same checks as CI
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "These files are not gofmt-formatted (run: make fmt):"; \
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
-	$(GO) vet ./...
+	$(GOLANGCI_LINT) run ./...
 
 fmt: ## Format all Go files in place
 	gofmt -w .
