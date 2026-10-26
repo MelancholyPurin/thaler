@@ -19,6 +19,8 @@ type app struct {
 	cfgFlag string
 	svc     core.Service
 	cfg     *config.Config
+	// ask reads a passphrase; nil means from the terminal. Tests replace it.
+	ask func(prompt string) (string, error)
 }
 
 func (a *app) dbPath() string {
@@ -118,6 +120,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 		a.currencyCmd(),
 		a.rateCmd(),
 		a.backupCmd(),
+		a.decryptCmd(),
 		a.checkCmd(),
 	)
 	root.AddCommand(cli)
