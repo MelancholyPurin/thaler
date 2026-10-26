@@ -447,9 +447,40 @@ func Test_BackupName(t *testing.T) {
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
-			// and every name it makes is one the glob finds again
-			if ok, _ := filepath.Match(BackupGlob, got); !ok {
-				t.Errorf("%q does not match %q", got, BackupGlob)
+			// and every name it makes, plain or encrypted, is one the globs find again
+			for _, name := range []string{got, EncryptedName(got)} {
+				found := false
+				for _, glob := range BackupGlobs {
+					if ok, _ := filepath.Match(glob, name); ok {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("%q matches none of %q", name, BackupGlobs)
+				}
+			}
+		})
+	}
+}
+
+func Test_EncryptedName(t *testing.T) {
+	tcs := []struct {
+		name string
+		dest string
+		want string
+	}{
+		{name: "gets the suffix", dest: "/b/thaler-20261022-090507.db", want: "/b/thaler-20261022-090507.db.age"},
+		{name: "keeps it when it has it", dest: "/b/mine.age", want: "/b/mine.age"},
+		{name: "any name", dest: "backup", want: "backup.age"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := EncryptedName(tc.dest)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

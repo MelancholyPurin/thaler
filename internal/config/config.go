@@ -141,8 +141,19 @@ func DefaultDBPath() string {
 	return filepath.Join(dataDir(), "thaler.db")
 }
 
-// BackupGlob matches the file names BackupName produces.
-const BackupGlob = "thaler-*.db"
+// EncryptedSuffix ends the name of an encrypted backup: an age file.
+const EncryptedSuffix = ".age"
+
+// BackupGlobs match the file names BackupName produces, plain and encrypted.
+var BackupGlobs = []string{"thaler-*.db", "thaler-*.db" + EncryptedSuffix}
+
+// EncryptedName is dest with the suffix of an encrypted backup, unless it has it.
+func EncryptedName(dest string) string {
+	if strings.HasSuffix(dest, EncryptedSuffix) {
+		return dest
+	}
+	return dest + EncryptedSuffix
+}
 
 // BackupDir is where backups go unless told otherwise: a backups folder next to
 // the database.

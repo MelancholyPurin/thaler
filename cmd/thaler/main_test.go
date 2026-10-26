@@ -2,18 +2,29 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
-// run executes the command tree with args against a temporary database.
-func run(t *testing.T, db string, args ...string) (string, error) {
+// cheapScrypt makes encrypting fast for the rest of the test: it matters here
+// that a backup can be opened again, not how slow guessing a passphrase is.
+func cheapScrypt(t *testing.T) {
 	t.Helper()
-	a := &app{}
+	old := core.ScryptWorkFactor
+	core.ScryptWorkFactor = 8
+	t.Cleanup(func() { core.ScryptWorkFactor = old })
+}
+
+// runApp executes the command tree with args against a temporary database.
+func runApp(t *testing.T, a *app, db string, args ...string) (string, error) {
+	t.Helper()
 	t.Cleanup(a.close)
 	root := newRoot(a)
 	var out bytes.Buffer
@@ -32,10 +43,14 @@ type cliEnv struct {
 	db  string
 	dir string
 	cfg string
+	// answers are what the passphrase prompts get, in order; none means there is
+	// no terminal to ask on.
+	answers []string
 }
 
 func newCLIEnv(t *testing.T, files map[string]string, setup ...[]string) *cliEnv {
 	t.Helper()
+	cheapScrypt(t)
 	e := &cliEnv{t: t, db: filepath.Join(t.TempDir(), "t.db"), dir: t.TempDir()}
 	e.cfg = filepath.Join(e.dir, "config.toml")
 	files = mergeFiles(files, map[string]string{"config.toml": ""})
@@ -72,7 +87,19 @@ func (e *cliEnv) run(args ...string) (string, error) {
 		full = append(full, strings.ReplaceAll(a, "{dir}", e.dir))
 	}
 	full = append(full, "--config", e.cfg)
-	out, err := run(e.t, e.db, full...)
+	a := &app{}
+	if e.answers != nil {
+		answers := e.answers
+		a.ask = func(prompt string) (string, error) {
+			if len(answers) == 0 {
+				return "", fmt.Errorf("no answer prepared for %q", prompt)
+			}
+			answer := answers[0]
+			answers = answers[1:]
+			return answer, nil
+		}
+	}
+	out, err := runApp(e.t, a, e.db, full...)
 	return strings.ReplaceAll(out, e.dir, "{dir}"), err
 }
 

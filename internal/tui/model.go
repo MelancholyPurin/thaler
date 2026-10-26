@@ -263,7 +263,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.bkp != nil {
-			m.bkp.dest.Width = m.backupInputWidth()
+			m.sizeBackup(m.bkp)
 		}
 		if m.acct != nil {
 			for _, in := range []*textinput.Model{&m.acct.name, &m.acct.currency, &m.acct.balance, &m.acct.asOf} {
