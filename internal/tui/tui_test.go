@@ -196,7 +196,7 @@ var paneNames = map[pane]string{paneHome: "home", paneAccounts: "accounts", pane
 var screenNames2 = map[screen]string{screenLedger: "ledger", screenBudget: "budget", screenForecast: "forecast", screenReports: "reports"}
 var modeNames = map[mode]string{
 	modeList: "list", modeFilter: "filter", modePick: "pick", modeHelp: "help", modeForm: "form", modeConfirm: "confirm",
-	modeImport: "import", modeAccount: "account", modeTransfer: "transfer",
+	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup",
 }
 
 // visibleRows are the transactions the list shows, newest first.
@@ -775,6 +775,8 @@ func observe(t *testing.T, m *Model, st core.Service, before []string) Flow {
 		f.Err = m.imp.err
 	case m.xfer != nil:
 		f.Err = m.xfer.err
+	case m.bkp != nil:
+		f.Err = m.bkp.err
 	}
 	f.Added, f.Removed = delta(before, storedLines(t, st))
 	return f
