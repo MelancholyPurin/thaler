@@ -93,6 +93,9 @@ type Service interface {
 	// Backup writes a snapshot to dest, a path on the machine running the
 	// service. dest must not exist yet.
 	Backup(ctx context.Context, dest string) error
+	// BackupEncrypted is Backup with the snapshot sealed under a passphrase
+	// (an age file), checked by decrypting it once before it returns.
+	BackupEncrypted(ctx context.Context, dest, passphrase string) error
 }
 
 // ---- accounts and transactions ----------------------------------------------

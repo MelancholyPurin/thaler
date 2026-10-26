@@ -1026,6 +1026,9 @@ func (s *Local) Backup(ctx context.Context, dest string) error {
 	if err := s.repo.queries().vacuumInto(ctx, dest); err != nil {
 		return fmt.Errorf("backup to %s: %w", dest, err)
 	}
+	if err := os.Chmod(dest, 0o600); err != nil { // it holds financial data: just for you
+		return err
+	}
 	if err := verifySnapshot(ctx, dest); err != nil {
 		os.Remove(dest) // a snapshot that fails its check must not sit among the good ones
 		return fmt.Errorf("backup to %s failed its check and was removed: %w", dest, err)
