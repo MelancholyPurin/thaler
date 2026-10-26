@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -139,6 +140,16 @@ func DefaultDBPath() string {
 	}
 	return filepath.Join(dataDir(), "thaler.db")
 }
+
+// BackupGlob matches the file names BackupName produces.
+const BackupGlob = "thaler-*.db"
+
+// BackupDir is where backups go unless told otherwise: a backups folder next to
+// the database.
+func BackupDir(dbPath string) string { return filepath.Join(filepath.Dir(dbPath), "backups") }
+
+// BackupName is the file name of a backup made at t.
+func BackupName(t time.Time) string { return "thaler-" + t.Format("20060102-150405") + ".db" }
 
 // DefaultConfigPath is $XDG_CONFIG_HOME/thaler/config.toml, falling back to
 // ~/.config/thaler/config.toml.
