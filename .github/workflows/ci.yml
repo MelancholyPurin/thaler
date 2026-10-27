@@ -47,3 +47,20 @@ jobs:
           go-version-file: go.mod
       - name: test with the race detector
         run: make test-race
+
+  # One check that stands for all the others: it passes only when every job above
+  # passed, and fails when any failed, was cancelled or was skipped. Require this
+  # one in branch protection, so jobs can be added, renamed or split without
+  # touching the repository settings.
+  result:
+    name: Report Result
+    if: always() # a failed job must make this fail, not skip it
+    needs: [lint, test, race]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
