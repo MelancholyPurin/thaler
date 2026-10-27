@@ -1,0 +1,26 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Advisories appear without anyone changing this repository, so look weekly too.
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # The newest toolchain, not the minimum in go.mod: a vulnerability in the
+          # standard library is only fixed in a newer patch release, and that is what
+          # people building Thaler get.
+          go-version: stable
+      - name: govulncheck
+        run: make vuln

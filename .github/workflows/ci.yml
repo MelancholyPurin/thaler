@@ -5,8 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# A newer push to the same pull request makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,5 +23,44 @@ jobs:
           go-version-file: go.mod
       - name: lint
         run: make lint
+      - name: go.mod is tidy
+        run: make tidy-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: test
         run: make test
+
+  # Its own job so it runs beside the others instead of after them: the race
+  # detector makes the tests several times slower.
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: test with the race detector
+        run: make test-race
+
+  # One check that stands for all the others: it passes only when every job above
+  # passed, and fails when any failed, was cancelled or was skipped. Require this
+  # one in branch protection, so jobs can be added, renamed or split without
+  # touching the repository settings.
+  result:
+    name: Report Result
+    if: always() # a failed job must make this fail, not skip it
+    needs: [lint, test, race]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
