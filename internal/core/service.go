@@ -1017,13 +1017,24 @@ func (s *Local) Check(ctx context.Context) ([]string, error) {
 // reported as written can be relied on. dest must not exist yet. The snapshot
 // is NOT encrypted.
 func (s *Local) Backup(ctx context.Context, dest string) error {
+	return snapshot(ctx, s.repo.queries(), dest)
+}
+
+// PreMigrationBackup is the copy of the database that Open made before it
+// upgraded the schema, or "" if the database needed no upgrade. The copy is NOT
+// encrypted.
+func (s *Local) PreMigrationBackup() string { return s.repo.migrationBackup }
+
+// snapshot writes a checked, private copy of the database q reads to dest, which
+// must not exist yet.
+func snapshot(ctx context.Context, q queries, dest string) error {
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("%s already exists", dest)
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return err
 	}
-	if err := s.repo.queries().vacuumInto(ctx, dest); err != nil {
+	if err := q.vacuumInto(ctx, dest); err != nil {
 		return fmt.Errorf("backup to %s: %w", dest, err)
 	}
 	if err := os.Chmod(dest, 0o600); err != nil { // it holds financial data: just for you

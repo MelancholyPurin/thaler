@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -21,6 +22,9 @@ type app struct {
 	cfg     *config.Config
 	// ask reads a passphrase; nil means from the terminal. Tests replace it.
 	ask func(prompt string) (string, error)
+	// notice receives messages that are not a command's result; nil means
+	// standard error. Tests replace it.
+	notice io.Writer
 }
 
 func (a *app) dbPath() string {
@@ -40,8 +44,25 @@ func (a *app) service(ctx context.Context) (core.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	if copied := svc.PreMigrationBackup(); copied != "" {
+		fmt.Fprint(a.noticeOut(), upgradeNotice(copied))
+	}
 	a.svc = svc
 	return svc, nil
+}
+
+// upgradeNotice tells the person that opening the database upgraded it, and
+// where the copy from before the upgrade is.
+func upgradeNotice(copied string) string {
+	return fmt.Sprintf("Upgraded the database to this version of Thaler. A copy of it from before is at %s (not encrypted)\n", copied)
+}
+
+// noticeOut is where messages that are not a command's result go: standard error.
+func (a *app) noticeOut() io.Writer {
+	if a.notice != nil {
+		return a.notice
+	}
+	return os.Stderr
 }
 
 func (a *app) config() (*config.Config, error) {

@@ -30,7 +30,12 @@ import (
 const nowSQL = `strftime('%Y-%m-%dT%H:%M:%SZ', 'now')`
 
 type repository struct {
-	db *sql.DB
+	db   *sql.DB
+	path string // ":memory:" or the database file
+
+	// migrationBackup is the copy made before upgrading the schema while opening,
+	// or "" when none was needed.
+	migrationBackup string
 }
 
 // dbtx is what *sql.DB and *sql.Tx have in common.
@@ -71,7 +76,7 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 		db.Close()
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
-	r := &repository{db: db}
+	r := &repository{db: db, path: path}
 	if err := r.migrate(ctx); err != nil {
 		db.Close()
 		return nil, err
