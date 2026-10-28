@@ -19,7 +19,7 @@ jobs:
     outputs:
       go: ${{ steps.paths.outputs.go }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the base commit has to be there to compare with
       - name: which paths changed
