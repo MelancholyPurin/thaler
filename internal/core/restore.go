@@ -34,10 +34,10 @@ type RestoreResult struct {
 	Upgrade bool
 }
 
-// replacedDir is where a restore keeps the database it replaced: a folder of its
+// ReplacedDir is where a restore keeps the database it replaced: a folder of its
 // own inside the backups folder next to the database, apart from the backups
 // made on purpose.
-func replacedDir(dbPath string) string {
+func ReplacedDir(dbPath string) string {
 	return filepath.Join(filepath.Dir(dbPath), "backups", "replaced")
 }
 
@@ -222,7 +222,7 @@ var dbFiles = []string{"", "-wal", "-shm"}
 // kept is complete on its own.
 func setAside(ctx context.Context, dbPath string) (string, error) {
 	mergeLog(ctx, dbPath)
-	dir := replacedDir(dbPath)
+	dir := ReplacedDir(dbPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}

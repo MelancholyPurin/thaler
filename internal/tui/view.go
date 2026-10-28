@@ -41,6 +41,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.transferPopup())
 	case modeBackup:
 		screen = m.centerPopup(screen, m.backupPopup())
+	case modeRestore:
+		screen = m.centerPopup(screen, m.restorePopup())
 	}
 	return screen
 }
@@ -374,6 +376,7 @@ func (m *Model) helpPopup() string {
 		{"/", "fuzzy search the transactions (esc clears)"},
 		{"u", "only uncategorized / all"},
 		{"S", "back up the database (optionally encrypted) and see when the last one was made"},
+		{"ctrl+r", "restore a backup in place of the database (the one it replaces is kept)"},
 		{"C", "edit config.toml (rules, import folder, bank profiles) in $EDITOR"},
 		{"?", "this help"},
 		{"q  ctrl+c", "quit"},
