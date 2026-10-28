@@ -60,6 +60,53 @@ func (f *backupForm) input(field backupField) *textinput.Model {
 
 const backupLabelWidth = 13
 
+// refreshBackupAge looks up when the newest backup was made, and how many days
+// may pass before the reminder shows. It is called when a backup is made or
+// the config edited: not on every redraw, since it reads the disk.
+func (m *Model) refreshBackupAge() {
+	m.lastBackup, m.remindDays = time.Time{}, 0
+	m.backupChecked = m.now()
+	if m.opts.BackupDir == "" {
+		return
+	}
+	m.remindDays = config.DefaultBackupReminderDays
+	if m.loadConfig != nil {
+		if cfg, err := m.loadConfig(); err == nil {
+			m.remindDays = cfg.ReminderDays()
+		}
+	}
+	if files := listBackups(m.opts.BackupDir); len(files) > 0 {
+		m.lastBackup = files[0].when
+	}
+}
+
+// backupCheckEvery is how often a key press looks at the backups folder again, so
+// that a backup made by "thaler cli backup" while the interface is open (from
+// cron, say) ends the reminder without a restart.
+const backupCheckEvery = time.Minute
+
+func (m *Model) refreshBackupAgeIfStale() {
+	if m.now().Sub(m.backupChecked) >= backupCheckEvery {
+		m.refreshBackupAge()
+	}
+}
+
+// backupReminder is the text asking for a backup, or "" while none is due: the
+// reminder is switched off, there is nothing worth backing up yet, or the newest
+// backup is recent enough.
+func (m *Model) backupReminder() string {
+	if m.remindDays <= 0 || len(m.rows) == 0 {
+		return ""
+	}
+	if m.lastBackup.IsZero() {
+		return "No backup yet: S makes one"
+	}
+	if days := daysAgo(m.now(), m.lastBackup); days >= m.remindDays {
+		return fmt.Sprintf("Last backup %d days ago: S makes a new one", days)
+	}
+	return ""
+}
+
 func (m *Model) backupWidth() int {
 	return min(max(m.width-6, 30), 76)
 }
@@ -210,6 +257,7 @@ func (m *Model) saveBackup() {
 	}
 	encrypted := f.encrypting()
 	m.mode, m.bkp = modeList, nil
+	m.refreshBackupAge()
 	size := "?"
 	if info, err := os.Stat(dest); err == nil {
 		size = humanSize(info.Size())
@@ -316,11 +364,16 @@ func humanSize(n int64) string {
 	}
 }
 
-// ago says how long before now t was, in calendar days: today, yesterday, 3 days ago.
-func ago(now, t time.Time) string {
+// daysAgo is how many calendar days before now t was.
+func daysAgo(now, t time.Time) int {
 	y1, m1, d1 := now.Date()
 	y2, m2, d2 := t.In(now.Location()).Date()
-	days := int(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC).Sub(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+	return int(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC).Sub(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+}
+
+// ago says how long before now t was, in calendar days: today, yesterday, 3 days ago.
+func ago(now, t time.Time) string {
+	days := daysAgo(now, t)
 	switch {
 	case days <= 0:
 		return "today"

@@ -123,16 +123,19 @@ type Model struct {
 	undo        []undoOp
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
 
-	loadConfig  ConfigLoader
-	opts        Options
-	downloads   string // where bank exports usually land; offered when importing unless config.toml says otherwise
-	imp         *importFlow
-	acct        *accountForm
-	xfer        *transferForm
-	bkp         *backupForm
-	rst         *restoreForm
-	fatal       error  // set when the interface cannot go on, and returned by Run
-	lastProfile string // import profile used last in this session
+	loadConfig    ConfigLoader
+	opts          Options
+	downloads     string // where bank exports usually land; offered when importing unless config.toml says otherwise
+	imp           *importFlow
+	acct          *accountForm
+	xfer          *transferForm
+	bkp           *backupForm
+	rst           *restoreForm
+	lastBackup    time.Time // when the newest backup was made, zero if there is none; see refreshBackupAge
+	remindDays    int       // days after which that is worth a reminder, 0 for never
+	backupChecked time.Time // when they were last looked up
+	fatal         error     // set when the interface cannot go on, and returned by Run
+	lastProfile   string    // import profile used last in this session
 
 	picker       textinput.Model
 	pickItems    []pickItem
@@ -180,6 +183,7 @@ func newWithClock(ctx context.Context, svc core.Service, opts Options, now func(
 		return nil, err
 	}
 	m.applyFilter(false)
+	m.refreshBackupAge()
 	return m, nil
 }
 
@@ -321,6 +325,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.status = ""
+	m.refreshBackupAgeIfStale()
 	key := msg.String()
 	switch key {
 	case "q":
