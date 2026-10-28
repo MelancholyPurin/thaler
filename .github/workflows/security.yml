@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # The newest toolchain, not the minimum in go.mod: a vulnerability in the
           # standard library is only fixed in a newer patch release, and that is what
