@@ -108,6 +108,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `a` | add a transaction (see below) |
 | `i` | import a bank export (see below) |
 | `S` | back up the database: see when the last backup was made and write a new one (see below) |
+| `ctrl+r` | restore a backup in place of the database; the one it replaces is kept (see below) |
 | `C` | open `config.toml` in your editor (rules, import folder, bank profiles) |
 | `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
@@ -162,7 +163,9 @@ In the category picker the category you last used for the same payee comes first
 
 **A copy before every upgrade.** When a new version of Thaler has to change the structure of a database that already holds data, it first writes a checked copy to `backups/pre-migration/` next to the database, named `thaler-<time>-before-<migration>.db`, and says where it is on standard error. If the copy cannot be made, the upgrade does not happen and nothing is changed. A new database, one that is already up to date, and one written by a newer version (which is refused) get no copy. These copies are plain, not encrypted, and are kept apart from the backups you make so that they never count as your "last backup"; nothing prunes them yet.
 
-**Restoring.** `thaler cli restore FILE` replaces the database with a backup, plain or encrypted (it asks for the passphrase, or reads `--passphrase-file`). The backup is read into a new file and checked first: one that is damaged, is not a Thaler database, or was made by a newer version is refused with nothing changed. Only then is the database in place moved, never deleted, to `backups/replaced/` next to it, and the backup put in its place. Running `thaler cli restore` on the file in `backups/replaced/` undoes a restore (the command prints it). It works when the database in place is damaged or missing. A backup from an older version is upgraded, after a copy of it, the next time Thaler starts. Close every other Thaler first; the restore does not look for one. Restoring from the TUI is planned.
+**Restoring.** `thaler cli restore FILE` replaces the database with a backup, plain or encrypted (it asks for the passphrase, or reads `--passphrase-file`). The backup is read into a new file and checked first: one that is damaged, is not a Thaler database, or was made by a newer version is refused with nothing changed. Only then is the database in place moved, never deleted, to `backups/replaced/` next to it, and the backup put in its place. Running `thaler cli restore` on the file in `backups/replaced/` undoes a restore (the command prints it). It works when the database in place is damaged or missing. A backup from an older version is upgraded, after a copy of it, the next time Thaler starts. Close every other Thaler first; the restore does not look for one.
+
+**Restoring from the interface.** `ctrl+r` opens the restore popup. It lists the backups in the backups folder, newest first, then the databases earlier restores replaced (marked "replaced by a restore"), so a restore can be taken back from the same place. Choose one with `↑`/`↓`; for an encrypted backup `tab` to *Passphrase* and type it. `enter` asks once more, naming the file and where your current database will be kept, and a second `enter` (or `y`) restores. Nothing happens until then, and a backup that is damaged, has the wrong passphrase or is not a Thaler database is refused with the database untouched and the popup still open. After a restore the screen shows the restored data and undo starts afresh (it cannot reach back across it). A backup that is not in the folder: `thaler cli restore FILE`.
 
 To open an encrypted backup again, `thaler cli decrypt FILE.age [DEST]` asks for the passphrase and writes a plain database (default: the file name without `.age`; an existing file is never overwritten, and a wrong passphrase leaves nothing behind). Use the result with `thaler --db DEST`. Because it is a standard age file, the `age` tool opens it too (`age -d`).
 
@@ -203,7 +206,7 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 | `thaler cli currency [set CODE]`, `thaler cli rate set/list` | base currency and exchange rates |
 | `thaler cli backup [DEST] [--encrypt \| --passphrase-file F]` | consistent snapshot via `VACUUM INTO`, checked after it is written; **not encrypted** unless `--encrypt` (asks for a passphrase twice) or `--passphrase-file` (first line of a file, for scripts) is given, which writes an age file ending in `.age`; also `S` in the interface |
 | `thaler cli decrypt SRC [DEST] [--passphrase-file F]` | open an encrypted backup as a plain database file, and check it |
-| `thaler cli restore SRC [--passphrase-file F]` | replace the database with a backup (plain or encrypted), keeping the one it replaces in `backups/replaced/` |
+| `thaler cli restore SRC [--passphrase-file F]` | replace the database with a backup (plain or encrypted), keeping the one it replaces in `backups/replaced/`; also `ctrl+r` in the interface |
 | `thaler cli check` | verifies every transaction balances per currency and the database is intact |
 
 Write negative amounts as `--amount=-12.50`. Amounts accept `12.50`, `12,50` and `1.234,56`; ambiguous input such as `1,234` is rejected rather than guessed.
