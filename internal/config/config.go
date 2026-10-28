@@ -18,9 +18,26 @@ import (
 // Config is the content of config.toml.
 type Config struct {
 	// ImportDir is the folder the TUI lists bank exports from; default ~/Downloads.
-	ImportDir string             `toml:"import_dir"`
-	Profiles  []importer.Profile `toml:"profile"`
-	Rules     []importer.Rule    `toml:"rule"`
+	ImportDir string `toml:"import_dir"`
+	// BackupReminderDays is how many days may pass since the last backup before
+	// the TUI reminds you; 0 switches the reminder off. Nil means not set: see
+	// ReminderDays.
+	BackupReminderDays *int               `toml:"backup_reminder_days"`
+	Profiles           []importer.Profile `toml:"profile"`
+	Rules              []importer.Rule    `toml:"rule"`
+}
+
+// DefaultBackupReminderDays is the reminder interval when config.toml does not
+// set one.
+const DefaultBackupReminderDays = 7
+
+// ReminderDays is the number of days after which an old backup is reminded of,
+// or 0 for never.
+func (c *Config) ReminderDays() int {
+	if c == nil || c.BackupReminderDays == nil {
+		return DefaultBackupReminderDays
+	}
+	return *c.BackupReminderDays
 }
 
 // Load reads the config file at path. A missing file is not an error unless
@@ -37,6 +54,9 @@ func Load(path string, mustExist bool) (*Config, error) {
 	}
 	if unknown := md.Undecoded(); len(unknown) > 0 {
 		return nil, fmt.Errorf("%s: unknown key(s): %v", path, unknown)
+	}
+	if d := c.BackupReminderDays; d != nil && *d < 0 {
+		return nil, fmt.Errorf("%s: backup_reminder_days is %d: use a number of days, or 0 for no reminder", path, *d)
 	}
 	return &c, nil
 }
