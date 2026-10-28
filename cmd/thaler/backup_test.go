@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -303,4 +304,82 @@ func Test_restoreMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The interface restores through swapDatabase: it must end up holding the service
+// of whatever database is in place, also when the restore is refused.
+func Test_swapDatabase(t *testing.T) {
+	type observed struct {
+		Accounts    []string
+		Err         string
+		Replaced    bool // the database that was in place is kept
+		HoldsResult bool // the app closes the service it returned
+	}
+	tcs := []struct {
+		name string
+		src  string // "backup" is a backup made before the second account was added
+		want observed
+	}{
+		{
+			name: "a backup replaces the database", src: "backup",
+			want: observed{Accounts: []string{"Assets:Bank"}, Replaced: true, HoldsResult: true},
+		},
+		{
+			name: "a file that is not there is refused and the old database is open again", src: "{dir}/nothing.db",
+			want: observed{Accounts: []string{"Assets:Bank", "Assets:Cash"}, Err: "{dir}/nothing.db does not exist", HoldsResult: true},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			db := filepath.Join(dir, "t.db")
+			a := &app{dbFlag: db, notice: io.Discard}
+			t.Cleanup(a.close)
+			svc, err := a.service(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AddAccount(t.Context(), "Assets:Bank", "EUR"); err != nil {
+				t.Fatal(err)
+			}
+			backup := filepath.Join(dir, "backups", "thaler-20261021-090000.db")
+			if err := svc.Backup(t.Context(), backup); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AddAccount(t.Context(), "Assets:Cash", "EUR"); err != nil {
+				t.Fatal(err)
+			}
+			src := strings.ReplaceAll(strings.Replace(tc.src, "backup", backup, 1), "{dir}", dir)
+
+			// when
+			got, _, swapErr := a.swapDatabase(t.Context(), src, "")
+
+			// then
+			var o observed
+			o.Accounts = accountNames(t, got)
+			if swapErr != nil {
+				o.Err = strings.ReplaceAll(swapErr.Error(), dir, "{dir}")
+			}
+			replaced, _ := filepath.Glob(filepath.Join(dir, "backups", "replaced", "thaler-*-replaced.db"))
+			o.Replaced = len(replaced) == 1
+			o.HoldsResult = a.svc == got
+			if diff := cmp.Diff(tc.want, o); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func accountNames(t *testing.T, svc core.Service) []string {
+	t.Helper()
+	accs, err := svc.ListAccounts(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, a := range accs {
+		names = append(names, a.Name)
+	}
+	return names
 }
