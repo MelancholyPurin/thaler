@@ -68,6 +68,10 @@ amount = ["Amount"]
 				Profiles: []importer.Profile{{Name: "mybank", Delimiter: ",", Columns: importer.Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}}},
 			},
 		},
+		{name: "a backup reminder interval", file: ptr("backup_reminder_days = 14\n"), want: Config{BackupReminderDays: intPtr(14)}},
+		{name: "0 switches the reminder off", file: ptr("backup_reminder_days = 0\n"), want: Config{BackupReminderDays: intPtr(0)}},
+		{name: "a negative interval is refused", file: ptr("backup_reminder_days = -1\n"), wantErr: "{path}: backup_reminder_days is -1: use a number of days, or 0 for no reminder"},
+		{name: "a text is not a number of days", file: ptr("backup_reminder_days = \"weekly\"\n"), wantErr: "reading {path}: toml: line 1 (last key \"backup_reminder_days\"): incompatible types: TOML value has type string; destination has type integer"},
 		{name: "an empty file", file: ptr("")},
 		{name: "no file, and none is needed", file: nil},
 		{name: "no file, but one was asked for", file: nil, mustExist: true, wantErr: "reading {path}: open {path}: no such file or directory"},
@@ -100,6 +104,32 @@ amount = ["Amount"]
 }
 
 func ptr(s string) *string { return &s }
+
+func intPtr(n int) *int { return &n }
+
+func Test_Config_ReminderDays(t *testing.T) {
+	tcs := []struct {
+		name string
+		cfg  *Config
+		want int
+	}{
+		{name: "no config", cfg: nil, want: 7},
+		{name: "not set", cfg: &Config{}, want: 7},
+		{name: "set", cfg: &Config{BackupReminderDays: intPtr(30)}, want: 30},
+		{name: "off", cfg: &Config{BackupReminderDays: intPtr(0)}, want: 0},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := tc.cfg.ReminderDays()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func Test_Ensure(t *testing.T) {
 	const header = "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n"

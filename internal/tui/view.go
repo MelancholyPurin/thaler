@@ -281,6 +281,9 @@ func (m *Model) bottomBar() string {
 	default:
 		hint = m.ledgerHint()
 	}
+	if r := m.backupReminder(); r != "" {
+		return fit(warn.Render(r)+dim.Render(" · "+hint), m.width)
+	}
 	return fit(dim.Render(hint), m.width)
 }
 
