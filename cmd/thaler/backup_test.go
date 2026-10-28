@@ -3,9 +3,13 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/melancholypurin/thaler/internal/core"
 )
 
 func Test_backup(t *testing.T) {
@@ -153,6 +157,149 @@ func Test_decrypt(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(e.dir, tc.made)); err != nil {
 					t.Errorf("the result was not written: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func Test_restore(t *testing.T) {
+	timestamp := regexp.MustCompile(`thaler-\d{8}-\d{6}-replaced`)
+	listing := []string{"cli", "account", "list"}
+	tcs := []struct {
+		name    string
+		files   map[string]string
+		answers []string
+		setup   [][]string // after the backup is made and Savings is added
+		noDB    bool       // delete the database before restoring
+		args    []string
+		want    string // the output, the folder of the database shown as {db} and the time as {time}
+		wantErr string
+		after   string // the account list afterwards
+	}{
+		{
+			name: "a plain backup", args: []string{"cli", "restore", "{dir}/b.db"},
+			want:  "Restored {dir}/b.db as {db}/t.db\nThe database it replaced is kept at {db}/backups/replaced/thaler-{time}-replaced.db\nTo undo this, run: thaler --db {db}/t.db cli restore {db}/backups/replaced/thaler-{time}-replaced.db\n",
+			after: "Assets:Bank  Assets, EUR\n",
+		},
+		{
+			name: "an encrypted backup, with a passphrase file", files: map[string]string{"pass.txt": "secret\n"},
+			setup: [][]string{{"cli", "backup", "{dir}/s.db", "--passphrase-file", "{dir}/pass.txt"}},
+			args:  []string{"cli", "restore", "{dir}/s.db.age", "--passphrase-file", "{dir}/pass.txt"},
+			want:  "Restored {dir}/s.db.age as {db}/t.db\nThe database it replaced is kept at {db}/backups/replaced/thaler-{time}-replaced.db\nTo undo this, run: thaler --db {db}/t.db cli restore {db}/backups/replaced/thaler-{time}-replaced.db\n",
+			after: "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+		{
+			name: "an encrypted backup, asked for the passphrase", files: map[string]string{"pass.txt": "secret\n"}, answers: []string{"secret"},
+			setup: [][]string{{"cli", "backup", "{dir}/s.db", "--passphrase-file", "{dir}/pass.txt"}},
+			args:  []string{"cli", "restore", "{dir}/s.db.age"},
+			want:  "Restored {dir}/s.db.age as {db}/t.db\nThe database it replaced is kept at {db}/backups/replaced/thaler-{time}-replaced.db\nTo undo this, run: thaler --db {db}/t.db cli restore {db}/backups/replaced/thaler-{time}-replaced.db\n",
+			after: "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+		{
+			name: "with no database in place", noDB: true, args: []string{"cli", "restore", "{dir}/b.db"},
+			want:  "Restored {dir}/b.db as {db}/t.db\nThere was no database to replace.\n",
+			after: "Assets:Bank  Assets, EUR\n",
+		},
+		{
+			name: "the wrong passphrase", files: map[string]string{"pass.txt": "secret\n", "wrong.txt": "wrong\n"},
+			setup:   [][]string{{"cli", "backup", "{dir}/s.db", "--passphrase-file", "{dir}/pass.txt"}},
+			args:    []string{"cli", "restore", "{dir}/s.db.age", "--passphrase-file", "{dir}/wrong.txt"},
+			wantErr: "decrypting {dir}/s.db.age: incorrect passphrase",
+			after:   "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+		{
+			name: "no terminal to ask on", files: map[string]string{"pass.txt": "secret\n"},
+			setup:   [][]string{{"cli", "backup", "{dir}/s.db", "--passphrase-file", "{dir}/pass.txt"}},
+			args:    []string{"cli", "restore", "{dir}/s.db.age"},
+			wantErr: "a passphrase is asked for on a terminal; for scripts use --passphrase-file",
+			after:   "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+		{
+			name: "a file that is not a backup", files: map[string]string{"junk.txt": "text"}, args: []string{"cli", "restore", "{dir}/junk.txt"},
+			wantErr: "{dir}/junk.txt is not a backup: it is neither a SQLite database nor an age file",
+			after:   "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+		{
+			name: "a file that is not there", args: []string{"cli", "restore", "{dir}/nope.db"},
+			wantErr: "{dir}/nope.db does not exist",
+			after:   "Assets:Bank     Assets, EUR\nAssets:Savings  Assets, EUR\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given: a ledger with Bank, a backup of it, and then Savings added after the backup
+			e := newCLIEnv(t, tc.files, addBank, []string{"cli", "backup", "{dir}/b.db"})
+			if _, err := e.run(addSavings...); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range tc.setup {
+				if out, err := e.run(args...); err != nil {
+					t.Fatalf("setup %v: %q, %v", args, out, err)
+				}
+			}
+			if tc.noDB {
+				for _, suffix := range []string{"", "-wal", "-shm"} {
+					os.Remove(e.db + suffix)
+				}
+			}
+			e.answers = tc.answers
+
+			// when
+			got, err := e.run(tc.args...)
+
+			// then
+			dbDir := filepath.Dir(e.db)
+			got = timestamp.ReplaceAllString(strings.ReplaceAll(got, dbDir, "{db}"), "thaler-{time}-replaced")
+			if diff := cmp.Diff(tc.wantErr, e.errText(err)); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("output mismatch (-want +got):\n%s", diff)
+			}
+			e.answers = nil
+			after, err := e.run(listing...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.after, after); diff != "" {
+				t.Errorf("the ledger afterwards is wrong (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_restoreMessage(t *testing.T) {
+	tcs := []struct {
+		name     string
+		customDB bool
+		res      core.RestoreResult
+		want     string
+	}{
+		{
+			name: "a database was replaced",
+			res:  core.RestoreResult{Replaced: "/d/backups/replaced/old.db"},
+			want: "Restored /b/x.db as /d/thaler.db\nThe database it replaced is kept at /d/backups/replaced/old.db\nTo undo this, run: thaler cli restore /d/backups/replaced/old.db\n",
+		},
+		{
+			name: "with --db the undo says so", customDB: true,
+			res:  core.RestoreResult{Replaced: "/d/backups/replaced/old.db"},
+			want: "Restored /b/x.db as /d/thaler.db\nThe database it replaced is kept at /d/backups/replaced/old.db\nTo undo this, run: thaler --db /d/thaler.db cli restore /d/backups/replaced/old.db\n",
+		},
+		{name: "nothing was replaced", want: "Restored /b/x.db as /d/thaler.db\nThere was no database to replace.\n"},
+		{
+			name: "an old backup is upgraded later",
+			res:  core.RestoreResult{Replaced: "/d/backups/replaced/old.db", Upgrade: true},
+			want: "Restored /b/x.db as /d/thaler.db\nThe database it replaced is kept at /d/backups/replaced/old.db\nTo undo this, run: thaler cli restore /d/backups/replaced/old.db\nIt was made by an older version of Thaler, so it is upgraded, after a copy of it, the next time Thaler starts.\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := restoreMessage("/b/x.db", "/d/thaler.db", tc.customDB, tc.res)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
