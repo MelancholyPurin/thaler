@@ -76,23 +76,11 @@ func DecryptBackup(ctx context.Context, src, dest, passphrase string) error {
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("%s already exists", dest)
 	}
-	in, err := os.Open(src)
+	r, srcFile, err := openDecrypted(src, passphrase)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-	id, err := age.NewScryptIdentity(passphrase)
-	if err != nil {
-		return err
-	}
-	r, err := age.Decrypt(in, id)
-	var noMatch *age.NoIdentityMatchError
-	switch {
-	case errors.As(err, &noMatch):
-		return fmt.Errorf("decrypting %s: incorrect passphrase", src)
-	case err != nil:
-		return fmt.Errorf("decrypting %s: %w", src, err)
-	}
+	defer srcFile.Close()
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return err
 	}
@@ -115,6 +103,32 @@ func DecryptBackup(ctx context.Context, src, dest, passphrase string) error {
 		return fail(fmt.Errorf("the result is not a healthy database: %w", err))
 	}
 	return nil
+}
+
+// openDecrypted opens the encrypted backup src and returns what it contains, as
+// a stream, and the open file, to be closed by the caller. A wrong passphrase and
+// a file that is not an age file are reported before anything is read.
+func openDecrypted(src, passphrase string) (io.Reader, io.Closer, error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return nil, nil, err
+	}
+	id, err := age.NewScryptIdentity(passphrase)
+	if err != nil {
+		in.Close()
+		return nil, nil, err
+	}
+	r, err := age.Decrypt(in, id)
+	var noMatch *age.NoIdentityMatchError
+	switch {
+	case errors.As(err, &noMatch):
+		in.Close()
+		return nil, nil, fmt.Errorf("decrypting %s: incorrect passphrase", src)
+	case err != nil:
+		in.Close()
+		return nil, nil, fmt.Errorf("decrypting %s: %w", src, err)
+	}
+	return r, in, nil
 }
 
 // seal encrypts the file at plain into a new file at dest and returns the

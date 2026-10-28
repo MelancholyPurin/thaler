@@ -171,7 +171,7 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 - [x] `SAF-4` Encrypt a backup with a passphrase (age), from the TUI and the CLI, checked by decrypting it once
 - [x] `SAF-5` Open an encrypted backup again with `thaler cli decrypt`
 - [x] `SAF-6` Copy the database aside before a migration changes an existing one
-- [ ] `SAF-7` Restore a backup from the command line, keeping the replaced database
+- [x] `SAF-7` Restore a backup from the command line, keeping the replaced database
 - [ ] `SAF-8` Pick a backup, enter the passphrase if needed, verify it, swap it in, keep the old one aside
 - [ ] `SAF-9` A reminder when the last backup is older than a number of days you set
 - [ ] `SAF-10` Show that an encrypted backup is being made instead of freezing

@@ -1053,7 +1053,10 @@ var uriPath = strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23")
 // integrity check on it.
 func verifySnapshot(ctx context.Context, path string) error {
 	// In a file: URI, ?, # and % mean something, so a path that has them is escaped.
-	db, err := sql.Open("sqlite", "file:"+uriPath.Replace(path)+"?mode=ro")
+	// Immutable: this is a copy nobody else is using, and a database that is in
+	// write-ahead-log mode would otherwise get -wal and -shm files that a read-only
+	// connection cannot clean up again.
+	db, err := sql.Open("sqlite", "file:"+uriPath.Replace(path)+"?mode=ro&immutable=1")
 	if err != nil {
 		return err
 	}
