@@ -39,6 +39,8 @@ type Options struct {
 	// backups go to by default and the one it counts them in.
 	DatabasePath string
 	BackupDir    string
+	// Restore replaces the database with a backup; nil where that is not possible.
+	Restore RestoreFunc
 }
 
 type mode int
@@ -54,6 +56,7 @@ const (
 	modeAccount              // creating an account or setting its balance
 	modeTransfer             // moving money between two accounts
 	modeBackup               // writing a backup of the database
+	modeRestore              // putting a backup in place of the database
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -127,6 +130,8 @@ type Model struct {
 	acct        *accountForm
 	xfer        *transferForm
 	bkp         *backupForm
+	rst         *restoreForm
+	fatal       error  // set when the interface cannot go on, and returned by Run
 	lastProfile string // import profile used last in this session
 
 	picker       textinput.Model
@@ -185,6 +190,9 @@ func Run(ctx context.Context, svc core.Service, opts Options) error {
 		return err
 	}
 	_, err = tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
+	if err == nil {
+		err = m.fatal
+	}
 	return err
 }
 
@@ -265,6 +273,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.bkp != nil {
 			m.sizeBackup(m.bkp)
 		}
+		if m.rst != nil {
+			m.rst.pass.Width = m.backupInputWidth()
+		}
 		if m.acct != nil {
 			for _, in := range []*textinput.Model{&m.acct.name, &m.acct.currency, &m.acct.balance, &m.acct.asOf} {
 				in.Width = m.accountWidth()
@@ -299,6 +310,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTransfer(msg)
 		case modeBackup:
 			return m.updateBackup(msg)
+		case modeRestore:
+			return m.updateRestore(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -319,6 +332,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.editConfig()
 	case "S":
 		return m, m.openBackup()
+	case "ctrl+r":
+		return m, m.openRestore()
 	case "f1", "L":
 		m.setScreen(screenLedger)
 		return m, nil

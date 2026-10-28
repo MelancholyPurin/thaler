@@ -24,6 +24,7 @@ type backupFile struct {
 	when      time.Time
 	size      int64
 	encrypted bool
+	replaced  bool // a database that a restore replaced, not a backup made on purpose
 }
 
 type backupField int
