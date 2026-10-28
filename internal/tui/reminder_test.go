@@ -177,7 +177,7 @@ func Test_backupReminder_noticesOutsideBackups(t *testing.T) {
 	m := reminderModel(t, dir, false, testConfig)
 	clock := fixedNow()
 	m.now = func() time.Time { return clock }
-	m.refreshBackupAge()
+	m.refreshBackups()
 	type observed struct{ Before, Soon, Later string }
 	var got observed
 	got.Before = m.backupReminder()

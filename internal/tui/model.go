@@ -57,6 +57,7 @@ const (
 	modeTransfer             // moving money between two accounts
 	modeBackup               // writing a backup of the database
 	modeRestore              // putting a backup in place of the database
+	modePrune                // removing the oldest backups
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -131,11 +132,13 @@ type Model struct {
 	xfer          *transferForm
 	bkp           *backupForm
 	rst           *restoreForm
-	lastBackup    time.Time // when the newest backup was made, zero if there is none; see refreshBackupAge
-	remindDays    int       // days after which that is worth a reminder, 0 for never
-	backupChecked time.Time // when they were last looked up
-	fatal         error     // set when the interface cannot go on, and returned by Run
-	lastProfile   string    // import profile used last in this session
+	prn           *pruneForm
+	lastBackup    time.Time      // when the newest backup was made, zero if there is none; see refreshBackups
+	remindDays    int            // days after which that is worth a reminder, 0 for never
+	prunable      core.PrunePlan // the backups that are more than are kept, see refreshBackups
+	backupChecked time.Time      // when they were last looked up
+	fatal         error          // set when the interface cannot go on, and returned by Run
+	lastProfile   string         // import profile used last in this session
 
 	picker       textinput.Model
 	pickItems    []pickItem
@@ -183,7 +186,7 @@ func newWithClock(ctx context.Context, svc core.Service, opts Options, now func(
 		return nil, err
 	}
 	m.applyFilter(false)
-	m.refreshBackupAge()
+	m.refreshBackups()
 	return m, nil
 }
 
@@ -316,6 +319,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateBackup(msg)
 		case modeRestore:
 			return m.updateRestore(msg)
+		case modePrune:
+			return m.updatePrune(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -325,7 +330,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.status = ""
-	m.refreshBackupAgeIfStale()
+	m.refreshBackupsIfStale()
 	key := msg.String()
 	switch key {
 	case "q":
@@ -339,6 +344,9 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openBackup()
 	case "ctrl+r":
 		return m, m.openRestore()
+	case "ctrl+p":
+		m.openPrune()
+		return m, nil
 	case "f1", "L":
 		m.setScreen(screenLedger)
 		return m, nil
