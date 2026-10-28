@@ -236,12 +236,7 @@ The schema lives in `internal/core/migrations/`. Add `YYYYMMDD_name.up.sql` file
 
 ## Roadmap
 
-Planned, not built yet. The goal is to keep the local-first tool and let a small household (up to about four people) log expenses in one self-hosted place:
-
-- A `thaler serve` mode: a JSON API over the same core, per-user tokens, a Docker image and a small VPS (or any always-on machine). The TUI and CLI will be able to talk to either the local database or a server.
-- **Private accounts** that are fully hidden from the other members: not visible, and excluded from shared category totals and the household net worth.
-- A phone-friendly web app for quick expense entry.
-- Budget targets and envelopes, recurring transactions, forecast and reports (the Budget, Forecast and Reports screens already exist in the UI; only the first shows data).
+[ROADMAP.md](ROADMAP.md) lists what is built and what is planned, as milestones, epics and stories with permanent IDs. In short: first a feature-complete terminal interface that works well locally, in English, Spanish and German (`M-TUI`: budgets with rollover, reports, recurring transactions and a forecast, restore, Windows support, and releases on a regular train), then a self-hostable server whose single entry point, the app-gateway, exposes the API, so a small household (up to about four people) can share one Thaler, with private accounts that stay hidden from the others (`M-SERVER`), then a Next.js web application tested with Vitest (`M-WEB`), and finally an installable mobile web app that works offline (`M-PWA`).
 
 ## License
 
