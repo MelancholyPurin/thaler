@@ -9,7 +9,7 @@ BIN       ?= thaler
 COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
-.PHONY: help build test test-race lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -22,6 +22,9 @@ test: ## Run the tests, in a random order (a failure prints the seed to repeat i
 
 test-race: ## Run the tests with the race detector (needs a C compiler)
 	$(GO) test -race -shuffle=on ./...
+
+test-scripts: ## Test the scripts CI uses (.github/scripts)
+	@for t in .github/scripts/*_test.sh; do $$t || exit 1; done
 
 lint: ## Check formatting and run golangci-lint (see .golangci.yml), the same checks as CI
 	@unformatted="$$(gofmt -l .)"; \
@@ -41,7 +44,7 @@ vuln: ## Scan the dependencies and the standard library for known vulnerabilitie
 fmt: ## Format all Go files in place
 	gofmt -w .
 
-check: lint tidy-check test ## Most of what CI runs: lint, go.mod check, tests (also try test-race and vuln)
+check: lint tidy-check test-scripts test ## Most of what CI runs: lint, go.mod check, tests (also try test-race and vuln)
 
 check-coverage: ## Run the tests and print coverage per package and in total
 	$(GO) test -coverprofile=$(COVERFILE) ./...

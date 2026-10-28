@@ -1,0 +1,39 @@
+name: Changed paths
+
+# A reusable workflow: CI and the security scan both call it to learn whether the
+# Go checks are needed for a change. See .github/scripts/changed-paths.sh for the
+# rule, which is an allowlist of files that cannot affect the build.
+on:
+  workflow_call:
+    outputs:
+      go:
+        description: '"true" when the Go checks have to run, "false" when only documentation and similar files changed'
+        value: ${{ jobs.filter.outputs.go }}
+
+permissions:
+  contents: read
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.paths.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the base commit has to be there to compare with
+      - name: which paths changed
+        id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          # Anything that is not a pull request or a push (a schedule, a manual run)
+          # has no base, and then everything runs.
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          .github/scripts/changed-paths.sh "$base" >> "$GITHUB_OUTPUT"
