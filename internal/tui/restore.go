@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/units"
 )
 
 // The restore popup puts one of the backups in the backups folder in place of
@@ -204,7 +205,7 @@ func (m *Model) restorePopup() string {
 
 	db := m.opts.DatabasePath
 	if f.dbSize > 0 {
-		db += " · " + humanSize(f.dbSize)
+		db += " · " + units.HumanSize(f.dbSize)
 	}
 	lines := []string{
 		label("Database") + " " + value(tailFit(db, iw-backupLabelWidth-1)),
@@ -248,7 +249,7 @@ func (m *Model) restoreListLines(iw int) []string {
 	var lines []string
 	for i := top; i < min(top+restoreRows, len(f.files)); i++ {
 		b := f.files[i]
-		row := fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), humanSize(b.size))
+		row := fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size))
 		switch {
 		case b.replaced:
 			row += " · replaced by a restore"
@@ -273,7 +274,7 @@ func (m *Model) restoreConfirmLines(iw int) []string {
 	return []string{
 		fit("Replace the database with", iw),
 		accent.Render(fit("  "+filepath.Base(b.path), iw)),
-		dim.Render(fit(fmt.Sprintf("  %s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), humanSize(b.size)), iw)),
+		dim.Render(fit(fmt.Sprintf("  %s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size)), iw)),
 		"",
 		fit("What you have now is kept in", iw),
 		dim.Render(fit("  "+tailFit(core.ReplacedDir(m.opts.DatabasePath), iw-2), iw)),

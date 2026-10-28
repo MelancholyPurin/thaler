@@ -11,6 +11,13 @@
 # (default: 7). 0 switches the reminder off.
 # backup_reminder_days = 14
 
+# How many of the newest backups to keep in each backups folder (default: 10).
+# Thaler never deletes one by itself: when there are more, the interface offers
+# to remove the oldest (ctrl+p), and `thaler cli prune` lists them first. The same
+# number applies to the backups you make, the databases that restores replaced
+# and the copies made before upgrades. 0 keeps everything and stops the offer.
+# keep_backups = 20
+
 # ---------------------------------------------------------------------------
 # Categorisation rules for `thaler cli import`.
 #

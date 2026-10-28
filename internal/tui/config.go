@@ -68,6 +68,6 @@ func (m *Model) configEdited(editorErr error) {
 		m.setStatus("The config has a problem, imports will refuse it until it is fixed (press C): "+err.Error(), true)
 		return
 	}
-	m.refreshBackupAge()
+	m.refreshBackups()
 	m.setStatus(fmt.Sprintf("Config saved: %d rule(s), %d bank profile(s); used by the next import", len(cfg.Rules), len(cfg.Profiles)), false)
 }

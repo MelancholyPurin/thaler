@@ -43,6 +43,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.backupPopup())
 	case modeRestore:
 		screen = m.centerPopup(screen, m.restorePopup())
+	case modePrune:
+		screen = m.centerPopup(screen, m.prunePopup())
 	}
 	return screen
 }
@@ -281,8 +283,8 @@ func (m *Model) bottomBar() string {
 	default:
 		hint = m.ledgerHint()
 	}
-	if r := m.backupReminder(); r != "" {
-		return fit(warn.Render(r)+dim.Render(" · "+hint), m.width)
+	if notes := m.backupNotes(); len(notes) > 0 {
+		return fit(warn.Render(strings.Join(notes, " · "))+dim.Render(" · "+hint), m.width)
 	}
 	return fit(dim.Render(hint), m.width)
 }
@@ -380,6 +382,7 @@ func (m *Model) helpPopup() string {
 		{"u", "only uncategorized / all"},
 		{"S", "back up the database (optionally encrypted) and see when the last one was made"},
 		{"ctrl+r", "restore a backup in place of the database (the one it replaces is kept)"},
+		{"ctrl+p", "remove the oldest backups, keeping the newest few (keep_backups in config.toml)"},
 		{"C", "edit config.toml (rules, import folder, bank profiles) in $EDITOR"},
 		{"?", "this help"},
 		{"q  ctrl+c", "quit"},

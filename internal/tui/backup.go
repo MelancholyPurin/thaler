@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/melancholypurin/thaler/internal/config"
+	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/units"
 )
 
 // The backup popup writes a snapshot of the database where you say, by default
@@ -60,24 +62,26 @@ func (f *backupForm) input(field backupField) *textinput.Model {
 
 const backupLabelWidth = 13
 
-// refreshBackupAge looks up when the newest backup was made, and how many days
-// may pass before the reminder shows. It is called when a backup is made or
+// refreshBackups looks up when the newest backup was made, how many days may pass
+// before the reminder shows, and which backups are more than are kept. It is called when a backup is made or
 // the config edited: not on every redraw, since it reads the disk.
-func (m *Model) refreshBackupAge() {
-	m.lastBackup, m.remindDays = time.Time{}, 0
+func (m *Model) refreshBackups() {
+	m.lastBackup, m.remindDays, m.prunable = time.Time{}, 0, core.PrunePlan{}
 	m.backupChecked = m.now()
 	if m.opts.BackupDir == "" {
 		return
 	}
-	m.remindDays = config.DefaultBackupReminderDays
+	var cfg *config.Config // nil when it cannot be read: the defaults then apply
 	if m.loadConfig != nil {
-		if cfg, err := m.loadConfig(); err == nil {
-			m.remindDays = cfg.ReminderDays()
+		if c, err := m.loadConfig(); err == nil {
+			cfg = c
 		}
 	}
+	m.remindDays = cfg.ReminderDays()
 	if files := listBackups(m.opts.BackupDir); len(files) > 0 {
 		m.lastBackup = files[0].when
 	}
+	m.prunable = m.pruneFor(cfg)
 }
 
 // backupCheckEvery is how often a key press looks at the backups folder again, so
@@ -85,9 +89,9 @@ func (m *Model) refreshBackupAge() {
 // cron, say) ends the reminder without a restart.
 const backupCheckEvery = time.Minute
 
-func (m *Model) refreshBackupAgeIfStale() {
+func (m *Model) refreshBackupsIfStale() {
 	if m.now().Sub(m.backupChecked) >= backupCheckEvery {
-		m.refreshBackupAge()
+		m.refreshBackups()
 	}
 }
 
@@ -105,6 +109,25 @@ func (m *Model) backupReminder() string {
 		return fmt.Sprintf("Last backup %d days ago: S makes a new one", days)
 	}
 	return ""
+}
+
+// backupNotes are the offers in the bottom bar about backups, most urgent first.
+func (m *Model) backupNotes() []string {
+	var notes []string
+	if r := m.backupReminder(); r != "" {
+		notes = append(notes, r)
+	}
+	if n := m.prunable.Count(); n > 0 {
+		notes = append(notes, fmt.Sprintf("%d old %s can be removed: ctrl+p", n, plural(n, "backup", "backups")))
+	}
+	return notes
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func (m *Model) backupWidth() int {
@@ -257,10 +280,10 @@ func (m *Model) saveBackup() {
 	}
 	encrypted := f.encrypting()
 	m.mode, m.bkp = modeList, nil
-	m.refreshBackupAge()
+	m.refreshBackups()
 	size := "?"
 	if info, err := os.Stat(dest); err == nil {
-		size = humanSize(info.Size())
+		size = units.HumanSize(info.Size())
 	}
 	how := "checked, NOT encrypted"
 	if encrypted {
@@ -284,12 +307,12 @@ func (m *Model) backupPopup() string {
 
 	db := m.opts.DatabasePath
 	if f.dbSize > 0 {
-		db += " · " + humanSize(f.dbSize)
+		db += " · " + units.HumanSize(f.dbSize)
 	}
 	last := "never: enter makes the first one"
 	if len(f.files) > 0 {
 		b := f.files[0]
-		last = fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), humanSize(b.size))
+		last = fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size))
 		if b.encrypted {
 			last += " · encrypted"
 		} else {
@@ -350,18 +373,6 @@ func tailFit(s string, w int) string {
 		return s
 	}
 	return "…" + string(r[len(r)-(w-1):])
-}
-
-// humanSize is a file size for reading: 512 B, 12.4 KB, 3.1 MB.
-func humanSize(n int64) string {
-	switch {
-	case n < 1024:
-		return fmt.Sprintf("%d B", n)
-	case n < 1024*1024:
-		return fmt.Sprintf("%.1f KB", float64(n)/1024)
-	default:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
-	}
 }
 
 // daysAgo is how many calendar days before now t was.

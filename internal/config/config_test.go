@@ -72,6 +72,9 @@ amount = ["Amount"]
 		{name: "0 switches the reminder off", file: ptr("backup_reminder_days = 0\n"), want: Config{BackupReminderDays: intPtr(0)}},
 		{name: "a negative interval is refused", file: ptr("backup_reminder_days = -1\n"), wantErr: "{path}: backup_reminder_days is -1: use a number of days, or 0 for no reminder"},
 		{name: "a text is not a number of days", file: ptr("backup_reminder_days = \"weekly\"\n"), wantErr: "reading {path}: toml: line 1 (last key \"backup_reminder_days\"): incompatible types: TOML value has type string; destination has type integer"},
+		{name: "how many backups to keep", file: ptr("keep_backups = 3\n"), want: Config{KeepBackups: intPtr(3)}},
+		{name: "0 keeps them all", file: ptr("keep_backups = 0\n"), want: Config{KeepBackups: intPtr(0)}},
+		{name: "a negative count is refused", file: ptr("keep_backups = -2\n"), wantErr: "{path}: keep_backups is -2: use a number of backups to keep, or 0 to keep them all"},
 		{name: "an empty file", file: ptr("")},
 		{name: "no file, and none is needed", file: nil},
 		{name: "no file, but one was asked for", file: nil, mustExist: true, wantErr: "reading {path}: open {path}: no such file or directory"},
@@ -106,6 +109,30 @@ amount = ["Amount"]
 func ptr(s string) *string { return &s }
 
 func intPtr(n int) *int { return &n }
+
+func Test_Config_KeepCount(t *testing.T) {
+	tcs := []struct {
+		name string
+		cfg  *Config
+		want int
+	}{
+		{name: "no config", cfg: nil, want: 10},
+		{name: "not set", cfg: &Config{}, want: 10},
+		{name: "set", cfg: &Config{KeepBackups: intPtr(3)}, want: 3},
+		{name: "keep all", cfg: &Config{KeepBackups: intPtr(0)}, want: 0},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := tc.cfg.KeepCount()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
 
 func Test_Config_ReminderDays(t *testing.T) {
 	tcs := []struct {

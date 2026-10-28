@@ -143,6 +143,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 		a.backupCmd(),
 		a.decryptCmd(),
 		a.restoreCmd(),
+		a.pruneCmd(),
 		a.checkCmd(),
 	)
 	root.AddCommand(cli)

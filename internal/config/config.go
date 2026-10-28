@@ -22,14 +22,31 @@ type Config struct {
 	// BackupReminderDays is how many days may pass since the last backup before
 	// the TUI reminds you; 0 switches the reminder off. Nil means not set: see
 	// ReminderDays.
-	BackupReminderDays *int               `toml:"backup_reminder_days"`
-	Profiles           []importer.Profile `toml:"profile"`
-	Rules              []importer.Rule    `toml:"rule"`
+	BackupReminderDays *int `toml:"backup_reminder_days"`
+	// KeepBackups is how many of the newest backups in each backups folder are
+	// kept when old ones are pruned; 0 means keep everything. Nil means not set:
+	// see KeepCount.
+	KeepBackups *int               `toml:"keep_backups"`
+	Profiles    []importer.Profile `toml:"profile"`
+	Rules       []importer.Rule    `toml:"rule"`
 }
 
 // DefaultBackupReminderDays is the reminder interval when config.toml does not
 // set one.
 const DefaultBackupReminderDays = 7
+
+// DefaultKeepBackups is how many backups are kept in each folder when config.toml
+// does not say.
+const DefaultKeepBackups = 10
+
+// KeepCount is how many of the newest backups in each folder to keep, or 0 to
+// keep them all. Nothing is ever removed without asking, whatever this is.
+func (c *Config) KeepCount() int {
+	if c == nil || c.KeepBackups == nil {
+		return DefaultKeepBackups
+	}
+	return *c.KeepBackups
+}
 
 // ReminderDays is the number of days after which an old backup is reminded of,
 // or 0 for never.
@@ -57,6 +74,9 @@ func Load(path string, mustExist bool) (*Config, error) {
 	}
 	if d := c.BackupReminderDays; d != nil && *d < 0 {
 		return nil, fmt.Errorf("%s: backup_reminder_days is %d: use a number of days, or 0 for no reminder", path, *d)
+	}
+	if n := c.KeepBackups; n != nil && *n < 0 {
+		return nil, fmt.Errorf("%s: keep_backups is %d: use a number of backups to keep, or 0 to keep them all", path, *n)
 	}
 	return &c, nil
 }
