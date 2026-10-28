@@ -174,7 +174,7 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 - [x] `SAF-7` Restore a backup from the command line, keeping the replaced database
 - [x] `SAF-8` Pick a backup, enter the passphrase if needed, verify it, swap it in, keep the old one aside
 - [x] `SAF-9` A reminder when the last backup is older than a number of days you set
-- [ ] `SAF-10` Show that an encrypted backup is being made instead of freezing
+- [x] `SAF-10` Show that an encrypted backup is being made instead of freezing
 - [x] `SAF-11` Keep the last N backups and offer to prune the rest
 
 ### LOC: Localization foundation
