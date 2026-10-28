@@ -12,7 +12,14 @@ permissions:
   contents: read
 
 jobs:
+  # A change to documentation only cannot add a vulnerability, so the scan skips it.
+  # The weekly run and pushes to main always scan.
+  changes:
+    uses: ./.github/workflows/changes.yml
+
   govulncheck:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
