@@ -137,6 +137,8 @@ type Model struct {
 	remindDays    int            // days after which that is worth a reminder, 0 for never
 	prunable      core.PrunePlan // the backups that are more than are kept, see refreshBackups
 	backupChecked time.Time      // when they were last looked up
+	busy          *busy          // work in progress, see start
+	quitWhenDone  bool           // ctrl+c was pressed while busy
 	fatal         error          // set when the interface cannot go on, and returned by Run
 	lastProfile   string         // import profile used last in this session
 
@@ -293,7 +295,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case configEditedMsg:
 		m.configEdited(msg.err)
 		return m, nil
+	case spinMsg:
+		if m.busy == nil {
+			return m, nil
+		}
+		m.busy.frame++
+		return m, spinTick()
+	case backupDone:
+		return m, m.finishBackup(msg)
+	case restoreDone:
+		return m.finishRestore(msg)
 	case tea.KeyMsg:
+		if m.busy != nil {
+			return m.keyWhileBusy(msg)
+		}
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}

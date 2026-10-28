@@ -209,8 +209,7 @@ func (m *Model) updateBackup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode, m.bkp = modeList, nil
 		return m, nil
 	case "enter", "ctrl+s":
-		m.saveBackup()
-		return m, nil
+		return m, m.saveBackup()
 	case "tab", "down":
 		return move(1)
 	case "shift+tab", "up":
@@ -252,44 +251,64 @@ func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
 	return dest, nil
 }
 
-func (m *Model) saveBackup() {
+// backupDone is the end of the work that saveBackup starts.
+type backupDone struct {
+	dest      string
+	encrypted bool
+	err       error
+}
+
+// saveBackup checks what was typed and starts writing the backup.
+func (m *Model) saveBackup() tea.Cmd {
 	f := m.bkp
 	if f.encrypting() && f.pass.Value() != f.repeat.Value() {
 		f.err = "the two passphrases differ: type it again in Repeat"
-		m.focusBackup(bfRepeat)
-		return
+		return m.focusBackup(bfRepeat)
 	}
 	if !f.encrypting() && f.repeat.Value() != "" {
 		f.err = "Repeat is filled in but Passphrase is empty"
-		m.focusBackup(bfPass)
-		return
+		return m.focusBackup(bfPass)
 	}
 	dest, err := m.backupTarget(f.dest.Value(), f.encrypting())
 	if err != nil {
 		f.err = err.Error()
-		return
+		return nil
 	}
-	if f.encrypting() {
-		err = m.svc.BackupEncrypted(m.ctx, dest, f.pass.Value())
-	} else {
-		err = m.svc.Backup(m.ctx, dest)
+	ctx, svc, pass, encrypting := m.ctx, m.svc, f.pass.Value(), f.encrypting()
+	note := "Writing the backup, then checking it"
+	if encrypting {
+		note = "Encrypting the backup (slow on purpose: a moment)"
 	}
-	if err != nil {
-		f.err = err.Error()
-		return
+	return m.start(note, func() tea.Msg {
+		var err error
+		if encrypting {
+			err = svc.BackupEncrypted(ctx, dest, pass)
+		} else {
+			err = svc.Backup(ctx, dest)
+		}
+		return backupDone{dest: dest, encrypted: encrypting, err: err}
+	})
+}
+
+// finishBackup shows how the backup went.
+func (m *Model) finishBackup(msg backupDone) tea.Cmd {
+	quit := m.idle()
+	if msg.err != nil {
+		m.bkp.err = msg.err.Error()
+		return quit
 	}
-	encrypted := f.encrypting()
 	m.mode, m.bkp = modeList, nil
 	m.refreshBackups()
 	size := "?"
-	if info, err := os.Stat(dest); err == nil {
+	if info, err := os.Stat(msg.dest); err == nil {
 		size = units.HumanSize(info.Size())
 	}
 	how := "checked, NOT encrypted"
-	if encrypted {
+	if msg.encrypted {
 		how = "checked, encrypted"
 	}
-	m.setStatus(fmt.Sprintf("Backed up (%s, %s) → %s", size, how, tailFit(dest, max(24, m.width-56))), false)
+	m.setStatus(fmt.Sprintf("Backed up (%s, %s) → %s", size, how, tailFit(msg.dest, max(24, m.width-56))), false)
+	return quit
 }
 
 func (m *Model) backupPopup() string {
@@ -344,8 +363,12 @@ func (m *Model) backupPopup() string {
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
-	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	return box("Back up the database", lines, w, h, true, "enter back up · tab next field · esc cancel")
+	last, footer := errStyle.Render(fit(f.err, iw)), "enter back up · tab next field · esc cancel"
+	if m.busy != nil {
+		last, footer = accent.Render(fit(m.busy.line(), iw)), m.footerBusy()
+	}
+	lines = append(lines, last)
+	return box("Back up the database", lines, w, h, true, footer)
 }
 
 // backupHints say what the backup will be and what that means for you.
