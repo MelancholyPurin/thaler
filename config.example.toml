@@ -6,6 +6,11 @@
 # (default: ~/Downloads). You can always type or drop another file or folder.
 # import_dir = "~/Documents/bank-exports"
 
+# The interface reminds you to back up when the newest backup in the backups
+# folder is this many days old, or there is none and you have transactions
+# (default: 7). 0 switches the reminder off.
+# backup_reminder_days = 14
+
 # ---------------------------------------------------------------------------
 # Categorisation rules for `thaler cli import`.
 #
