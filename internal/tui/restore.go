@@ -154,22 +154,43 @@ func (m *Model) askRestore() {
 	f.confirm = true
 }
 
-// restore replaces the database with the chosen backup and shows the result.
+// restoreDone is the end of the work that restore starts.
+type restoreDone struct {
+	from backupFile
+	svc  core.Service
+	res  core.RestoreResult
+	err  error
+}
+
+// restore starts replacing the database with the chosen backup.
 func (m *Model) restore() (tea.Model, tea.Cmd) {
 	f := m.rst
-	b := f.selected()
-	svc, res, err := m.opts.Restore(m.ctx, b.path, f.pass.Value())
-	if svc == nil {
+	b, pass, hook, ctx := f.selected(), f.pass.Value(), m.opts.Restore, m.ctx
+	note := "Checking the backup, then replacing the database"
+	if b.encrypted {
+		note = "Decrypting and checking the backup (slow on purpose)"
+	}
+	return m, m.start(note, func() tea.Msg {
+		svc, res, err := hook(ctx, b.path, pass)
+		return restoreDone{from: b, svc: svc, res: res, err: err}
+	})
+}
+
+// finishRestore shows how the restore went.
+func (m *Model) finishRestore(msg restoreDone) (tea.Model, tea.Cmd) {
+	quit := m.idle()
+	f, b, res, err := m.rst, msg.from, msg.res, msg.err
+	if msg.svc == nil {
 		m.fatal = fmt.Errorf("restoring %s: %w", b.path, err)
 		return m, tea.Quit
 	}
-	m.svc = svc
+	m.svc = msg.svc
 	if err != nil {
 		f.confirm, f.err = false, err.Error()
 		if b.encrypted {
 			m.focusRestore(rfPass)
 		}
-		return m, nil
+		return m, quit
 	}
 
 	m.mode, m.rst = modeList, nil
@@ -185,15 +206,15 @@ func (m *Model) restore() (tea.Model, tea.Cmd) {
 	m.applyFilter(false)
 	m.clampAll()
 
-	msg := "Restored " + filepath.Base(b.path)
+	text := "Restored " + filepath.Base(b.path)
 	if res.Upgrade {
-		msg += " (upgraded to this version)"
+		text += " (upgraded to this version)"
 	}
 	if res.Replaced != "" {
-		msg += " · the database before is kept: ctrl+r lists it"
+		text += " · the database before is kept: ctrl+r lists it"
 	}
-	m.setStatus(msg, false)
-	return m, nil
+	m.setStatus(text, false)
+	return m, quit
 }
 
 func (m *Model) restorePopup() string {
@@ -235,7 +256,11 @@ func (m *Model) restorePopup() string {
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
-	lines = append(lines, errStyle.Render(fit(f.err, iw)))
+	last := errStyle.Render(fit(f.err, iw))
+	if m.busy != nil {
+		last, footer = accent.Render(fit(m.busy.line(), iw)), m.footerBusy()
+	}
+	lines = append(lines, last)
 	return box("Restore a backup", lines, w, h, true, footer)
 }
 
