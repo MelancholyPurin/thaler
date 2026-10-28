@@ -518,3 +518,27 @@ func Test_runTUI(t *testing.T) {
 		})
 	}
 }
+
+func Test_upgradeNotice(t *testing.T) {
+	tcs := []struct {
+		name   string
+		copied string
+		want   string
+	}{
+		{
+			name: "says where the copy is, and that it is not encrypted", copied: "/data/backups/pre-migration/thaler-20261101-120000-before-20261107_x.db",
+			want: "Upgraded the database to this version of Thaler. A copy of it from before is at /data/backups/pre-migration/thaler-20261101-120000-before-20261107_x.db (not encrypted)\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := upgradeNotice(tc.copied)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
