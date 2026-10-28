@@ -28,7 +28,7 @@ func (r *repository) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	state, err := r.migrationState(ctx, files)
+	state, err := readMigrationState(ctx, r.db, files)
 	if err != nil {
 		return err
 	}
@@ -115,14 +115,15 @@ type migrationState struct {
 	existing bool // it already has a schema, so it may hold data
 }
 
-// migrationState reads, and never writes, which migrations have been applied.
-func (r *repository) migrationState(ctx context.Context, files []string) (migrationState, error) {
+// readMigrationState reads, and never writes, which migrations the database
+// behind db has applied.
+func readMigrationState(ctx context.Context, db dbtx, files []string) (migrationState, error) {
 	st := migrationState{applied: map[string]bool{}}
 
 	// Databases created before schema_migrations existed tracked their version
 	// in PRAGMA user_version; the only migration then was the initial schema.
 	var legacy int
-	if err := r.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&legacy); err != nil {
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&legacy); err != nil {
 		return st, err
 	}
 	if legacy > 0 && len(files) > 0 {
@@ -131,11 +132,11 @@ func (r *repository) migrationState(ctx context.Context, files []string) (migrat
 	}
 
 	var tracked int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'`).Scan(&tracked); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'`).Scan(&tracked); err != nil {
 		return st, err
 	}
 	if tracked > 0 {
-		rows, err := r.db.QueryContext(ctx, `SELECT name FROM schema_migrations`)
+		rows, err := db.QueryContext(ctx, `SELECT name FROM schema_migrations`)
 		if err != nil {
 			return st, err
 		}
