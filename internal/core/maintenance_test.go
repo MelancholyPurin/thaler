@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -596,4 +597,226 @@ func Test_usersTable(t *testing.T) {
 			t.Errorf("uuid %q is not a version 4 uuid (-want +got):\n%s", u, diff)
 		}
 	})
+}
+
+// hasTable says whether the SQLite file at path has a table of that name. It
+// looks without changing anything.
+func hasTable(t *testing.T, path, name string) bool {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n > 0
+}
+
+var timestamped = regexp.MustCompile(`thaler-\d{8}-\d{6}-before-`)
+
+// copiesIn lists the files below dir, relative to it, with the time in their
+// names shown as {time}. A folder that is not there has none.
+func copiesIn(t *testing.T, dir string) []string {
+	t.Helper()
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return nil
+	}
+	var out []string
+	for _, f := range filesBelow(t, dir) {
+		out = append(out, timestamped.ReplaceAllString(f, "thaler-{time}-before-"))
+	}
+	return out
+}
+
+// A database that already has a schema is copied aside, as it was, before an
+// upgrade changes it; one that has nothing to lose, or nothing to upgrade, is not.
+func Test_Open_backsUpBeforeMigrating(t *testing.T) {
+	type observed struct {
+		Copies   []string // under backups, the time shown as {time}
+		Reported string   // what PreMigrationBackup names, shown the same way
+		Err      string
+		Upgraded bool // the database itself has the new schema
+
+		// About the one copy, when there is one.
+		NotUpgraded bool // it has the schema from before the upgrade
+		Tracked     bool // and the table that records migrations, if it had one
+		KeepsRow    bool // and the account that was in the database
+		Private     bool // it is 0600 and its folder 0700
+	}
+	const (
+		tracked  = `CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT '')`
+		atInit   = `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`
+		anAcct   = `INSERT INTO accounts (name, type, currency) VALUES ('Assets:Bank', 'Assets', 'EUR')`
+		firstNew = "pre-migration/thaler-{time}-before-20261025_users_and_identity.db"
+	)
+	tcs := []struct {
+		name       string
+		statements []string // the old database, on top of the initial schema; nil for a new one
+		block      string   // a file to create where the backups folder would go
+		reopen     bool     // open, close, and open again before looking
+		want       observed
+	}{
+		{
+			name: "a database at the initial schema is copied before it is upgraded", statements: []string{tracked, atInit, anAcct},
+			want: observed{
+				Copies: []string{firstNew}, Reported: firstNew, Upgraded: true,
+				NotUpgraded: true, Tracked: true, KeepsRow: true, Private: true,
+			},
+		},
+		{
+			// Not Tracked: the table that records migrations is created by the upgrade, so
+			// a copy without it was made before the upgrade wrote anything.
+			name: "one from before migrations were tracked is copied before anything is written to it", statements: []string{`PRAGMA user_version = 1`, anAcct},
+			want: observed{
+				Copies: []string{firstNew}, Reported: firstNew, Upgraded: true,
+				NotUpgraded: true, KeepsRow: true, Private: true,
+			},
+		},
+		{name: "a new database has nothing to lose", want: observed{Upgraded: true}},
+		{name: "and one opened again is up to date", reopen: true, want: observed{Upgraded: true}},
+		{
+			name: "a database from a newer build is refused, with no copy made", statements: []string{tracked, atInit, `INSERT INTO schema_migrations (name) VALUES ('29991231_from_the_future.up.sql')`},
+			want: observed{Err: "database has migration 29991231_from_the_future.up.sql that this build does not know; update thaler"},
+		},
+		{
+			name: "when the copy cannot be made the upgrade does not happen", statements: []string{tracked, atInit, anAcct}, block: "backups",
+			want: observed{Err: "cannot upgrade the database without a copy of it first, and nothing was changed: mkdir {dir}/backups: not a directory"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			var path string
+			if tc.statements != nil {
+				path = oldDatabase(t, tc.statements...)
+			} else {
+				path = filepath.Join(t.TempDir(), "thaler.db")
+			}
+			dir := filepath.Dir(path)
+			backups := filepath.Join(dir, "backups")
+			if tc.block != "" {
+				if err := os.WriteFile(filepath.Join(dir, tc.block), []byte("in the way"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.reopen {
+				first, err := Open(ctx, path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := first.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// when
+			st, err := Open(ctx, path)
+
+			// then
+			var got observed
+			if err != nil {
+				got.Err = strings.ReplaceAll(err.Error(), dir, "{dir}")
+			} else {
+				defer st.Close()
+				got.Reported = timestamped.ReplaceAllString(strings.TrimPrefix(st.PreMigrationBackup(), backups+string(filepath.Separator)), "thaler-{time}-before-")
+			}
+			got.Upgraded = hasTable(t, path, "users")
+			got.Copies = copiesIn(t, backups)
+			if len(got.Copies) == 1 {
+				copyPath := st.PreMigrationBackup()
+				got.NotUpgraded = !hasTable(t, copyPath, "users")
+				got.Tracked = hasTable(t, copyPath, "schema_migrations")
+				db, err := sql.Open("sqlite", "file:"+copyPath+"?mode=ro")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer db.Close()
+				var accounts int
+				if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts`).Scan(&accounts); err != nil {
+					t.Fatal(err)
+				}
+				got.KeepsRow = accounts == 1
+				file, err := os.Stat(copyPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				folder, err := os.Stat(filepath.Dir(copyPath))
+				if err != nil {
+					t.Fatal(err)
+				}
+				got.Private = file.Mode().Perm() == 0o600 && folder.Mode().Perm() == 0o700
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_freePath(t *testing.T) {
+	tcs := []struct {
+		name     string
+		existing []string
+		path     string
+		want     string
+	}{
+		{name: "a name nobody has", path: "a.db", want: "a.db"},
+		{name: "a name that is taken", existing: []string{"a.db"}, path: "a.db", want: "a-2.db"},
+		{name: "and one after it", existing: []string{"a.db", "a-2.db"}, path: "a.db", want: "a-3.db"},
+		{name: "a gap is filled", existing: []string{"a.db", "a-3.db"}, path: "a.db", want: "a-2.db"},
+		{name: "no extension", existing: []string{"a"}, path: "a", want: "a-2"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			for _, f := range tc.existing {
+				if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// when
+			got := freePath(filepath.Join(dir, tc.path))
+
+			// then
+			if diff := cmp.Diff(filepath.Join(dir, tc.want), got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The copies go into a folder inside the backups folder that the TUI and the
+// command line use, so they are never mixed up with the backups made on purpose.
+func Test_preMigrationDir(t *testing.T) {
+	tcs := []struct {
+		name string
+		db   string
+		want string
+	}{
+		{name: "next to the database", db: "/data/thaler/thaler.db", want: "/data/thaler/backups/pre-migration"},
+		{name: "wherever the database was put", db: "/tmp/test/my.db", want: "/tmp/test/backups/pre-migration"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := preMigrationDir(tc.db)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(config.BackupDir(tc.db), filepath.Dir(got)); diff != "" {
+				t.Errorf("not inside the backups folder the interface uses (-want +got):\n%s", diff)
+			}
+			// and the interface does not count them as backups
+			if matches, _ := filepath.Match(filepath.Join(config.BackupDir(tc.db), config.BackupGlobs[0]), filepath.Join(got, "thaler-20261101-120000-before-x.db")); matches {
+				t.Errorf("%s would be listed as a backup", got)
+			}
+		})
+	}
 }
