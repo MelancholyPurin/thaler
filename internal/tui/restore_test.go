@@ -110,6 +110,9 @@ func restoreModel(t *testing.T, dir string, backups ...seeded) *Model {
 var cmpSorted = cmpopts.SortSlices(func(a, b string) bool { return a < b })
 
 var (
+	// replacedName is the name of a replaced database: its time, and a number when
+	// two restores fall in the same second. Which of the two happens depends on the
+	// clock, so tests see neither.
 	replacedName = regexp.MustCompile(`thaler-\d{8}-\d{6}-replaced(-\d+)?`)
 	sideFile     = regexp.MustCompile(`-(wal|shm)$`)
 )
@@ -239,7 +242,7 @@ func Test_Update_restore(t *testing.T) {
 				Mode: "list", Status: "Restored thaler-{time}-replaced.db · the database before is kept: ctrl+r lists it",
 				Ledger: kino,
 				Files: []string{
-					"backups/replaced/thaler-{time}-replaced.db", "backups/replaced/thaler-{time}-replaced-2.db",
+					"backups/replaced/thaler-{time}-replaced.db", "backups/replaced/thaler-{time}-replaced.db",
 					"backups/thaler-20261021-090000.db", "thaler.db",
 				},
 			},
@@ -277,10 +280,10 @@ func Test_Update_restore(t *testing.T) {
 				}
 			}
 			got.Err = strings.ReplaceAll(got.Err, dir, "{dir}")
-			got.Status = replacedName.ReplaceAllString(strings.ReplaceAll(got.Status, dir, "{dir}"), "thaler-{time}-replaced$1")
+			got.Status = replacedName.ReplaceAllString(strings.ReplaceAll(got.Status, dir, "{dir}"), "thaler-{time}-replaced")
 			for _, f := range filesUnder(t, dir) {
 				if !sideFile.MatchString(f) {
-					got.Files = append(got.Files, replacedName.ReplaceAllString(f, "thaler-{time}-replaced$1"))
+					got.Files = append(got.Files, replacedName.ReplaceAllString(f, "thaler-{time}-replaced"))
 				}
 			}
 			if diff := cmp.Diff(tc.want, got, equalEmpty, cmpSorted); diff != "" {
