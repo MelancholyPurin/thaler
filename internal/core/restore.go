@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/melancholypurin/thaler/internal/config"
 )
 
 // Restoring puts a backup in place of the database. It works on files and not on
@@ -32,13 +34,6 @@ type RestoreResult struct {
 	// Upgrade is true when the backup was made by an older version, so the next
 	// time the database is opened it is upgraded (after a copy of it, see Open).
 	Upgrade bool
-}
-
-// ReplacedDir is where a restore keeps the database it replaced: a folder of its
-// own inside the backups folder next to the database, apart from the backups
-// made on purpose.
-func ReplacedDir(dbPath string) string {
-	return filepath.Join(filepath.Dir(dbPath), "backups", "replaced")
 }
 
 // BackupIsEncrypted says whether the file at path is an encrypted backup, so
@@ -222,7 +217,7 @@ var dbFiles = []string{"", "-wal", "-shm"}
 // kept is complete on its own.
 func setAside(ctx context.Context, dbPath string) (string, error) {
 	mergeLog(ctx, dbPath)
-	dir := ReplacedDir(dbPath)
+	dir := config.ReplacedDir(dbPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}

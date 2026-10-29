@@ -14,3 +14,11 @@ func HumanSize(n int64) string {
 		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
 	}
 }
+
+// Plural is one when n is 1, and many otherwise: Plural(2, "backup", "backups").
+func Plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}

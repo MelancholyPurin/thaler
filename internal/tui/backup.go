@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -22,11 +21,8 @@ import (
 
 // backupFile is a backup found in the backups folder.
 type backupFile struct {
-	path      string
-	when      time.Time
-	size      int64
-	encrypted bool
-	replaced  bool // a database that a restore replaced, not a backup made on purpose
+	core.BackupFile
+	replaced bool // a database that a restore replaced, not a backup made on purpose
 }
 
 type backupField int
@@ -79,7 +75,7 @@ func (m *Model) refreshBackups() {
 	}
 	m.remindDays = cfg.ReminderDays()
 	if files := listBackups(m.opts.BackupDir); len(files) > 0 {
-		m.lastBackup = files[0].when
+		m.lastBackup = files[0].When
 	}
 	m.prunable = m.pruneFor(cfg)
 }
@@ -118,16 +114,9 @@ func (m *Model) backupNotes() []string {
 		notes = append(notes, r)
 	}
 	if n := m.prunable.Count(); n > 0 {
-		notes = append(notes, fmt.Sprintf("%d old %s can be removed: ctrl+p", n, plural(n, "backup", "backups")))
+		notes = append(notes, fmt.Sprintf("%d old %s can be removed: ctrl+p", n, units.Plural(n, "backup", "backups")))
 	}
 	return notes
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 func (m *Model) backupWidth() int {
@@ -141,21 +130,11 @@ func (m *Model) backupInputWidth() int {
 // listBackups is every backup in dir, newest first. A folder that is missing
 // or unreadable simply has none.
 func listBackups(dir string) []backupFile {
-	var files []backupFile
-	for _, glob := range config.BackupGlobs {
-		paths, _ := filepath.Glob(filepath.Join(dir, glob))
-		for _, p := range paths {
-			info, err := os.Stat(p)
-			if err != nil || !info.Mode().IsRegular() {
-				continue
-			}
-			files = append(files, backupFile{
-				path: p, when: info.ModTime(), size: info.Size(),
-				encrypted: strings.HasSuffix(p, config.EncryptedSuffix),
-			})
-		}
+	found, _ := core.ListBackups(dir)
+	files := make([]backupFile, len(found))
+	for i, f := range found {
+		files[i] = backupFile{BackupFile: f}
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].when.After(files[j].when) })
 	return files
 }
 
@@ -331,8 +310,8 @@ func (m *Model) backupPopup() string {
 	last := "never: enter makes the first one"
 	if len(f.files) > 0 {
 		b := f.files[0]
-		last = fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size))
-		if b.encrypted {
+		last = fmt.Sprintf("%s · %s · %s", b.When.Local().Format("2006-01-02 15:04"), ago(m.now(), b.When), units.HumanSize(b.Size))
+		if b.Encrypted {
 			last += " · encrypted"
 		} else {
 			last += " · not encrypted"

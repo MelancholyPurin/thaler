@@ -486,6 +486,40 @@ func Test_BackupDir(t *testing.T) {
 	}
 }
 
+// The folders Thaler writes its own copies to lie inside the backups folder, but
+// apart from it, so that the interface does not count them as backups you made.
+func Test_BackupSubfolders(t *testing.T) {
+	tcs := []struct {
+		name   string
+		folder func(string) string
+		db     string
+		want   string
+	}{
+		{name: "replaced, next to the database", folder: ReplacedDir, db: "/data/thaler/thaler.db", want: "/data/thaler/backups/replaced"},
+		{name: "replaced, wherever the database was put", folder: ReplacedDir, db: "/tmp/test/my.db", want: "/tmp/test/backups/replaced"},
+		{name: "before an upgrade, next to the database", folder: PreMigrationDir, db: "/data/thaler/thaler.db", want: "/data/thaler/backups/pre-migration"},
+		{name: "before an upgrade, wherever the database was put", folder: PreMigrationDir, db: "/tmp/test/my.db", want: "/tmp/test/backups/pre-migration"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := tc.folder(tc.db)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(BackupDir(tc.db), filepath.Dir(got)); diff != "" {
+				t.Errorf("not inside the backups folder (-want +got):\n%s", diff)
+			}
+			// a backup in the folder is not found by listing the backups folder
+			if matches, _ := filepath.Match(filepath.Join(BackupDir(tc.db), BackupGlobs[0]), filepath.Join(got, "thaler-20261101-120000-before-x.db")); matches {
+				t.Errorf("%s would be listed as a backup", got)
+			}
+		})
+	}
+}
+
 func Test_BackupName(t *testing.T) {
 	tcs := []struct {
 		name string

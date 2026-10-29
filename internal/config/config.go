@@ -199,6 +199,14 @@ func EncryptedName(dest string) string {
 // the database.
 func BackupDir(dbPath string) string { return filepath.Join(filepath.Dir(dbPath), "backups") }
 
+// ReplacedDir is where a restore keeps the database it replaced: a folder of its
+// own inside the backups folder, so that it is not mistaken for a backup you made.
+func ReplacedDir(dbPath string) string { return filepath.Join(BackupDir(dbPath), "replaced") }
+
+// PreMigrationDir is where the copies made before an upgrade go: a folder of its
+// own inside the backups folder, for the same reason.
+func PreMigrationDir(dbPath string) string { return filepath.Join(BackupDir(dbPath), "pre-migration") }
+
 // BackupName is the file name of a backup made at t.
 func BackupName(t time.Time) string { return "thaler-" + t.Format("20060102-150405") + ".db" }
 

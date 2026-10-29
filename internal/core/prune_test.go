@@ -234,7 +234,7 @@ func Test_Prune_refusesWhatIsNotABackup(t *testing.T) {
 	precious := filepath.Join(dir, "thaler.db")
 	aged(t, dir, "thaler.db", time.Now(), 0)
 	aged(t, dir, "backups/thaler-20261021-090000.db", time.Now(), 0)
-	plan := PrunePlan{Folders: []PruneFolder{{Remove: []PruneFile{
+	plan := PrunePlan{Folders: []PruneFolder{{Remove: []BackupFile{
 		{Path: filepath.Join(dir, "backups", "thaler-20261021-090000.db")}, {Path: precious},
 	}}}}
 

@@ -58,7 +58,7 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "\nRemoved %d %s (%s).\n", removed, plural(removed, "backup", "backups"), units.HumanSize(plan.Size()))
+			fmt.Fprintf(out, "\nRemoved %d %s (%s).\n", removed, units.Plural(removed, "backup", "backups"), units.HumanSize(plan.Size()))
 			return nil
 		},
 	}
@@ -70,18 +70,11 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 // describe lists what a plan removes, folder by folder.
 func describe(w io.Writer, plan core.PrunePlan) {
 	fmt.Fprintf(w, "Keeping the newest %d in each folder; %d %s (%s) would go:\n",
-		plan.Keep, plan.Count(), plural(plan.Count(), "backup", "backups"), units.HumanSize(plan.Size()))
+		plan.Keep, plan.Count(), units.Plural(plan.Count(), "backup", "backups"), units.HumanSize(plan.Size()))
 	for _, f := range plan.Folders {
 		fmt.Fprintf(w, "\n%s: %s, %d of %d\n", f.Label, f.Dir, len(f.Remove), f.Total)
 		for _, file := range f.Remove {
 			fmt.Fprintf(w, "  %s  %s  %s\n", file.When.Local().Format("2006-01-02 15:04"), filepath.Base(file.Path), units.HumanSize(file.Size))
 		}
 	}
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
