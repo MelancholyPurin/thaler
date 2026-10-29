@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -785,37 +784,6 @@ func Test_freePath(t *testing.T) {
 			// then
 			if diff := cmp.Diff(filepath.Join(dir, tc.want), got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-// The copies go into a folder inside the backups folder that the TUI and the
-// command line use, so they are never mixed up with the backups made on purpose.
-func Test_preMigrationDir(t *testing.T) {
-	tcs := []struct {
-		name string
-		db   string
-		want string
-	}{
-		{name: "next to the database", db: "/data/thaler/thaler.db", want: "/data/thaler/backups/pre-migration"},
-		{name: "wherever the database was put", db: "/tmp/test/my.db", want: "/tmp/test/backups/pre-migration"},
-	}
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			// when
-			got := preMigrationDir(tc.db)
-
-			// then
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("mismatch (-want +got):\n%s", diff)
-			}
-			if diff := cmp.Diff(config.BackupDir(tc.db), filepath.Dir(got)); diff != "" {
-				t.Errorf("not inside the backups folder the interface uses (-want +got):\n%s", diff)
-			}
-			// and the interface does not count them as backups
-			if matches, _ := filepath.Match(filepath.Join(config.BackupDir(tc.db), config.BackupGlobs[0]), filepath.Join(got, "thaler-20261101-120000-before-x.db")); matches {
-				t.Errorf("%s would be listed as a backup", got)
 			}
 		})
 	}

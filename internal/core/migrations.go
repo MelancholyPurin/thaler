@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/melancholypurin/thaler/internal/config"
 )
 
 //go:embed migrations/*.up.sql
@@ -156,13 +158,6 @@ func readMigrationState(ctx context.Context, db dbtx, files []string) (migration
 	return st, nil
 }
 
-// preMigrationDir is where the copies made before an upgrade go: a folder of its
-// own inside the backups folder next to the database (see config.BackupDir), so
-// that they are not mistaken for the backups you made yourself.
-func preMigrationDir(dbPath string) string {
-	return filepath.Join(filepath.Dir(dbPath), "backups", "pre-migration")
-}
-
 // backupBeforeMigrating copies the database aside before the migration named
 // first changes it. If the copy cannot be made, the migration does not run: an
 // upgrade that cannot be undone is worse than one that waits.
@@ -171,7 +166,7 @@ func (r *repository) backupBeforeMigrating(ctx context.Context, first string) er
 		return nil
 	}
 	name := fmt.Sprintf("thaler-%s-before-%s.db", time.Now().Format("20060102-150405"), strings.TrimSuffix(first, ".up.sql"))
-	dest := freePath(filepath.Join(preMigrationDir(r.path), name))
+	dest := freePath(filepath.Join(config.PreMigrationDir(r.path), name))
 	if err := snapshot(ctx, queries{r.db}, dest); err != nil {
 		return fmt.Errorf("cannot upgrade the database without a copy of it first, and nothing was changed: %w", err)
 	}
