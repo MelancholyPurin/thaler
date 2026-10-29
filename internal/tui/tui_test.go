@@ -134,7 +134,18 @@ func key(s string) tea.KeyMsg {
 func press(m *Model, keys ...string) {
 	for _, k := range keys {
 		m.Update(key(k))
+		settle(m)
 	}
+}
+
+// settle finishes the work the last key started, as the runtime would, and
+// returns the command that its result asked for.
+func settle(m *Model) tea.Cmd {
+	var cmd tea.Cmd
+	for m.busy != nil {
+		_, cmd = m.Update(m.busy.run())
+	}
+	return cmd
 }
 
 func typeText(m *Model, text string) {

@@ -326,7 +326,8 @@ func Test_Update_restore_ends(t *testing.T) {
 
 	// when
 	play(m, "ctrl+r enter")
-	_, cmd := m.Update(key("enter"))
+	m.Update(key("enter"))
+	cmd := settle(m)
 
 	// then
 	type observed struct {
