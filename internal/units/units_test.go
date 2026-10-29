@@ -32,3 +32,26 @@ func Test_HumanSize(t *testing.T) {
 		})
 	}
 }
+
+func Test_Plural(t *testing.T) {
+	tcs := []struct {
+		name string
+		n    int
+		want string
+	}{
+		{name: "none", n: 0, want: "backups"},
+		{name: "one", n: 1, want: "backup"},
+		{name: "two", n: 2, want: "backups"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := Plural(tc.n, "backup", "backups")
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
