@@ -273,7 +273,7 @@ func Test_Update_restore(t *testing.T) {
 			if m.rst != nil {
 				got.Err, got.Confirm = m.rst.err, m.rst.confirm
 				if len(m.rst.files) > 0 {
-					got.Selected = filepath.Base(m.rst.selected().path)
+					got.Selected = filepath.Base(m.rst.selected().Path)
 				}
 			}
 			got.Err = strings.ReplaceAll(got.Err, dir, "{dir}")

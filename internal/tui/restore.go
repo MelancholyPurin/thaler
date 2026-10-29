@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/units"
 )
@@ -55,7 +56,7 @@ func (f *restoreForm) selected() backupFile { return f.files[f.cursor] }
 // both newest first. Replaced databases are marked so as to be told apart.
 func listRestorable(dir, dbPath string) []backupFile {
 	files := listBackups(dir)
-	for _, b := range listBackups(core.ReplacedDir(dbPath)) {
+	for _, b := range listBackups(config.ReplacedDir(dbPath)) {
 		b.replaced = true
 		files = append(files, b)
 	}
@@ -146,8 +147,8 @@ func (m *Model) askRestore() {
 		f.err = "there is no backup to restore: S makes one"
 		return
 	}
-	if b := f.selected(); b.encrypted && f.pass.Value() == "" {
-		f.err = filepath.Base(b.path) + " is encrypted: type its passphrase"
+	if b := f.selected(); b.Encrypted && f.pass.Value() == "" {
+		f.err = filepath.Base(b.Path) + " is encrypted: type its passphrase"
 		m.focusRestore(rfPass)
 		return
 	}
@@ -167,11 +168,11 @@ func (m *Model) restore() (tea.Model, tea.Cmd) {
 	f := m.rst
 	b, pass, hook, ctx := f.selected(), f.pass.Value(), m.opts.Restore, m.ctx
 	note := "Checking the backup, then replacing the database"
-	if b.encrypted {
+	if b.Encrypted {
 		note = "Decrypting and checking the backup (slow on purpose)"
 	}
 	return m, m.start(note, func() tea.Msg {
-		svc, res, err := hook(ctx, b.path, pass)
+		svc, res, err := hook(ctx, b.Path, pass)
 		return restoreDone{from: b, svc: svc, res: res, err: err}
 	})
 }
@@ -181,13 +182,13 @@ func (m *Model) finishRestore(msg restoreDone) (tea.Model, tea.Cmd) {
 	quit := m.idle()
 	f, b, res, err := m.rst, msg.from, msg.res, msg.err
 	if msg.svc == nil {
-		m.fatal = fmt.Errorf("restoring %s: %w", b.path, err)
+		m.fatal = fmt.Errorf("restoring %s: %w", b.Path, err)
 		return m, tea.Quit
 	}
 	m.svc = msg.svc
 	if err != nil {
 		f.confirm, f.err = false, err.Error()
-		if b.encrypted {
+		if b.Encrypted {
 			m.focusRestore(rfPass)
 		}
 		return m, quit
@@ -206,7 +207,7 @@ func (m *Model) finishRestore(msg restoreDone) (tea.Model, tea.Cmd) {
 	m.applyFilter(false)
 	m.clampAll()
 
-	text := "Restored " + filepath.Base(b.path)
+	text := "Restored " + filepath.Base(b.Path)
 	if res.Upgrade {
 		text += " (upgraded to this version)"
 	}
@@ -274,11 +275,11 @@ func (m *Model) restoreListLines(iw int) []string {
 	var lines []string
 	for i := top; i < min(top+restoreRows, len(f.files)); i++ {
 		b := f.files[i]
-		row := fmt.Sprintf("%s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size))
+		row := fmt.Sprintf("%s · %s · %s", b.When.Local().Format("2006-01-02 15:04"), ago(m.now(), b.When), units.HumanSize(b.Size))
 		switch {
 		case b.replaced:
 			row += " · replaced by a restore"
-		case b.encrypted:
+		case b.Encrypted:
 			row += " · encrypted"
 		}
 		if i == f.cursor {
@@ -298,11 +299,11 @@ func (m *Model) restoreConfirmLines(iw int) []string {
 	b := f.selected()
 	return []string{
 		fit("Replace the database with", iw),
-		accent.Render(fit("  "+filepath.Base(b.path), iw)),
-		dim.Render(fit(fmt.Sprintf("  %s · %s · %s", b.when.Local().Format("2006-01-02 15:04"), ago(m.now(), b.when), units.HumanSize(b.size)), iw)),
+		accent.Render(fit("  "+filepath.Base(b.Path), iw)),
+		dim.Render(fit(fmt.Sprintf("  %s · %s · %s", b.When.Local().Format("2006-01-02 15:04"), ago(m.now(), b.When), units.HumanSize(b.Size)), iw)),
 		"",
 		fit("What you have now is kept in", iw),
-		dim.Render(fit("  "+tailFit(core.ReplacedDir(m.opts.DatabasePath), iw-2), iw)),
+		dim.Render(fit("  "+tailFit(config.ReplacedDir(m.opts.DatabasePath), iw-2), iw)),
 		fit("and can be restored from here the same way.", iw),
 	}
 }

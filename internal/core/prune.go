@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
-	"sort"
-	"time"
 
 	"github.com/melancholypurin/thaler/internal/config"
 )
@@ -21,13 +18,6 @@ import (
 // the newest few are kept; only files named like a backup are ever listed, so
 // anything else a person put there stays.
 
-// PruneFile is a backup that a plan would remove.
-type PruneFile struct {
-	Path string
-	Size int64
-	When time.Time // last modified, which is how "old" is judged
-}
-
 // PruneFolder is what a plan would remove from one folder.
 type PruneFolder struct {
 	// Label says what the folder holds, for a person to read.
@@ -35,7 +25,7 @@ type PruneFolder struct {
 	Dir   string
 	// Total is how many backups the folder holds, Remove the oldest of them.
 	Total  int
-	Remove []PruneFile // newest first
+	Remove []BackupFile // newest first
 }
 
 // PrunePlan is what would be removed, folder by folder. A folder with nothing to
@@ -75,10 +65,10 @@ func PlanPrune(dbPath string, keep int) (PrunePlan, error) {
 	plan := PrunePlan{Keep: keep}
 	for _, f := range []PruneFolder{
 		{Label: "backups", Dir: config.BackupDir(dbPath)},
-		{Label: "replaced by a restore", Dir: ReplacedDir(dbPath)},
-		{Label: "copies before an upgrade", Dir: preMigrationDir(dbPath)},
+		{Label: "replaced by a restore", Dir: config.ReplacedDir(dbPath)},
+		{Label: "copies before an upgrade", Dir: config.PreMigrationDir(dbPath)},
 	} {
-		files, err := backupsIn(f.Dir)
+		files, err := ListBackups(f.Dir)
 		if err != nil {
 			return PrunePlan{}, err
 		}
@@ -90,47 +80,6 @@ func PlanPrune(dbPath string, keep int) (PrunePlan, error) {
 		plan.Folders = append(plan.Folders, f)
 	}
 	return plan, nil
-}
-
-// backupsIn is the backups directly in dir, newest first. A folder that is not
-// there simply has none.
-func backupsIn(dir string) ([]PruneFile, error) {
-	var files []PruneFile
-	for _, glob := range config.BackupGlobs {
-		paths, err := filepath.Glob(filepath.Join(dir, glob))
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range paths {
-			info, err := os.Stat(p)
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			if info.Mode().IsRegular() {
-				files = append(files, PruneFile{Path: p, Size: info.Size(), When: info.ModTime()})
-			}
-		}
-	}
-	sort.Slice(files, func(i, j int) bool {
-		if !files[i].When.Equal(files[j].When) {
-			return files[i].When.After(files[j].When)
-		}
-		return files[i].Path > files[j].Path
-	})
-	return files, nil
-}
-
-// isBackupName says whether a file is named like a backup (see config.BackupGlobs).
-func isBackupName(path string) bool {
-	for _, glob := range config.BackupGlobs {
-		if ok, _ := filepath.Match(glob, filepath.Base(path)); ok {
-			return true
-		}
-	}
-	return false
 }
 
 // Prune removes the files of a plan, and the -wal and -shm files that may lie
