@@ -57,11 +57,11 @@ func Test_Open(t *testing.T) {
 			dir := t.TempDir()
 			path := tc.path(dir)
 			if tc.reopen {
-				first, err := Open(ctx, path)
+				first, err := Open(t.Context(), path)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := first.AddAccount(ctx, "Assets:Bank", "EUR"); err != nil {
+				if _, err := first.AddAccount(t.Context(), "Assets:Bank", "EUR"); err != nil {
 					t.Fatal(err)
 				}
 				if err := first.Close(); err != nil {
@@ -70,7 +70,7 @@ func Test_Open(t *testing.T) {
 			}
 
 			// when
-			st, err := Open(ctx, path)
+			st, err := Open(t.Context(), path)
 
 			// then
 			checkErr(t, errWithDir(err, dir), tc.wantErr, nil)
@@ -79,7 +79,7 @@ func Test_Open(t *testing.T) {
 			}
 			defer st.Close()
 			if tc.reopen {
-				got, err := st.GetAccount(ctx, "Assets:Bank")
+				got, err := st.GetAccount(t.Context(), "Assets:Bank")
 				if err != nil {
 					t.Fatalf("data lost after reopening: %v", err)
 				}
@@ -129,7 +129,7 @@ func Test_Backup(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
 			dir := t.TempDir()
-			st, err := Open(ctx, filepath.Join(dir, "thaler.db"))
+			st, err := Open(t.Context(), filepath.Join(dir, "thaler.db"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -143,7 +143,7 @@ func Test_Backup(t *testing.T) {
 			}
 
 			// when
-			err = st.Backup(ctx, dest)
+			err = st.Backup(t.Context(), dest)
 
 			// then
 			if tc.wantErr != "" {
@@ -163,12 +163,12 @@ func Test_Backup(t *testing.T) {
 			if !tc.wantRestored {
 				return
 			}
-			restored, err := Open(ctx, dest)
+			restored, err := Open(t.Context(), dest)
 			if err != nil {
 				t.Fatalf("the backup does not open: %v", err)
 			}
 			defer restored.Close()
-			got, err := restored.GetAccount(ctx, "Assets:Bank")
+			got, err := restored.GetAccount(t.Context(), "Assets:Bank")
 			if err != nil {
 				t.Fatalf("the backup does not contain the data: %v", err)
 			}
@@ -190,12 +190,12 @@ func Test_verifySnapshot(t *testing.T) {
 		{
 			name: "a healthy database",
 			prepare: func(t *testing.T, path string) {
-				st, err := Open(ctx, ":memory:")
+				st, err := Open(t.Context(), ":memory:")
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer st.Close()
-				if err := st.Backup(ctx, path); err != nil {
+				if err := st.Backup(t.Context(), path); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -222,7 +222,7 @@ func Test_verifySnapshot(t *testing.T) {
 			tc.prepare(t, path)
 
 			// when
-			err := verifySnapshot(ctx, path)
+			err := verifySnapshot(t.Context(), path)
 
 			// then
 			switch {
@@ -259,7 +259,7 @@ func oldDatabase(t *testing.T, statements ...string) string {
 		t.Fatal(err)
 	}
 	for _, stmt := range append([]string{string(initSQL)}, statements...) {
-		if _, err := old.ExecContext(ctx, stmt); err != nil {
+		if _, err := old.ExecContext(t.Context(), stmt); err != nil {
 			t.Fatalf("building the old database: %v", err)
 		}
 	}
@@ -297,7 +297,7 @@ func Test_migrate(t *testing.T) {
 			path := oldDatabase(t, tc.statements...)
 
 			// when
-			st, err := Open(ctx, path)
+			st, err := Open(t.Context(), path)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -305,7 +305,7 @@ func Test_migrate(t *testing.T) {
 				return
 			}
 			defer st.Close()
-			rows, err := st.repo.db.QueryContext(ctx, `SELECT name FROM schema_migrations ORDER BY name`)
+			rows, err := st.repo.db.QueryContext(t.Context(), `SELECT name FROM schema_migrations ORDER BY name`)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -362,7 +362,7 @@ func Test_migrate_existingRows(t *testing.T) {
 			path := oldDatabase(t, tc.statements...)
 
 			// when
-			st, err := Open(ctx, path)
+			st, err := Open(t.Context(), path)
 
 			// then
 			if err != nil {
@@ -371,7 +371,7 @@ func Test_migrate_existingRows(t *testing.T) {
 			defer st.Close()
 			summary := func(name, untouched string) table {
 				var tb table
-				err := st.repo.db.QueryRowContext(ctx, `SELECT COUNT(*), COUNT(DISTINCT uuid),
+				err := st.repo.db.QueryRowContext(t.Context(), `SELECT COUNT(*), COUNT(DISTINCT uuid),
 					COALESCE(SUM(uuid GLOB '????????-????-4???-[89ab]???-????????????'), 0), COALESCE(SUM(`+untouched+`), 0) FROM `+name).
 					Scan(&tb.Rows, &tb.DistinctUUIDs, &tb.WellFormed, &tb.Untouched)
 				if err != nil {
@@ -382,13 +382,13 @@ func Test_migrate_existingRows(t *testing.T) {
 			var got outcome
 			got.Accounts = summary("accounts", "version = 1 AND updated_at IS NULL AND created_by IS NULL AND owner_id IS NULL")
 			got.Transactions = summary("transactions", "version = 1 AND updated_at IS NULL AND created_by IS NULL")
-			if err := st.repo.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&got.Users); err != nil {
+			if err := st.repo.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM users`).Scan(&got.Users); err != nil {
 				t.Fatal(err)
 			}
-			if got.Problems, err = st.Check(ctx); err != nil {
+			if got.Problems, err = st.Check(t.Context()); err != nil {
 				t.Fatal(err)
 			}
-			txs, err := st.ListTransactions(ctx, TxFilter{})
+			txs, err := st.ListTransactions(t.Context(), TxFilter{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -443,7 +443,7 @@ func Test_Check(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.Check(ctx)
+			got, err := st.Check(t.Context())
 
 			// then
 			checkErr(t, err, "", nil)
@@ -470,12 +470,12 @@ func Test_identity(t *testing.T) {
 	replace := func(t *testing.T, st *Local) {
 		nt := newEntry
 		nt.Payee = "market"
-		if _, err := st.ReplaceTransaction(ctx, 1, nt); err != nil {
+		if _, err := st.ReplaceTransaction(t.Context(), 1, nt); err != nil {
 			t.Fatal(err)
 		}
 	}
 	recategorize := func(t *testing.T, st *Local) {
-		if _, err := st.SetCategories(ctx, []CategoryChange{{TransactionID: 1, Category: "Expenses:Dining"}}); err != nil {
+		if _, err := st.SetCategories(t.Context(), []CategoryChange{{TransactionID: 1, Category: "Expenses:Dining"}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -494,7 +494,7 @@ func Test_identity(t *testing.T) {
 			// given
 			st := newLedger(t, accounts("Assets:Bank EUR"), stored(newEntry))
 			read := func() (uuid string, version int, updated sql.NullString) {
-				err := st.repo.db.QueryRowContext(ctx, `SELECT uuid, version, updated_at FROM transactions WHERE id = 1`).Scan(&uuid, &version, &updated)
+				err := st.repo.db.QueryRowContext(t.Context(), `SELECT uuid, version, updated_at FROM transactions WHERE id = 1`).Scan(&uuid, &version, &updated)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -521,7 +521,7 @@ func Test_identity(t *testing.T) {
 		st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Cash EUR"), stored(newEntry), stored(newEntry))
 
 		// when
-		rows, err := st.repo.db.QueryContext(ctx, `SELECT uuid FROM accounts UNION ALL SELECT uuid FROM transactions`)
+		rows, err := st.repo.db.QueryContext(t.Context(), `SELECT uuid FROM accounts UNION ALL SELECT uuid FROM transactions`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -573,7 +573,7 @@ func Test_usersTable(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			_, err := st.repo.db.ExecContext(ctx, tc.stmt)
+			_, err := st.repo.db.ExecContext(t.Context(), tc.stmt)
 
 			// then
 			if diff := cmp.Diff(tc.wantErr, err != nil); diff != "" {
@@ -588,7 +588,7 @@ func Test_usersTable(t *testing.T) {
 
 		// when
 		var u string
-		err := st.repo.db.QueryRowContext(ctx, `SELECT uuid FROM users`).Scan(&u)
+		err := st.repo.db.QueryRowContext(t.Context(), `SELECT uuid FROM users`).Scan(&u)
 
 		// then
 		checkErr(t, err, "", nil)
@@ -608,7 +608,7 @@ func hasTable(t *testing.T, path, name string) bool {
 	}
 	defer db.Close()
 	var n int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n > 0
@@ -702,7 +702,7 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 				}
 			}
 			if tc.reopen {
-				first, err := Open(ctx, path)
+				first, err := Open(t.Context(), path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -712,7 +712,7 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 			}
 
 			// when
-			st, err := Open(ctx, path)
+			st, err := Open(t.Context(), path)
 
 			// then
 			var got observed
@@ -734,7 +734,7 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 				}
 				defer db.Close()
 				var accounts int
-				if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts`).Scan(&accounts); err != nil {
+				if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM accounts`).Scan(&accounts); err != nil {
 					t.Fatal(err)
 				}
 				got.KeepsRow = accounts == 1

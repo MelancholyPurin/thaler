@@ -98,7 +98,7 @@ func Test_Transfer(t *testing.T) {
 			st := newLedger(t, accts)
 
 			// when
-			got, err := st.Transfer(ctx, tc.req)
+			got, err := st.Transfer(t.Context(), tc.req)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -161,13 +161,13 @@ func Test_Transfer_balances(t *testing.T) {
 
 			// when
 			for _, m := range tc.moves {
-				if _, err := st.Transfer(ctx, m); err != nil {
+				if _, err := st.Transfer(t.Context(), m); err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			// then
-			report, err := st.BalanceReport(ctx, BalanceRequest{})
+			report, err := st.BalanceReport(t.Context(), BalanceRequest{})
 			checkErr(t, err, "", nil)
 			if diff := cmp.Diff(tc.want, report.Lines, equalEmpty); diff != "" {
 				t.Errorf("balances mismatch (-want +got):\n%s", diff)
@@ -180,7 +180,7 @@ func Test_Transfer_balances(t *testing.T) {
 func openingBalance(account string, balance ledger.Money, asOf string) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if _, err := st.SetOpeningBalance(ctx, OpeningBalanceRequest{Account: account, Balance: balance, AsOf: day(asOf)}); err != nil {
+		if _, err := st.SetOpeningBalance(t.Context(), OpeningBalanceRequest{Account: account, Balance: balance, AsOf: day(asOf)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -275,7 +275,7 @@ func Test_SetOpeningBalance(t *testing.T) {
 			}
 
 			// when
-			got, err := st.SetOpeningBalance(ctx, tc.req)
+			got, err := st.SetOpeningBalance(t.Context(), tc.req)
 
 			// then
 			checkErr(t, err, tc.wantErr, tc.wantIs)
@@ -348,7 +348,7 @@ func Test_SetCategories_transferLinks(t *testing.T) {
 			st := newLedger(t, pairOfTransfers()...)
 
 			// when
-			_, err := st.SetCategories(ctx, tc.changes)
+			_, err := st.SetCategories(t.Context(), tc.changes)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -363,13 +363,13 @@ func Test_SetCategories_transferLinks(t *testing.T) {
 		// given
 		st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Dollars USD"), func(t *testing.T, st *Local) {
 			req := TransferRequest{From: "Assets:Bank", To: "Assets:Dollars", Amount: eur(10000), ToAmount: usd(10850), Date: day("2026-10-06")}
-			if _, err := st.Transfer(ctx, req); err != nil {
+			if _, err := st.Transfer(t.Context(), req); err != nil {
 				t.Fatal(err)
 			}
 		})
 
 		// when
-		_, err := st.SetCategories(ctx, []CategoryChange{{TransactionID: 1, Category: "Expenses:Fees"}})
+		_, err := st.SetCategories(t.Context(), []CategoryChange{{TransactionID: 1, Category: "Expenses:Fees"}})
 
 		// then
 		checkErr(t, err, "", nil)
@@ -421,7 +421,7 @@ func Test_ReplaceTransaction_transferLinks(t *testing.T) {
 			st := newLedger(t, pairOfTransfers()...)
 
 			// when
-			_, err := st.ReplaceTransaction(ctx, 1, tc.nt)
+			_, err := st.ReplaceTransaction(t.Context(), 1, tc.nt)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -450,7 +450,7 @@ func Test_DeleteTransaction_transferLink(t *testing.T) {
 			st := newLedger(t, pairOfTransfers()...)
 
 			// when
-			err := st.DeleteTransaction(ctx, tc.id)
+			err := st.DeleteTransaction(t.Context(), tc.id)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -490,7 +490,7 @@ func Test_importUndo_afterPairing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
 			st := newLedger(t, tc.setup...)
-			res, err := st.Import(ctx, ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}})
+			res, err := st.Import(t.Context(), ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}})
 			if err != nil || len(res.Linked) != 1 {
 				t.Fatalf("setup: %+v, %v", res, err)
 			}
@@ -500,12 +500,12 @@ func Test_importUndo_afterPairing(t *testing.T) {
 			for _, l := range res.Linked {
 				back = append(back, CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
 			}
-			_, err = st.SetCategories(ctx, back)
+			_, err = st.SetCategories(t.Context(), back)
 			if err != nil {
 				t.Fatal(err)
 			}
 			for _, id := range res.IDs {
-				if err := st.DeleteTransaction(ctx, id); err != nil {
+				if err := st.DeleteTransaction(t.Context(), id); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -515,7 +515,7 @@ func Test_importUndo_afterPairing(t *testing.T) {
 				t.Errorf("the ledger should be as before the second import (-want +got):\n%s", diff)
 			}
 			checkConsistent(t, st)
-			again, err := st.Import(ctx, ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}})
+			again, err := st.Import(t.Context(), ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}})
 			checkErr(t, err, "", nil)
 			if diff := cmp.Diff(1, again.Transfers); diff != "" {
 				t.Errorf("importing again after the undo should pair again (-want +got):\n%s", diff)

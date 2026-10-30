@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -18,8 +17,6 @@ import (
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-var ctx = context.Background()
-
 // equalEmpty treats nil and empty slices alike.
 var equalEmpty = cmpopts.EquateEmpty()
 
@@ -32,7 +29,7 @@ func fixedNow() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC
 
 func openLedger(t *testing.T) *core.Local {
 	t.Helper()
-	st, err := core.Open(ctx, ":memory:")
+	st, err := core.Open(t.Context(), ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +39,7 @@ func openLedger(t *testing.T) *core.Local {
 
 func modelOn(t *testing.T, st *core.Local, width, height int) *Model {
 	t.Helper()
-	m, err := newWithClock(ctx, st, Options{LoadConfig: testConfig}, fixedNow)
+	m, err := newWithClock(t.Context(), st, Options{LoadConfig: testConfig}, fixedNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +57,7 @@ func book(t *testing.T, st *core.Local, date, payee, account, category string, m
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := st.AddTransaction(ctx, core.NewTransaction{
+	res, err := st.AddTransaction(t.Context(), core.NewTransaction{
 		Date: d, Payee: payee,
 		Postings: []ledger.Posting{{Account: account, Amount: eur(minor)}, {Account: category, Amount: eur(-minor)}},
 	})
@@ -78,7 +75,7 @@ func openAccounts(t *testing.T, st *core.Local, specs ...string) {
 		if len(fields) > 1 {
 			cur = ledger.Currency(fields[1])
 		}
-		if _, err := st.AddAccount(ctx, fields[0], cur); err != nil {
+		if _, err := st.AddAccount(t.Context(), fields[0], cur); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -223,7 +220,7 @@ func visibleRows(m *Model) []string {
 // storedLines lists what is stored, oldest first: "date payee | account amount | ...".
 func storedLines(t *testing.T, st core.Service) []string {
 	t.Helper()
-	txs, err := st.ListTransactions(ctx, core.TxFilter{})
+	txs, err := st.ListTransactions(t.Context(), core.TxFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +272,7 @@ func checkView(t *testing.T, view string, shows, hides []string) {
 // txByPayee finds the newest transaction of a payee.
 func txByPayee(t *testing.T, st core.Service, payee string) core.TxView {
 	t.Helper()
-	txs, err := st.ListTransactions(ctx, core.TxFilter{})
+	txs, err := st.ListTransactions(t.Context(), core.TxFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +311,7 @@ func selectPayee(t *testing.T, m *Model, payee string) {
 // checkConsistent fails if the ledger's own check finds anything wrong.
 func checkConsistent(t *testing.T, st core.Service) {
 	t.Helper()
-	problems, err := st.Check(ctx)
+	problems, err := st.Check(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +322,7 @@ func checkConsistent(t *testing.T, st core.Service) {
 
 func txCount(t *testing.T, st core.Service) int {
 	t.Helper()
-	txs, err := st.ListTransactions(ctx, core.TxFilter{})
+	txs, err := st.ListTransactions(t.Context(), core.TxFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

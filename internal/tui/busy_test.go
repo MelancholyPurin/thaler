@@ -163,25 +163,36 @@ func Test_Update_busy_finish(t *testing.T) {
 
 // A backup that fails leaves the popup open, ready for another try.
 func Test_Update_busy_failure(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	m := backupModel(t, dir)
-	play(m, "S enter") // writes the backup
-
-	// when
-	play(m, "S enter") // the same name again: refused
-
-	// then
 	type observed struct {
 		Mode string
 		Busy bool
 		Err  string
 	}
-	got := observed{Mode: modeNames[m.mode], Busy: m.busy != nil, Err: m.bkp.err}
-	got.Err = strings.ReplaceAll(got.Err, dir, "{dir}")
-	want := observed{Mode: "backup", Err: "{dir}/backups/thaler-20261022-120000.db already exists"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+	tcs := []struct {
+		name   string
+		script string
+		want   observed
+	}{
+		{
+			name: "the same name again is refused", script: "S enter S enter",
+			want: observed{Mode: "backup", Err: "{dir}/backups/thaler-20261022-120000.db already exists"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := backupModel(t, dir)
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{Mode: modeNames[m.mode], Busy: m.busy != nil, Err: strings.ReplaceAll(m.bkp.err, dir, "{dir}")}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

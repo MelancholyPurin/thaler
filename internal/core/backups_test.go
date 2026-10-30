@@ -81,22 +81,34 @@ func Test_ListBackups(t *testing.T) {
 }
 
 func Test_ListBackups_modificationTime(t *testing.T) {
-	// given
-	dir := t.TempDir()
 	base := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
-	aged(t, dir, "thaler-20261021-090000.db", base, 3)
-
-	// when
-	got, err := ListBackups(dir)
-
-	// then
-	if err != nil {
-		t.Fatal(err)
+	tcs := []struct {
+		name string
+		days int // how old the file is
+		want time.Time
+	}{
+		{name: "three days old", days: 3, want: base.AddDate(0, 0, -3)},
+		{name: "changed just now", days: 0, want: base},
 	}
-	if len(got) != 1 {
-		t.Fatalf("listed %d backups, want 1", len(got))
-	}
-	if diff := cmp.Diff(base.AddDate(0, 0, -3), got[0].When); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			aged(t, dir, "thaler-20261021-090000.db", base, tc.days)
+
+			// when
+			got, err := ListBackups(dir)
+
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("listed %d backups, want 1", len(got))
+			}
+			if diff := cmp.Diff(tc.want, got[0].When); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

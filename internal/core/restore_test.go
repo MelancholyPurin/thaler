@@ -23,7 +23,7 @@ func accountNames(t *testing.T, path string) []string {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(ctx, `SELECT name FROM accounts ORDER BY name`)
+	rows, err := db.QueryContext(t.Context(), `SELECT name FROM accounts ORDER BY name`)
 	if err != nil {
 		return nil
 	}
@@ -62,11 +62,11 @@ func everythingBelow(t *testing.T, dir string) []string {
 // ledgerWith builds a database file at path holding one account.
 func ledgerWith(t *testing.T, path, account string) {
 	t.Helper()
-	st, err := Open(ctx, path)
+	st, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.AddAccount(ctx, account, "EUR"); err != nil {
+	if _, err := st.AddAccount(t.Context(), account, "EUR"); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Close(); err != nil {
@@ -101,16 +101,16 @@ func Test_RestoreBackup(t *testing.T) {
 	}
 	sealedOld := func(t *testing.T, _, _ string) string {
 		cheapScrypt(t)
-		st, err := Open(ctx, ":memory:")
+		st, err := Open(t.Context(), ":memory:")
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer st.Close()
-		if _, err := st.AddAccount(ctx, "Assets:Old", "EUR"); err != nil {
+		if _, err := st.AddAccount(t.Context(), "Assets:Old", "EUR"); err != nil {
 			t.Fatal(err)
 		}
 		p := filepath.Join(t.TempDir(), "backup.db.age")
-		if err := st.BackupEncrypted(ctx, p, "right"); err != nil {
+		if err := st.BackupEncrypted(t.Context(), p, "right"); err != nil {
 			t.Fatal(err)
 		}
 		return p
@@ -184,7 +184,7 @@ func Test_RestoreBackup(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer db.Close()
-				if _, err := db.ExecContext(ctx, `CREATE TABLE notes (x TEXT); PRAGMA user_version = 3`); err != nil {
+				if _, err := db.ExecContext(t.Context(), `CREATE TABLE notes (x TEXT); PRAGMA user_version = 3`); err != nil {
 					t.Fatal(err)
 				}
 				return p
@@ -240,7 +240,7 @@ func Test_RestoreBackup(t *testing.T) {
 			src := tc.source(t, dir, dbPath)
 
 			// when
-			res, err := RestoreBackup(ctx, src, dbPath, tc.passphrase)
+			res, err := RestoreBackup(t.Context(), src, dbPath, tc.passphrase)
 
 			// then
 			got := observed{Upgrade: res.Upgrade, Accounts: accountNames(t, dbPath)}
@@ -274,65 +274,92 @@ func Test_RestoreBackup(t *testing.T) {
 
 // Restoring the database that a restore set aside puts things back as they were.
 func Test_RestoreBackup_undo(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "thaler.db")
-	ledgerWith(t, dbPath, "Assets:Live")
-	backup := filepath.Join(t.TempDir(), "backup.db")
-	ledgerWith(t, backup, "Assets:Old")
-	first, err := RestoreBackup(ctx, backup, dbPath, "")
-	if err != nil {
-		t.Fatal(err)
+	tcs := []struct {
+		name string
+		live string // the account in the database in place
+		old  string // the account in the backup
+	}{
+		{name: "one account each", live: "Assets:Live", old: "Assets:Old"},
 	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			dbPath := filepath.Join(dir, "thaler.db")
+			ledgerWith(t, dbPath, tc.live)
+			backup := filepath.Join(t.TempDir(), "backup.db")
+			ledgerWith(t, backup, tc.old)
+			first, err := RestoreBackup(t.Context(), backup, dbPath, "")
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	// when
-	second, err := RestoreBackup(ctx, first.Replaced, dbPath, "")
+			// when
+			second, err := RestoreBackup(t.Context(), first.Replaced, dbPath, "")
 
-	// then
-	if err != nil {
-		t.Fatal(err)
-	}
-	if diff := cmp.Diff([]string{"Assets:Live"}, accountNames(t, dbPath)); diff != "" {
-		t.Errorf("the database is not back as it was (-want +got):\n%s", diff)
-	}
-	if diff := cmp.Diff([]string{"Assets:Old"}, accountNames(t, second.Replaced)); diff != "" {
-		t.Errorf("the restored backup was not kept (-want +got):\n%s", diff)
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff([]string{tc.live}, accountNames(t, dbPath)); diff != "" {
+				t.Errorf("the database is not back as it was (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff([]string{tc.old}, accountNames(t, second.Replaced)); diff != "" {
+				t.Errorf("the restored backup was not kept (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
 // A restored database is a working one: it opens, upgrades if it is old, and
 // keeps what the backup held.
 func Test_RestoreBackup_opens(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "thaler.db")
-	old := oldDatabase(t,
-		`CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT '')`,
-		`INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`,
-		`INSERT INTO accounts (name, type, currency) VALUES ('Assets:Bank', 'Assets', 'EUR')`)
-	if _, err := RestoreBackup(ctx, old, dbPath, ""); err != nil {
-		t.Fatal(err)
+	tcs := []struct {
+		name  string
+		setup []string // builds the old database, after the initial schema
+		want  string   // the account that must still be there
+	}{
+		{
+			name: "a database from before names were tracked by file",
+			setup: []string{
+				`CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT '')`,
+				`INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`,
+				`INSERT INTO accounts (name, type, currency) VALUES ('Assets:Bank', 'Assets', 'EUR')`,
+			},
+			want: "Assets:Bank",
+		},
 	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			dbPath := filepath.Join(dir, "thaler.db")
+			old := oldDatabase(t, tc.setup...)
+			if _, err := RestoreBackup(t.Context(), old, dbPath, ""); err != nil {
+				t.Fatal(err)
+			}
 
-	// when
-	st, err := Open(ctx, dbPath)
+			// when
+			st, err := Open(t.Context(), dbPath)
 
-	// then
-	if err != nil {
-		t.Fatalf("the restored database does not open: %v", err)
+			// then
+			if err != nil {
+				t.Fatalf("the restored database does not open: %v", err)
+			}
+			defer st.Close()
+			acct, err := st.GetAccount(t.Context(), tc.want)
+			if err != nil {
+				t.Fatalf("the data is not there: %v", err)
+			}
+			if diff := cmp.Diff(tc.want, acct.Name); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			if st.PreMigrationBackup() == "" {
+				t.Error("an old backup is upgraded after a copy of it, but no copy was made")
+			}
+			checkConsistent(t, st)
+		})
 	}
-	defer st.Close()
-	acct, err := st.GetAccount(ctx, "Assets:Bank")
-	if err != nil {
-		t.Fatalf("the data is not there: %v", err)
-	}
-	if diff := cmp.Diff("Assets:Bank", acct.Name); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
-	}
-	if st.PreMigrationBackup() == "" {
-		t.Error("an old backup is upgraded after a copy of it, but no copy was made")
-	}
-	checkConsistent(t, st)
 }
 
 func Test_BackupIsEncrypted(t *testing.T) {

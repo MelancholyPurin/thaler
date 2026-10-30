@@ -343,6 +343,7 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 - [ ] `ENG-9` Fail the check when coverage drops under a floor
 - [ ] `ENG-10` Split `(*Local).Import` and flatten the deeply nested code the linter flagged
 - [ ] `ENG-11` Branch protection requiring `result`, squash merge only, branches deleted after merge
+- [ ] `ENG-12` Run the database migrations with `golang-migrate`: one version number, a test that every migration file is registered in order, the copy before an upgrade and the refusal of a newer database kept, and databases written by the current runner converted
 
 ### DOC: Documentation
 

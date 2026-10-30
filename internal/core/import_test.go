@@ -61,7 +61,7 @@ func (tc importCase) verify(t *testing.T, st *Local, got ImportResult, err error
 		return
 	}
 	// Importing the same file again changes nothing.
-	again, err := st.Import(ctx, tc.request())
+	again, err := st.Import(t.Context(), tc.request())
 	if err != nil {
 		t.Fatalf("importing again: %v", err)
 	}
@@ -195,7 +195,7 @@ func Test_Import(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.Import(ctx, tc.request())
+			got, err := st.Import(t.Context(), tc.request())
 
 			// then
 			tc.verify(t, st, got, err)
@@ -334,7 +334,7 @@ func Test_Import_adoptingHandEnteredTransactions(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.Import(ctx, tc.request())
+			got, err := st.Import(t.Context(), tc.request())
 
 			// then
 			tc.verify(t, st, got, err)
@@ -506,7 +506,7 @@ func Test_Import_pairingTransfers(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.Import(ctx, tc.request())
+			got, err := st.Import(t.Context(), tc.request())
 
 			// then
 			tc.verify(t, st, got, err)
@@ -545,7 +545,7 @@ func Test_DetachImport(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			err := st.DetachImport(ctx, tc.ids)
+			err := st.DetachImport(t.Context(), tc.ids)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -566,12 +566,12 @@ func Test_DetachImport(t *testing.T) {
 	t.Run("a detached entry takes the same bank row over again", func(t *testing.T) {
 		// given
 		st := newLedger(t, setup...)
-		if err := st.DetachImport(ctx, []int64{1}); err != nil {
+		if err := st.DetachImport(t.Context(), []int64{1}); err != nil {
 			t.Fatal(err)
 		}
 
 		// when
-		got, err := st.Import(ctx, ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{bankRow("2026-10-03", -2347)}})
+		got, err := st.Import(t.Context(), ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{bankRow("2026-10-03", -2347)}})
 
 		// then
 		checkErr(t, err, "", nil)
@@ -638,7 +638,7 @@ func Test_Recategorize(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.Recategorize(ctx, tc.req)
+			got, err := st.Recategorize(t.Context(), tc.req)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)

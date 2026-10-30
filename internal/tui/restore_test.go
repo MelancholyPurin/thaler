@@ -44,16 +44,16 @@ func makeBackup(t *testing.T, dir string, b seeded) {
 			t.Fatal(err)
 		}
 	} else {
-		st, err := core.Open(ctx, filepath.Join(t.TempDir(), "source.db"))
+		st, err := core.Open(t.Context(), filepath.Join(t.TempDir(), "source.db"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		openAccounts(t, st, "Assets:Bank EUR")
 		book(t, st, "2026-10-01", b.payee, "Assets:Bank", "Expenses:Fun", -500)
 		if strings.HasSuffix(b.name, ".age") {
-			err = st.BackupEncrypted(ctx, dest, "pw")
+			err = st.BackupEncrypted(t.Context(), dest, "pw")
 		} else {
-			err = st.Backup(ctx, dest)
+			err = st.Backup(t.Context(), dest)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -74,7 +74,7 @@ func restoreModel(t *testing.T, dir string, backups ...seeded) *Model {
 	t.Helper()
 	cheapScrypt(t)
 	dbPath := filepath.Join(dir, "thaler.db")
-	st, err := core.Open(ctx, dbPath)
+	st, err := core.Open(t.Context(), dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func restoreModel(t *testing.T, dir string, backups ...seeded) *Model {
 	for _, b := range backups {
 		makeBackup(t, dir, b)
 	}
-	m, err := newWithClock(ctx, st, Options{
+	m, err := newWithClock(t.Context(), st, Options{
 		LoadConfig:   testConfig,
 		DatabasePath: dbPath,
 		BackupDir:    filepath.Join(dir, "backups"),
@@ -295,52 +295,78 @@ func Test_Update_restore(t *testing.T) {
 
 // What the screen shows follows the database that was put in place.
 func Test_Update_restore_refreshes(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	m := restoreModel(t, dir, seeded{"thaler-20261021-090000.db", "Metzger", day21})
-	before := visibleRows(m)
-
-	// when
-	play(m, "ctrl+r enter enter")
-
-	// then
-	got := map[string][]string{"before": before, "after": visibleRows(m)}
-	want := map[string][]string{
-		"before": {"2026-10-03 Kino -12.00"},
-		"after":  {"2026-10-01 Metzger -5.00"},
+	type observed struct {
+		Before, After []string // the rows the list shows
+		Undoable      bool     // something done before the restore can still be undone
 	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+	tcs := []struct {
+		name   string
+		seeds  []seeded
+		script string
+		want   observed
+	}{
+		{
+			name: "the rows are the restored ones", seeds: []seeded{{"thaler-20261021-090000.db", "Metzger", day21}}, script: "ctrl+r enter enter",
+			want: observed{Before: []string{"2026-10-03 Kino -12.00"}, After: []string{"2026-10-01 Metzger -5.00"}},
+		},
 	}
-	if m.undo != nil || m.lastAccount != "" {
-		t.Errorf("what was done before the restore can still be undone: %v", m.undo)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := restoreModel(t, dir, tc.seeds...)
+			before := visibleRows(m)
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{Before: before, After: visibleRows(m), Undoable: m.undo != nil || m.lastAccount != ""}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
 // If nothing can be opened after a restore there is no database to show, so the
 // interface ends with the reason.
 func Test_Update_restore_ends(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	m := restoreModel(t, dir, seeded{"thaler-20261021-090000.db", "Metzger", day21})
-	m.opts.Restore = func(context.Context, string, string) (core.Service, core.RestoreResult, error) {
-		return nil, core.RestoreResult{}, errors.New("disk on fire")
-	}
-
-	// when
-	play(m, "ctrl+r enter")
-	m.Update(key("enter"))
-	cmd := settle(m)
-
-	// then
 	type observed struct {
 		Quit  bool
 		Fatal string
 	}
-	got := observed{Quit: cmd != nil && cmd() == tea.Quit(), Fatal: strings.ReplaceAll(m.fatal.Error(), dir, "{dir}")}
-	want := observed{Quit: true, Fatal: "restoring {dir}/backups/thaler-20261021-090000.db: disk on fire"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+	tcs := []struct {
+		name    string
+		seeds   []seeded
+		openErr error // why no database can be opened after the restore
+		want    observed
+	}{
+		{
+			name: "nothing can be opened", seeds: []seeded{{"thaler-20261021-090000.db", "Metzger", day21}}, openErr: errors.New("disk on fire"),
+			want: observed{Quit: true, Fatal: "restoring {dir}/backups/thaler-20261021-090000.db: disk on fire"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := restoreModel(t, dir, tc.seeds...)
+			m.opts.Restore = func(context.Context, string, string) (core.Service, core.RestoreResult, error) {
+				return nil, core.RestoreResult{}, tc.openErr
+			}
+
+			// when
+			play(m, "ctrl+r enter")
+			m.Update(key("enter"))
+			cmd := settle(m)
+
+			// then
+			got := observed{Quit: cmd != nil && cmd() == tea.Quit(), Fatal: strings.ReplaceAll(m.fatal.Error(), dir, "{dir}")}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

@@ -144,24 +144,54 @@ func Test_Update_prune(t *testing.T) {
 }
 
 func Test_prunePopup(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	touch(t, dir, "backups/thaler-20261022-090000.db", 0)
-	for i, n := range []string{"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"} {
-		touch(t, dir, "backups/replaced/thaler-202610"+n+"-100000-replaced.db", 10+i) // 01 is the newest
+	tcs := []struct {
+		name        string
+		keep        int
+		replaced    []string // names of the databases restores replaced, newest first
+		presses     int      // times down is pressed after the popup opens
+		firstShows  []string
+		firstHides  []string
+		lastShows   []string
+		lastHides   []string
+		wantScrolls int // the first line shown at the end
+	}{
+		{
+			name: "twelve replaced databases, eleven to remove, scrolled to the end", keep: 1, presses: 14,
+			replaced: []string{
+				"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
+			},
+			firstShows: []string{
+				"Remove old backups", "Keeping the newest 1 in each folder", "These 11 would go",
+				"replaced by a restore · 11 of 12", "enter remove 11 · ↑/↓ scroll",
+			},
+			firstHides:  []string{"backups · "},
+			lastShows:   []string{"thaler-20261012-100000-replaced.db"},
+			lastHides:   []string{"thaler-20261002-100000-replaced.db"},
+			wantScrolls: 3, // 11 files and a heading: 12 lines, nine shown
+		},
 	}
-	m := reminderModel(t, dir, false, keepSetting(1))
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			touch(t, dir, "backups/thaler-20261022-090000.db", 0)
+			for i, n := range tc.replaced {
+				touch(t, dir, "backups/replaced/thaler-202610"+n+"-100000-replaced.db", 10+i)
+			}
+			m := reminderModel(t, dir, false, keepSetting(tc.keep))
 
-	// when
-	play(m, "ctrl+p")
-	first := m.View()
-	play(m, "down down down down down down down down down down down down down down")
-	last := m.View()
+			// when
+			play(m, "ctrl+p")
+			first := m.View()
+			play(m, strings.TrimSpace(strings.Repeat("down ", tc.presses)))
+			last := m.View()
 
-	// then
-	checkView(t, first, []string{"Remove old backups", "Keeping the newest 1 in each folder", "These 11 would go", "replaced by a restore · 11 of 12", "enter remove 11 · ↑/↓ scroll"}, []string{"backups · "})
-	checkView(t, last, []string{"thaler-20261012-100000-replaced.db"}, []string{"thaler-20261002-100000-replaced.db"})
-	if m.prn.top != len(m.prn.lines)-pruneRows {
-		t.Errorf("scrolled to line %d, want the last window from %d", m.prn.top, len(m.prn.lines)-pruneRows)
+			// then
+			checkView(t, first, tc.firstShows, tc.firstHides)
+			checkView(t, last, tc.lastShows, tc.lastHides)
+			if diff := cmp.Diff(tc.wantScrolls, m.prn.top); diff != "" {
+				t.Errorf("first line shown (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
