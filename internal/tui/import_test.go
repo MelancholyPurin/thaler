@@ -624,7 +624,7 @@ func Test_Update_import_adoptingEntries(t *testing.T) {
 
 			// then
 			got := observed{Flow: observe(t, m, st, before)}
-			txs, err := st.ListTransactions(ctx, core.TxFilter{})
+			txs, err := st.ListTransactions(t.Context(), core.TxFilter{})
 			if err != nil {
 				t.Fatal(err)
 			}

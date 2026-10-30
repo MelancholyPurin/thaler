@@ -534,7 +534,7 @@ func Test_Update_form_titleAndDescription(t *testing.T) {
 				if n.payee == "Sammler" {
 					cat, amount = ledger.UncategorizedExpense, 100
 				}
-				if _, err := st.AddTransaction(ctx, core.NewTransaction{
+				if _, err := st.AddTransaction(t.Context(), core.NewTransaction{
 					Date: d(n.date), Payee: n.payee, Description: n.description,
 					Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-amount)}, {Account: cat, Amount: eur(amount)}},
 				}); err != nil {

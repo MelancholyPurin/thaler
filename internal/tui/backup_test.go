@@ -22,7 +22,7 @@ func backupModel(t *testing.T, dir string) *Model {
 	st := openLedger(t)
 	openAccounts(t, st, "Assets:Bank EUR")
 	book(t, st, "2026-10-03", "Kino", "Assets:Bank", "Expenses:Fun", -1200)
-	m, err := newWithClock(ctx, st, Options{
+	m, err := newWithClock(t.Context(), st, Options{
 		LoadConfig:   testConfig,
 		DatabasePath: filepath.Join(dir, "thaler.db"),
 		BackupDir:    filepath.Join(dir, "backups"),
@@ -46,7 +46,7 @@ func cheapScrypt(t *testing.T) {
 // openFile opens the database file at path, as a restore would.
 func openFile(t *testing.T, path string) *core.Local {
 	t.Helper()
-	st, err := core.Open(ctx, path)
+	st, err := core.Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("the backup does not open: %v", err)
 	}
@@ -286,19 +286,33 @@ func readFileString(t *testing.T, path string) string {
 
 // A backup that was written can be opened as a ledger holding the same data.
 func Test_Update_backup_contents(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	m := backupModel(t, dir)
+	tcs := []struct {
+		name   string
+		script string
+		file   string // the backup that is written, below the folder
+		want   []string
+	}{
+		{
+			name: "the ledger is in the backup", script: "S enter", file: "backups/thaler-20261022-120000.db",
+			want: []string{"2026-10-03 Kino | Assets:Bank -12.00 | Expenses:Fun 12.00"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := backupModel(t, dir)
 
-	// when
-	play(m, "S enter")
+			// when
+			play(m, tc.script)
 
-	// then
-	restored := openFile(t, filepath.Join(dir, "backups", "thaler-20261022-120000.db"))
-	got := storedLines(t, restored)
-	want := []string{"2026-10-03 Kino | Assets:Bank -12.00 | Expenses:Fun 12.00"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("the backup does not hold the ledger (-want +got):\n%s", diff)
+			// then
+			restored := openFile(t, filepath.Join(dir, tc.file))
+			got := storedLines(t, restored)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("the backup does not hold the ledger (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -332,7 +346,7 @@ func Test_Update_backup_encryptedContents(t *testing.T) {
 			dest := filepath.Join(dir, "restored.db")
 
 			// when
-			err := core.DecryptBackup(ctx, src, dest, tc.passphrase)
+			err := core.DecryptBackup(t.Context(), src, dest, tc.passphrase)
 
 			// then
 			var got observed
@@ -350,17 +364,30 @@ func Test_Update_backup_encryptedContents(t *testing.T) {
 
 // Without a known backups folder S says so instead of writing somewhere.
 func Test_Update_backup_unknownFolder(t *testing.T) {
-	// given
-	m, _ := newModel(t)
+	tcs := []struct {
+		name   string
+		script string
+		want   Flow
+	}{
+		{
+			name: "S says there is nowhere to write", script: "S",
+			want: Flow{Mode: "list", Status: "no backup location is known", StatusIsError: true},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := newModel(t)
 
-	// when
-	play(m, "S")
+			// when
+			play(m, tc.script)
 
-	// then
-	got := Flow{Mode: modeNames[m.mode], Status: m.status, StatusIsError: m.statusIsError}
-	want := Flow{Mode: "list", Status: "no backup location is known", StatusIsError: true}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+			// then
+			got := Flow{Mode: modeNames[m.mode], Status: m.status, StatusIsError: m.statusIsError}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

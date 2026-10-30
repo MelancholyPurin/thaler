@@ -11,7 +11,7 @@ import (
 // balanceLines are the balances of the asset and liability accounts.
 func balanceLines(t *testing.T, st core.Service) []string {
 	t.Helper()
-	report, err := st.BalanceReport(ctx, core.BalanceRequest{})
+	report, err := st.BalanceReport(t.Context(), core.BalanceRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func balanceLines(t *testing.T, st core.Service) []string {
 
 func accountNames(t *testing.T, st core.Service) []string {
 	t.Helper()
-	accs, err := st.ListAccounts(ctx)
+	accs, err := st.ListAccounts(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

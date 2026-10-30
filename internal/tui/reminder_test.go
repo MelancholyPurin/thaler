@@ -22,7 +22,7 @@ func reminderModel(t *testing.T, dir string, empty bool, load ConfigLoader) *Mod
 	if !empty {
 		book(t, st, "2026-10-03", "Kino", "Assets:Bank", "Expenses:Fun", -1200)
 	}
-	m, err := newWithClock(ctx, st, Options{
+	m, err := newWithClock(t.Context(), st, Options{
 		LoadConfig:   load,
 		DatabasePath: filepath.Join(dir, "thaler.db"),
 		BackupDir:    filepath.Join(dir, "backups"),
@@ -121,26 +121,41 @@ func Test_backupReminder(t *testing.T) {
 }
 
 func Test_backupReminder_followsWhatYouDo(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	touch(t, dir, "backups/thaler-20261001-090000.db", 21)
-	days := 30
-	m := reminderModel(t, dir, false, func() (*config.Config, error) { return &config.Config{BackupReminderDays: &days}, nil })
 	type observed struct{ Start, Shorter, Backed string }
-	var got observed
+	tcs := []struct {
+		name  string
+		age   int // days since the only backup
+		first int // the reminder interval at the start, and then
+		then  int
+		want  observed
+	}{
+		{
+			name: "a shorter interval brings it, a new backup ends it", age: 21, first: 30, then: 7,
+			want: observed{Shorter: "Last backup 21 days ago: S makes a new one"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			touch(t, dir, "backups/thaler-20261001-090000.db", tc.age)
+			days := tc.first
+			m := reminderModel(t, dir, false, func() (*config.Config, error) { return &config.Config{BackupReminderDays: &days}, nil })
+			var got observed
 
-	// when
-	got.Start = m.backupReminder()
-	days = 7
-	m.configEdited(nil)
-	got.Shorter = m.backupReminder()
-	play(m, "S enter")
-	got.Backed = m.backupReminder()
+			// when
+			got.Start = m.backupReminder()
+			days = tc.then
+			m.configEdited(nil)
+			got.Shorter = m.backupReminder()
+			play(m, "S enter")
+			got.Backed = m.backupReminder()
 
-	// then
-	want := observed{Shorter: "Last backup 21 days ago: S makes a new one"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -172,28 +187,43 @@ func Test_daysAgo(t *testing.T) {
 // A backup made by something else while the interface is open ends the reminder,
 // but the folder is not read on every key.
 func Test_backupReminder_noticesOutsideBackups(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	m := reminderModel(t, dir, false, testConfig)
-	clock := fixedNow()
-	m.now = func() time.Time { return clock }
-	m.refreshBackups()
 	type observed struct{ Before, Soon, Later string }
-	var got observed
-	got.Before = m.backupReminder()
+	const never = "No backup yet: S makes one"
+	tcs := []struct {
+		name  string
+		soon  time.Duration // the first key is pressed this long after the backup appeared
+		later time.Duration // and the second this much after that
+		want  observed
+	}{
+		{
+			name: "not read on every key, but within a minute or so", soon: 10 * time.Second, later: time.Minute,
+			want: observed{Before: never, Soon: never},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			m := reminderModel(t, dir, false, testConfig)
+			clock := fixedNow()
+			m.now = func() time.Time { return clock }
+			m.refreshBackups()
+			var got observed
+			got.Before = m.backupReminder()
 
-	// when
-	touch(t, dir, "backups/thaler-20261022-110000.db", 0)
-	clock = clock.Add(10 * time.Second)
-	press(m, "t")
-	got.Soon = m.backupReminder()
-	clock = clock.Add(time.Minute)
-	press(m, "t")
-	got.Later = m.backupReminder()
+			// when
+			touch(t, dir, "backups/thaler-20261022-110000.db", 0)
+			clock = clock.Add(tc.soon)
+			press(m, "t")
+			got.Soon = m.backupReminder()
+			clock = clock.Add(tc.later)
+			press(m, "t")
+			got.Later = m.backupReminder()
 
-	// then
-	want := observed{Before: "No backup yet: S makes one", Soon: "No backup yet: S makes one"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
