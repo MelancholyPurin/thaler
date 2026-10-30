@@ -15,10 +15,10 @@ import (
 	"github.com/melancholypurin/thaler/internal/config"
 )
 
-//go:embed migrations/*.up.sql
+//go:embed dbmigrations/*.up.sql
 var migrationFS embed.FS
 
-// migrate applies migrations/YYYYMMDD_name.up.sql files in name order. Applied
+// migrate applies dbmigrations/YYYYMMDD_name.up.sql files in name order. Applied
 // migrations are recorded by file name in schema_migrations, so a migration
 // that lands on a branch with an earlier date than one already applied is still
 // picked up. Each migration runs in its own transaction.
@@ -69,7 +69,7 @@ func (r *repository) migrate(ctx context.Context) error {
 		}
 	}
 	for _, f := range pending {
-		body, err := migrationFS.ReadFile("migrations/" + f)
+		body, err := migrationFS.ReadFile("dbmigrations/" + f)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func (r *repository) migrate(ctx context.Context) error {
 
 // migrationFiles is the embedded migrations, in the order they are applied.
 func migrationFiles() ([]string, error) {
-	entries, err := fs.ReadDir(migrationFS, "migrations")
+	entries, err := fs.ReadDir(migrationFS, "dbmigrations")
 	if err != nil {
 		return nil, err
 	}

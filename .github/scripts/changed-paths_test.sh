@@ -34,7 +34,7 @@ cases=(
 	"the Makefile | +Makefile | true"
 	"the lint configuration | +.golangci.yml | true"
 	"the embedded example config | +config.example.toml | true"
-	"an embedded migration | +internal/core/migrations/20261101_x.up.sql | true"
+	"an embedded migration | +internal/core/dbmigrations/20261101_x.up.sql | true"
 	"a test fixture | +internal/importer/testdata/sample.csv | true"
 	"a workflow | +.github/workflows/ci.yml | true"
 	"the filter script | +.github/scripts/changed-paths.sh | true"

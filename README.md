@@ -237,7 +237,7 @@ core/repository.go    Local's SQL; unexported, so nothing outside core can bypas
 core/migrations.go    schema versioning
 ```
 
-The schema lives in `internal/core/migrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
+The schema lives in `internal/core/dbmigrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
 
 ## Decisions worth knowing
 
