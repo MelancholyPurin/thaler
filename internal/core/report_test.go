@@ -29,7 +29,7 @@ func balancesLedger() []given {
 func setRate(date, base, quote, rate string) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if err := st.SetRate(ctx, date, ledger.Currency(base), ledger.Currency(quote), rate); err != nil {
+		if err := st.SetRate(t.Context(), date, ledger.Currency(base), ledger.Currency(quote), rate); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -133,7 +133,7 @@ func Test_BalanceReport(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.BalanceReport(ctx, tc.req)
+			got, err := st.BalanceReport(t.Context(), tc.req)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -224,7 +224,7 @@ func Test_BudgetReport(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.BudgetReport(ctx, tc.req)
+			got, err := st.BudgetReport(t.Context(), tc.req)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -239,7 +239,7 @@ func Test_BudgetReport(t *testing.T) {
 func moved(from, to string, minor int64, date string) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if _, err := st.Transfer(ctx, TransferRequest{From: from, To: to, Amount: eur(minor), Date: day(date)}); err != nil {
+		if _, err := st.Transfer(t.Context(), TransferRequest{From: from, To: to, Amount: eur(minor), Date: day(date)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -277,7 +277,7 @@ func Test_categoryTotals(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			got, err := st.repo.queries().categoryTotals(ctx, tc.from, tc.to)
+			got, err := st.repo.queries().categoryTotals(t.Context(), tc.from, tc.to)
 
 			// then
 			checkErr(t, err, "", nil)

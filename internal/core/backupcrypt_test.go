@@ -60,7 +60,7 @@ func Test_BackupEncrypted(t *testing.T) {
 			// given
 			cheapScrypt(t)
 			dir := t.TempDir()
-			st, err := Open(ctx, filepath.Join(dir, "thaler.db"))
+			st, err := Open(t.Context(), filepath.Join(dir, "thaler.db"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +74,7 @@ func Test_BackupEncrypted(t *testing.T) {
 			}
 
 			// when
-			err = st.BackupEncrypted(ctx, dest, tc.passphrase)
+			err = st.BackupEncrypted(t.Context(), dest, tc.passphrase)
 
 			// then
 			checkErr(t, err, strings.ReplaceAll(tc.wantErr, "{dest}", dest), nil)
@@ -96,15 +96,15 @@ func Test_BackupEncrypted(t *testing.T) {
 				got.Mode = info.Mode().Perm()
 
 				plain := filepath.Join(dir, "restored.db")
-				if err := DecryptBackup(ctx, dest, plain, tc.passphrase); err != nil {
+				if err := DecryptBackup(t.Context(), dest, plain, tc.passphrase); err != nil {
 					t.Fatalf("the backup does not decrypt: %v", err)
 				}
-				restored, err := Open(ctx, plain)
+				restored, err := Open(t.Context(), plain)
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer restored.Close()
-				acct, err := restored.GetAccount(ctx, "Assets:Bank")
+				acct, err := restored.GetAccount(t.Context(), "Assets:Bank")
 				if err != nil {
 					t.Fatalf("the backup does not hold the data: %v", err)
 				}
@@ -229,7 +229,7 @@ func Test_DecryptBackup(t *testing.T) {
 			// given
 			cheapScrypt(t)
 			dir := t.TempDir()
-			st, err := Open(ctx, ":memory:")
+			st, err := Open(t.Context(), ":memory:")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -244,7 +244,7 @@ func Test_DecryptBackup(t *testing.T) {
 			}
 
 			// when
-			err = DecryptBackup(ctx, src, dest, tc.passphrase)
+			err = DecryptBackup(t.Context(), src, dest, tc.passphrase)
 
 			// then
 			got := observed{Err: strings.ReplaceAll(strings.ReplaceAll(errText(err), src, "{src}"), dest, "{dest}")}
@@ -269,7 +269,7 @@ func Test_DecryptBackup(t *testing.T) {
 func sealed(t *testing.T, st *Local, dir, passphrase string) string {
 	t.Helper()
 	p := filepath.Join(dir, "sealed.age")
-	if err := st.BackupEncrypted(ctx, p, passphrase); err != nil {
+	if err := st.BackupEncrypted(t.Context(), p, passphrase); err != nil {
 		t.Fatal(err)
 	}
 	return p

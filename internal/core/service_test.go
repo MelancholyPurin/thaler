@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -13,8 +12,6 @@ import (
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
-
-var ctx = context.Background()
 
 func eur(minor int64) ledger.Money { return ledger.Money{Minor: minor, Currency: "EUR"} }
 func usd(minor int64) ledger.Money { return ledger.Money{Minor: minor, Currency: "USD"} }
@@ -29,7 +26,7 @@ func day(s string) time.Time {
 
 func newLocal(t *testing.T) *Local {
 	t.Helper()
-	st, err := Open(ctx, ":memory:")
+	st, err := Open(t.Context(), ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +58,7 @@ func accounts(specs ...string) given {
 			if len(fields) > 1 {
 				cur = ledger.Currency(fields[1])
 			}
-			if _, err := st.AddAccount(ctx, fields[0], cur); err != nil {
+			if _, err := st.AddAccount(t.Context(), fields[0], cur); err != nil {
 				t.Fatalf("AddAccount(%s): %v", spec, err)
 			}
 		}
@@ -77,7 +74,7 @@ func today(date string) given {
 func stored(nt NewTransaction) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if _, err := st.AddTransaction(ctx, nt); err != nil {
+		if _, err := st.AddTransaction(t.Context(), nt); err != nil {
 			t.Fatalf("AddTransaction: %v", err)
 		}
 	}
@@ -113,7 +110,7 @@ func handEntered(account, date, payee, category string, minor int64) given {
 func importing(account string, rules []importer.Rule, rows ...importer.Row) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if _, err := st.Import(ctx, ImportRequest{Account: account, Rows: rows, Rules: rules}); err != nil {
+		if _, err := st.Import(t.Context(), ImportRequest{Account: account, Rows: rows, Rules: rules}); err != nil {
 			t.Fatalf("import into %s: %v", account, err)
 		}
 	}
@@ -124,7 +121,7 @@ func importing(account string, rules []importer.Rule, rows ...importer.Row) give
 func rawSQL(statement string, args ...any) given {
 	return func(t *testing.T, st *Local) {
 		t.Helper()
-		if _, err := st.repo.db.ExecContext(ctx, statement, args...); err != nil {
+		if _, err := st.repo.db.ExecContext(t.Context(), statement, args...); err != nil {
 			t.Fatalf("%s: %v", statement, err)
 		}
 	}
@@ -163,7 +160,7 @@ func checkErr(t *testing.T, err error, wantErr string, wantIs error) {
 // checkConsistent fails if Check finds anything wrong with the ledger.
 func checkConsistent(t *testing.T, st *Local) {
 	t.Helper()
-	problems, err := st.Check(ctx)
+	problems, err := st.Check(t.Context())
 	checkErr(t, err, "", nil)
 	if diff := cmp.Diff([]string(nil), problems, equalEmpty); diff != "" {
 		t.Errorf("Check found problems (-want +got):\n%s", diff)
@@ -180,14 +177,14 @@ type ledgerState struct {
 func stateOf(t *testing.T, st *Local) ledgerState {
 	t.Helper()
 	var s ledgerState
-	accs, err := st.ListAccounts(ctx)
+	accs, err := st.ListAccounts(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range accs {
 		s.Accounts = append(s.Accounts, a.Name)
 	}
-	if s.Transactions, err = st.ListTransactions(ctx, TxFilter{}); err != nil {
+	if s.Transactions, err = st.ListTransactions(t.Context(), TxFilter{}); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -220,13 +217,13 @@ func Test_BaseCurrency(t *testing.T) {
 			// given
 			st := newLedger(t, tc.setup...)
 			if tc.set != "" {
-				if err := st.SetBaseCurrency(ctx, tc.set); err != nil {
+				if err := st.SetBaseCurrency(t.Context(), tc.set); err != nil {
 					t.Fatal(err)
 				}
 			}
 
 			// when
-			got, err := st.BaseCurrency(ctx)
+			got, err := st.BaseCurrency(t.Context())
 
 			// then
 			checkErr(t, err, "", nil)
@@ -276,14 +273,14 @@ func Test_SetRate(t *testing.T) {
 			// when
 			var err error
 			for _, r := range tc.sets {
-				if err = st.SetRate(ctx, r.date, ledger.Currency(r.base), ledger.Currency(r.quote), r.rate); err != nil {
+				if err = st.SetRate(t.Context(), r.date, ledger.Currency(r.base), ledger.Currency(r.quote), r.rate); err != nil {
 					break
 				}
 			}
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
-			entries, rerr := st.Rates(ctx)
+			entries, rerr := st.Rates(t.Context())
 			if rerr != nil {
 				t.Fatal(rerr)
 			}
@@ -326,7 +323,7 @@ func Test_AddAccount(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.AddAccount(ctx, tc.account, tc.currency)
+			got, err := st.AddAccount(t.Context(), tc.account, tc.currency)
 
 			// then
 			checkErr(t, err, tc.wantErr, tc.wantIs)
@@ -356,7 +353,7 @@ func Test_GetAccount(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.GetAccount(ctx, tc.get)
+			got, err := st.GetAccount(t.Context(), tc.get)
 
 			// then
 			checkErr(t, err, tc.wantErr, tc.wantIs)
@@ -390,7 +387,7 @@ func Test_ListAccounts(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.ListAccounts(ctx)
+			got, err := st.ListAccounts(t.Context())
 
 			// then
 			checkErr(t, err, "", nil)
@@ -593,7 +590,7 @@ func Test_AddTransaction(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			got, err := st.AddTransaction(ctx, tc.nt)
+			got, err := st.AddTransaction(t.Context(), tc.nt)
 
 			// then
 			checkErr(t, err, tc.wantErr, tc.wantIs)
@@ -626,7 +623,7 @@ func Test_importHashExists(t *testing.T) {
 				handEntered("Assets:Bank", "2026-10-06", "by hand", "Expenses:X", -2))
 
 			// when
-			got, err := st.repo.queries().importHashExists(ctx, tc.hash)
+			got, err := st.repo.queries().importHashExists(t.Context(), tc.hash)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -660,7 +657,7 @@ func Test_GetTransaction(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			got, err := st.GetTransaction(ctx, tc.id)
+			got, err := st.GetTransaction(t.Context(), tc.id)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -701,7 +698,7 @@ func Test_ListTransactions(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			got, err := st.ListTransactions(ctx, tc.filter)
+			got, err := st.ListTransactions(t.Context(), tc.filter)
 
 			// then
 			checkErr(t, err, "", nil)
@@ -716,7 +713,7 @@ func Test_ListTransactions(t *testing.T) {
 		st := newLedger(t, setup...)
 
 		// when
-		got, err := st.ListTransactions(ctx, TxFilter{ID: 3})
+		got, err := st.ListTransactions(t.Context(), TxFilter{ID: 3})
 
 		// then
 		checkErr(t, err, "", nil)
@@ -765,21 +762,21 @@ func Test_ReplaceTransaction(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			created, err := st.ReplaceTransaction(ctx, tc.id, tc.nt)
+			created, err := st.ReplaceTransaction(t.Context(), tc.id, tc.nt)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
 			if diff := cmp.Diff(tc.wantCreated, created, equalEmpty); diff != "" {
 				t.Errorf("created categories mismatch (-want +got):\n%s", diff)
 			}
-			got, gerr := st.GetTransaction(ctx, 1)
+			got, gerr := st.GetTransaction(t.Context(), 1)
 			if gerr != nil {
 				t.Fatal(gerr)
 			}
 			if diff := cmp.Diff(tc.wantTx, got); diff != "" {
 				t.Errorf("stored transaction mismatch (-want +got):\n%s", diff)
 			}
-			stillKnown, herr := st.repo.queries().importHashExists(ctx, "h1")
+			stillKnown, herr := st.repo.queries().importHashExists(t.Context(), "h1")
 			checkErr(t, herr, "", nil)
 			if diff := cmp.Diff(true, stillKnown); diff != "" {
 				t.Errorf("an edited imported row must still be recognised on re-import (-want +got):\n%s", diff)
@@ -805,7 +802,7 @@ func Test_DeleteTransaction(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			err := st.DeleteTransaction(ctx, tc.id)
+			err := st.DeleteTransaction(t.Context(), tc.id)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -818,12 +815,12 @@ func Test_DeleteTransaction(t *testing.T) {
 	t.Run("deleting twice fails the second time", func(t *testing.T) {
 		// given
 		st := newLedger(t, setup...)
-		if err := st.DeleteTransaction(ctx, 1); err != nil {
+		if err := st.DeleteTransaction(t.Context(), 1); err != nil {
 			t.Fatal(err)
 		}
 
 		// when
-		err := st.DeleteTransaction(ctx, 1)
+		err := st.DeleteTransaction(t.Context(), 1)
 
 		// then
 		checkErr(t, err, "transaction #1 does not exist", nil)
@@ -836,7 +833,7 @@ func Test_RestoreTransaction(t *testing.T) {
 		Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-1000)}, {Account: "Expenses:Groceries", Amount: eur(1000)}},
 	}
 	setup := []given{accounts("Assets:Bank EUR"), stored(original), func(t *testing.T, st *Local) {
-		if err := st.DeleteTransaction(ctx, 1); err != nil {
+		if err := st.DeleteTransaction(t.Context(), 1); err != nil {
 			t.Fatal(err)
 		}
 	}}
@@ -864,7 +861,7 @@ func Test_RestoreTransaction(t *testing.T) {
 			st := newLedger(t, setup...)
 
 			// when
-			err := st.RestoreTransaction(ctx, tc.id, tc.nt)
+			err := st.RestoreTransaction(t.Context(), tc.id, tc.nt)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
@@ -883,7 +880,7 @@ func Test_SetCategories(t *testing.T) {
 	}
 	categoryOf := func(st *Local) []string {
 		var out []string
-		txs, _ := st.ListTransactions(ctx, TxFilter{})
+		txs, _ := st.ListTransactions(t.Context(), TxFilter{})
 		for _, tx := range txs {
 			_, cat, _ := tx.Legs()
 			out = append(out, cat.Account)
@@ -946,7 +943,7 @@ func Test_SetCategories(t *testing.T) {
 			st := newLedger(t, tc.setup...)
 
 			// when
-			created, err := st.SetCategories(ctx, tc.changes)
+			created, err := st.SetCategories(t.Context(), tc.changes)
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)

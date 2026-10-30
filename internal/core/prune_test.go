@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // aged writes a small file below dir, last changed days days before base.
@@ -229,27 +230,47 @@ func Test_Prune(t *testing.T) {
 }
 
 func Test_Prune_refusesWhatIsNotABackup(t *testing.T) {
-	// given
-	dir := t.TempDir()
-	precious := filepath.Join(dir, "thaler.db")
-	aged(t, dir, "thaler.db", time.Now(), 0)
-	aged(t, dir, "backups/thaler-20261021-090000.db", time.Now(), 0)
-	plan := PrunePlan{Folders: []PruneFolder{{Remove: []BackupFile{
-		{Path: filepath.Join(dir, "backups", "thaler-20261021-090000.db")}, {Path: precious},
-	}}}}
-
-	// when
-	removed, err := Prune(plan)
-
-	// then
 	type observed struct {
 		Removed int
 		Err     bool
 		Left    []string
 	}
-	got := observed{Removed: removed, Err: err != nil, Left: everythingBelow(t, dir)}
-	want := observed{Err: true, Left: []string{"backups/thaler-20261021-090000.db", "thaler.db"}}
-	if diff := cmp.Diff(want, got, equalEmpty); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+	tcs := []struct {
+		name     string
+		precious string // below the folder: a file the plan lists although it is no backup
+		want     observed
+	}{
+		{
+			name: "the database", precious: "thaler.db",
+			want: observed{Err: true, Left: []string{"backups/thaler-20261021-090000.db", "thaler.db"}},
+		},
+		{
+			name: "a note in the backups folder", precious: "backups/notes.txt",
+			want: observed{Err: true, Left: []string{"backups/notes.txt", "backups/thaler-20261021-090000.db"}},
+		},
+		{
+			name: "a backup that was renamed", precious: "backups/thaler-20261021-090000.db.bak",
+			want: observed{Err: true, Left: []string{"backups/thaler-20261021-090000.db", "backups/thaler-20261021-090000.db.bak"}},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := t.TempDir()
+			aged(t, dir, tc.precious, time.Now(), 0)
+			aged(t, dir, "backups/thaler-20261021-090000.db", time.Now(), 0)
+			plan := PrunePlan{Folders: []PruneFolder{{Remove: []BackupFile{
+				{Path: filepath.Join(dir, "backups", "thaler-20261021-090000.db")}, {Path: filepath.Join(dir, tc.precious)},
+			}}}}
+
+			// when
+			removed, err := Prune(plan)
+
+			// then
+			got := observed{Removed: removed, Err: err != nil, Left: everythingBelow(t, dir)}
+			if diff := cmp.Diff(tc.want, got, equalEmpty, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
