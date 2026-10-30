@@ -18,7 +18,7 @@ var uuidV4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-
 
 func migrationNames(t *testing.T) []string {
 	t.Helper()
-	entries, err := migrationFS.ReadDir("migrations")
+	entries, err := migrationFS.ReadDir("dbmigrations")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func oldDatabase(t *testing.T, statements ...string) string {
 		t.Fatal(err)
 	}
 	defer old.Close()
-	initSQL, err := migrationFS.ReadFile("migrations/20261022_init.up.sql")
+	initSQL, err := migrationFS.ReadFile("dbmigrations/20261022_init.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
