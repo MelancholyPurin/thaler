@@ -250,7 +250,7 @@ The schema lives in `internal/core/dbmigrations/`, applied by [golang-migrate](h
 
 ## Roadmap
 
-[ROADMAP.md](ROADMAP.md) lists what is built and what is planned, as milestones, epics and stories with permanent IDs. In short: first a feature-complete terminal interface that works well locally, in English, Spanish and German (`M-TUI`: budgets with rollover, reports, recurring transactions and a forecast, restore, Windows support, and releases on a regular train), then a self-hostable server whose single entry point, the app-gateway, exposes the API, so a small household (up to about four people) can share one Thaler, with private accounts that stay hidden from the others (`M-SERVER`), then a Next.js web application tested with Vitest (`M-WEB`), and finally an installable mobile web app that works offline (`M-PWA`).
+[ROADMAP.md](ROADMAP.md) lists what is built and what is planned, as milestones, epics and stories with permanent IDs. In short: first a feature-complete terminal interface that works well locally, in English, Spanish and German (`M-TUI`: budgets with rollover, reports, recurring transactions and a forecast, restore, and releases on a regular train), then a self-hostable server whose single entry point, the app-gateway, exposes the API, so a small household (up to about four people) can share one Thaler, with private accounts that stay hidden from the others (`M-SERVER`), then a Next.js web application tested with Vitest (`M-WEB`), and finally an installable mobile web app that works offline (`M-PWA`).
 
 ## License
 

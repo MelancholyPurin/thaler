@@ -24,7 +24,7 @@ Status: `[x]` delivered, `[ ]` planned. Stories are listed in the order they are
 
 | ID | Milestone | Done when |
 | --- | --- | --- |
-| `M-TUI` | Feature-complete TUI that can be used locally | One person can run their finances in the terminal, in English, Spanish or German, with data that cannot be lost, on macOS, Linux and Windows, and new versions arrive on a regular release train |
+| `M-TUI` | Feature-complete TUI that can be used locally | One person can run their finances in the terminal, in English, Spanish or German, with data that cannot be lost, on macOS and Linux, and new versions arrive on a regular release train |
 | `M-SERVER` | Self-hostable multi-user server | `thaler serve` starts the app-gateway, the one public entry point to all the endpoints, in Docker on a small VPS; each household member has their own login; private accounts stay private |
 | `M-WEB` | Web application (Next.js, React) | The family uses the browser, in English, Spanish or German, for everyday logging, budgets and reports, including from Windows, and the frontend is covered by Vitest and end-to-end tests |
 | `M-PWA` | Installable progressive web app | Expenses can be logged from a phone, offline, and synced later |
@@ -49,7 +49,7 @@ Status: `[x]` delivered, `[ ]` planned. Stories are listed in the order they are
 | `TRP` | Reports tab | `M-TUI` |
 | `TFC` | Forecast tab and recurring transactions | `M-TUI` |
 | `TLC` | TUI in three languages | `M-TUI` |
-| `PLT` | Installing and running everywhere | `M-TUI` |
+| `PLT` | Installing and running on macOS and Linux | `M-TUI` |
 | `REL` | The release train | `M-TUI` |
 | `ENG` | Build, test and delivery | `M-TUI` |
 | `DOC` | Documentation | `M-TUI` |
@@ -74,7 +74,7 @@ Status: `[x]` delivered, `[ ]` planned. Stories are listed in the order they are
 | `PNO` | Notifications | `M-PWA` |
 | `PUX` | Phone experience | `M-PWA` |
 
-Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; **Windows** is a supported platform (installing and running everywhere, `PLT`); the languages are **English** (the source language), **Spanish** and **German**, on every surface (the localization foundation is `LOC`); releases leave on a **release train that leaves every two weeks** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
+Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; the terminal interface and the server are for **macOS and Linux** only, not Windows (decided again in `PLT`: Windows computers use the web application, in the browser, which needs nothing from the Go code); the languages are **English** (the source language), **Spanish** and **German**, on every surface (the localization foundation is `LOC`); releases leave on a **release train that leaves every two weeks** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
 
 Also decided: versions follow **SemVer**, each train bumping the minor version and a hotfix the patch, with `1.0.0` at the end of `M-TUI` (`REL-2`); the app-gateway is a **module of the single `thaler` binary**, with a boundary clean enough to split later (`GAT-1`, `GAT-14`); the web app's localization library is **next-intl**, with **react-i18next** kept open as the alternative (`WLC-1`). Nothing is left undecided at this level.
 
@@ -82,7 +82,7 @@ Also decided: versions follow **SemVer**, each train bumping the minor version a
 
 ## M-TUI: Feature-complete TUI that can be used locally
 
-Single user, local SQLite file, terminal only. **Exit criteria:** every epic below is complete; one full month of real bank exports has been imported, categorized and reconciled against the bank; a backup has been restored for real; release binaries install on macOS, Linux and Windows.
+Single user, local SQLite file, terminal only. **Exit criteria:** every epic below is complete; one full month of real bank exports has been imported, categorized and reconciled against the bank; a backup has been restored for real; release binaries install on macOS and Linux.
 
 **Suggested order:** backup and restore (`SAF`) and installing everywhere (`PLT`) first, so real data can go in safely; then the release train (`REL`), so what follows ships on it; then the localization foundation (`LOC`) with the string extraction in the TUI (`TLC`) while the interface is still small, since every screen added later is more strings to extract; then budgets (`BUD`, `TBU`); then the editing gaps (`TLD`, `TTR`, `TCT`); then reports (`RPT`, `TRP`); then recurring transactions and the forecast (`REC`, `TFC`). Build, test and docs stories (`ENG`, `DOC`) go in between features, one at a time.
 
@@ -304,15 +304,15 @@ Getting every transaction into the right category with as little typing as possi
 - [ ] `TLC-6` Key hints and the help popup in the language; the keys themselves stay the same
 - [ ] `TLC-7` A native speaker reads the Spanish and the German before a release
 
-### PLT: Installing and running everywhere
+### PLT: Installing and running on macOS and Linux
 
 - [ ] `PLT-1` `thaler --version`, set when the binary is built
-- [ ] `PLT-2` The binaries for macOS, Linux and Windows that each release ships, with checksums (built by `REL-9`)
-- [ ] `PLT-3` Config and data folders where Windows expects them
-- [ ] `PLT-4` Open the config in a Windows editor, and behave on Windows terminals
-- [ ] `PLT-5` Run the tests on macOS and Windows as well as Linux
+- [ ] `PLT-2` The binaries for macOS and Linux that each release ships, with checksums (built by `REL-9`)
+- ~~`PLT-3` Config and data folders where Windows expects them~~ (dropped: no Windows support)
+- ~~`PLT-4` Open the config in a Windows editor, and behave on Windows terminals~~ (dropped: no Windows support)
+- ~~`PLT-5` Run the tests on macOS and Windows as well as Linux~~ (dropped: the tests run on Linux and macOS in CI; Windows is not supported)
 - [ ] `PLT-6` Install instructions per platform
-- [ ] `PLT-7` Homebrew and Scoop packages
+- [ ] `PLT-7` A Homebrew package
 
 ### REL: The release train
 
