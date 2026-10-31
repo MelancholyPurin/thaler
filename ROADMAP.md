@@ -306,7 +306,7 @@ Getting every transaction into the right category with as little typing as possi
 
 ### PLT: Installing and running on macOS and Linux
 
-- [ ] `PLT-1` `thaler --version`, set when the binary is built
+- [x] `PLT-1` `thaler --version`, set when the binary is built
 - [ ] `PLT-2` The binaries for macOS and Linux that each release ships, with checksums (built by `REL-9`)
 - ~~`PLT-3` Config and data folders where Windows expects them~~ (dropped: no Windows support)
 - ~~`PLT-4` Open the config in a Windows editor, and behave on Windows terminals~~ (dropped: no Windows support)
