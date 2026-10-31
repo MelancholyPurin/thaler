@@ -57,23 +57,34 @@ jobs:
         run: go test -shuffle=on ./...
 
   # Windows is a supported platform (PLT-5), but the tests were written on Unix and
-  # still assume it in places: forward slashes in the paths they expect, Unix file
-  # modes. Until they are made portable this job runs to show what fails, and is
-  # kept out of the result check below so that it cannot block a merge. When it
-  # passes, move it into the `test` matrix and out of this comment.
+  # still assume it. What fails there, as of the first run:
+  #   - expected paths written with forward slashes, where Windows has backslashes;
+  #   - error text from the operating system ("no such file or directory");
+  #   - Unix file modes (0600, 0700), which Windows does not report;
+  #   - file names with a question mark, which Windows does not allow;
+  #   - the drag-and-drop path cleaning in the TUI (`my\ file`), which is Unix shell escaping.
+  # Until the tests are portable this job runs to show what fails, but it must not
+  # look like a block: a failed job is a red check on the pull request, even when
+  # nothing requires it. So the failing step is allowed to fail, and the job says so
+  # in a warning. It is also kept out of the result check below. When the tests
+  # pass, make the step required and move this job into the `test` matrix.
   test-windows:
     name: test (windows-latest, not required yet)
     needs: changes
     if: needs.changes.outputs.go == 'true'
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: test
+        id: tests
+        continue-on-error: true
         run: go test -shuffle=on ./...
+      - name: say so when the tests failed
+        if: steps.tests.outcome == 'failure'
+        run: echo "::warning title=The Windows tests fail (PLT-5)::This job is not required yet. See the log of the test step for what failed."
 
   # Its own job so it runs beside the others instead of after them: the race
   # detector makes the tests several times slower.
