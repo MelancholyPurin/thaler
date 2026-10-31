@@ -74,9 +74,9 @@ Status: `[x]` delivered, `[ ]` planned. Stories are listed in the order they are
 | `PNO` | Notifications | `M-PWA` |
 | `PUX` | Phone experience | `M-PWA` |
 
-Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; the terminal interface and the server are for **macOS and Linux** only, not Windows (decided again in `PLT`: Windows computers use the web application, in the browser, which needs nothing from the Go code); the languages are **English** (the source language), **Spanish** and **German**, on every surface (the localization foundation is `LOC`); releases leave on a **release train that leaves every two weeks** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
+Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; the terminal interface and the server are for **macOS and Linux** only, not Windows (decided again in `PLT`: Windows computers use the web application, in the browser, which needs nothing from the Go code); the languages are **English** (the source language), **Spanish** and **German**, on every surface (the localization foundation is `LOC`); releases leave on a **release train that leaves every second Monday, with the cut-off on the Friday before** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
 
-Also decided: versions follow **SemVer**, each train bumping the minor version and a hotfix the patch, with `1.0.0` at the end of `M-TUI` (`REL-2`); the app-gateway is a **module of the single `thaler` binary**, with a boundary clean enough to split later (`GAT-1`, `GAT-14`); the web app's localization library is **next-intl**, with **react-i18next** kept open as the alternative (`WLC-1`). Nothing is left undecided at this level.
+Also decided: versions follow **SemVer**, each train bumping the minor version and a hotfix the patch, with `1.0.0` at the end of `M-TUI` (`REL-1`); the app-gateway is a **module of the single `thaler` binary**, with a boundary clean enough to split later (`GAT-1`, `GAT-14`); the web app's localization library is **next-intl**, with **react-i18next** kept open as the alternative (`WLC-1`). Nothing is left undecided at this level.
 
 ---
 
@@ -181,15 +181,15 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 
 English is the source language; Spanish and German are translations. This epic is the machinery that every surface uses.
 
-- [ ] `LOC-1` Message catalogs in Go, one file per language, with a tool that extracts new strings
-- [ ] `LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English
-- [ ] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`)
-- [ ] `LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused
+- [ ] `LOC-1` Message catalogs in Go, one file per language, with a tool that extracts new strings; and the language setting: `config.toml`, then the environment (`LANG`), then English
+- ~~`LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English~~ (folded into `LOC-1`)
+- [ ] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`), and typed amounts and dates read in that format, with the ambiguous cases still refused
+- ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)
 - [ ] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code
 - [ ] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages
 - [ ] `LOC-7` Display names for the built-in account types and starting categories, separate from the names stored in the ledger
-- [ ] `LOC-8` A test and a CI step that fail when a key is missing from a language or no longer used
-- [ ] `LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does
+- [ ] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
+- ~~`LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does~~ (folded into `LOC-8`)
 
 ### CLI: Command-line interface
 
@@ -228,7 +228,7 @@ The main screen: accounts, transactions and the forms to change them.
 - [x] `TLD-11` Open `config.toml` in your editor from the TUI
 - [ ] `TLD-12` Create and edit split transactions
 - [ ] `TLD-13` Rename and archive accounts
-- [ ] `TLD-14` Select several transactions to categorize or delete at once
+- [ ] `TLD-14` Select several transactions to categorize or delete at once (also what `TCT-6` asked for)
 - [ ] `TLD-15` Sort, and filter by amount, date range, category and account
 - [ ] `TLD-16` Colour themes for dark and light terminals
 
@@ -241,7 +241,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TCT-3` Show only what still needs a category
 - [ ] `TCT-4` List, edit, reorder and delete rules inside the TUI
 - [ ] `TCT-5` Run the rules again over existing uncategorized transactions
-- [ ] `TCT-6` Categorize a selection at once
+- ~~`TCT-6` Categorize a selection at once~~ (folded into `TLD-14`)
 - [ ] `TCT-7` Rename and merge categories
 - [ ] `TCT-8` Suggest a category from how similar payees were categorized
 
@@ -261,8 +261,8 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TTR-1` Move money between two of your accounts
 - [x] `TTR-2` Say what arrives and see the exchange rate it implies
 - [x] `TTR-3` Transfer halves are marked `⇄` in the list and in the import review
-- [ ] `TTR-4` Edit a transfer as one thing
-- [ ] `TTR-5` Delete both halves together
+- [ ] `TTR-4` Edit a transfer as one thing, and delete both halves together
+- ~~`TTR-5` Delete both halves together~~ (folded into `TTR-4`)
 - [ ] `TTR-6` Link two existing transactions as a transfer, and unlink them
 
 ### TBU: Budget tab
@@ -307,7 +307,7 @@ Getting every transaction into the right category with as little typing as possi
 ### PLT: Installing and running on macOS and Linux
 
 - [x] `PLT-1` `thaler --version`, set when the binary is built
-- [ ] `PLT-2` The binaries for macOS and Linux that each release ships, with checksums (built by `REL-9`)
+- ~~`PLT-2` The binaries for macOS and Linux that each release ships, with checksums (built by `REL-9`)~~ (folded into `REL-9`)
 - ~~`PLT-3` Config and data folders where Windows expects them~~ (dropped: no Windows support)
 - ~~`PLT-4` Open the config in a Windows editor, and behave on Windows terminals~~ (dropped: no Windows support)
 - ~~`PLT-5` Run the tests on macOS and Windows as well as Linux~~ (dropped: the tests run on Linux and macOS in CI; Windows is not supported)
@@ -318,16 +318,24 @@ Getting every transaction into the right category with as little typing as possi
 
 A release leaves on a fixed schedule and carries whatever is complete. Work that is not finished stays behind a flag, so a late epic waits for the next train instead of holding up this one. This is what makes it possible to release a finished epic without waiting for a whole milestone.
 
-- [ ] `REL-1` The schedule of the train (decided: every two weeks) and the cut-off before it
-- [ ] `REL-2` SemVer: each train bumps the minor version, a hotfix the patch, and `1.0.0` marks the end of `M-TUI`; plus the rule for which versions can upgrade to which
-- [ ] `REL-3` A release branch is cut from `main` on the train's day, and only fixes go onto it
+**The schedule.** A train leaves **every second Monday**, counting from Monday 2026-11-16: 2026-11-16, 2026-11-30, 2026-12-14, and so on. The **cut-off is the Friday before**, at the end of the day. A story merged into `main` by the cut-off rides that train; one merged later waits for the next, even if it is finished on Saturday. Between the cut-off and the departure `main` takes only fixes, so that the weekend and Monday morning are for the release candidate and its smoke test (`REL-6`), not for new work. A train with nothing new to ship does not leave, and the next one is the following Monday as usual. A hotfix does not wait for a train. Until the workflow of `REL-9` can build a release, the dates still count but nothing ships on them: the first train that leaves is the first one after it works.
+
+**Versions.** `MAJOR.MINOR.PATCH`, tagged `v0.3.0`. Each train bumps the minor version; a hotfix bumps the patch of the release it fixes. Until `1.0.0`, which is the train that completes `M-TUI`, the major version is `0` and anything may change from one train to the next (a command, a flag, a config key, a key in the interface); the release notes say what did. From `1.0.0`, removing or changing the meaning of a command, a flag or a config key waits for a major version.
+
+*Which versions upgrade to which.* A release opens a database written by **any earlier release**: migrations only add, are never edited, and run in order after a copy of the database (`backups/pre-migration/`), so skipping trains is fine. `REL-6` tests the step from the previous train on every release. The other way round is **not supported**: a release refuses a database written by a newer one and says to update, and going back means restoring a backup or the copy from before the upgrade. A backup from an older release restores into a newer one, which upgrades it; one from a newer release is refused. A change that would break any of this is a major version.
+
+**The release branch.** On the departure Monday, `release/<major>.<minor>` (for example `release/0.3`) is cut from the latest commit of `main` that passed CI, and `main` is open for the next train again. Only fixes go onto the branch. The release is tagged on it (`v0.3.0`) once its smoke test passes, and so is each hotfix (`v0.3.1`). The branch is protected like `main`, so a fix reaches it through a pull request. A fix is made on `main` first, by pull request, and then carried onto the release branch by a second pull request that cherry-picks it, so that no fix exists only on a branch; both commits carry the same `[ID]` in the title, which is what the release notes read. A fix the release alone needs, because the code is gone from `main`, is made on the branch and says so in its description. A hotfix is such a fix that ships at once, as a patch tag on the branch.
+
+- [x] `REL-1` The rules of the train, written above: the schedule (every second Monday, cut-off the Friday before), SemVer and which versions can upgrade to which, the release branch, and how a fix is made there and carried back to `main`
+- ~~`REL-2` SemVer and the upgrade rule~~ (folded into `REL-1`)
+- ~~`REL-3` The release branch~~ (folded into `REL-1`)
 - [ ] `REL-4` Feature flags in the configuration, so unfinished stories can be merged and stay off
-- [ ] `REL-5` Release notes written from the `[ID]` in the commit titles, grouped by epic
-- [ ] `REL-6` A release candidate and a smoke-test checklist, including making and restoring a backup
-- [ ] `REL-7` Tests that upgrade a database from the previous train, with data in it
-- [ ] `REL-8` How a fix is made on the release branch and carried back to `main`
-- [ ] `REL-9` One workflow cuts, tags and builds everything the train ships: binaries, and later the image and the web app
-- [ ] `REL-10` The published schedule, and which release shipped each story, recorded in this file
+- [ ] `REL-5` Release notes written from the `[ID]` in the commit titles, grouped by epic; the release that shipped each story recorded in this file; and the release-notes page of the documentation built from the same
+- [ ] `REL-6` A release candidate and a smoke-test checklist, including making and restoring a backup; and tests that upgrade a database from the previous train, with data in it
+- ~~`REL-7` Tests that upgrade a database from the previous train, with data in it~~ (folded into `REL-6`)
+- ~~`REL-8` How a fix is made on the release branch and carried back to `main`~~ (folded into `REL-1`)
+- [ ] `REL-9` One workflow cuts, tags and builds everything the train ships: the binaries for macOS and Linux with their checksums, and later the image and the web app
+- ~~`REL-10` The published schedule, and which release shipped each story, recorded in this file~~ (folded into `REL-5`)
 - [ ] `REL-11` Signed checksums for every artifact
 
 ### ENG: Build, test and delivery
@@ -338,22 +346,22 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 - [x] `ENG-4` Lint, test and race detector as parallel jobs, a `go.mod` check, shuffled tests, and a single `result` check
 - [x] `ENG-5` Govulncheck on every change and weekly
 - [x] `ENG-6` Weekly dependency updates
-- [ ] `ENG-7` Run the lint locally before a push
+- [ ] `ENG-7` Guardrails around a push: run the lint locally before it, fail the check when coverage drops under a floor, and branch protection requiring `result`, squash merge only, branches deleted after merge
 - [ ] `ENG-8` Fuzz the amount, CSV and config parsers
-- [ ] `ENG-9` Fail the check when coverage drops under a floor
+- ~~`ENG-9` Fail the check when coverage drops under a floor~~ (folded into `ENG-7`)
 - [ ] `ENG-10` Split `(*Local).Import` and flatten the deeply nested code the linter flagged
-- [ ] `ENG-11` Branch protection requiring `result`, squash merge only, branches deleted after merge
+- ~~`ENG-11` Branch protection requiring `result`, squash merge only, branches deleted after merge~~ (folded into `ENG-7`)
 - [x] `ENG-12` Run the database migrations with `golang-migrate`: one version number, a test that every migration file is registered in order, the copy before an upgrade and the refusal of a newer database kept, and databases written by the current runner converted
 
 ### DOC: Documentation
 
 - [x] `DOC-1` Install, usage, formats and design notes
-- [ ] `DOC-2` Conventions: test style, branch per feature, never commit financial data
+- [ ] `DOC-2` Contributor documentation: the conventions (test style, branch per feature, never commit financial data), and the layers and why they are cut where they are
 - [ ] `DOC-3` How to report a vulnerability, and what Thaler does and does not protect
-- [ ] `DOC-4` The layers and why they are cut where they are
+- ~~`DOC-4` The layers and why they are cut where they are~~ (folded into `DOC-2`)
 - [ ] `DOC-5` A walkthrough of the first month with real data
 - [ ] `DOC-6` Every `config.toml` key
-- [ ] `DOC-7` What changed in each release, assembled by the release train from the story IDs in the commit titles (see `REL-5`)
+- ~~`DOC-7` What changed in each release, assembled by the release train from the story IDs in the commit titles (see `REL-5`)~~ (folded into `REL-5`)
 - [ ] `DOC-8` The README and the user guide in Spanish and German
 
 ---

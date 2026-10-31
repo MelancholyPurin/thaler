@@ -12,7 +12,7 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 
 ## Install
 
-Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. For now Thaler is built from source, which needs **Go 1.27 or newer**; release binaries and a Homebrew package are planned (`PLT-2`, `PLT-7` in the [roadmap](ROADMAP.md)).
+Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. For now Thaler is built from source, which needs **Go 1.27 or newer**; release binaries and a Homebrew package are planned (`REL-9`, `PLT-7` in the [roadmap](ROADMAP.md)).
 
 **1. Get Go.** On macOS, `brew install go`. On Linux, follow [go.dev/doc/install](https://go.dev/doc/install): the distribution's own package is often older than 1.27. `go version` says which one you have.
 
