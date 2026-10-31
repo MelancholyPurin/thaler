@@ -18,6 +18,13 @@
 # and the copies made before upgrades. 0 keeps everything and stops the offer.
 # keep_backups = 20
 
+# A story that is merged before it is finished stays off until you switch it on
+# here, so it cannot hold up a release; try one if you want to see it early. A
+# name that does not exist is refused, and the error lists the ones that do.
+# Nothing is behind a flag in this version.
+# [features]
+# some_feature = true
+
 # ---------------------------------------------------------------------------
 # Categorisation rules for `thaler cli import`.
 #
