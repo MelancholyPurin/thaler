@@ -237,11 +237,11 @@ core/repository.go    Local's SQL; unexported, so nothing outside core can bypas
 core/migrations.go    schema versioning
 ```
 
-The schema lives in `internal/core/dbmigrations/`. Add `YYYYMMDD_name.up.sql` files for changes; applied files are recorded by name in the `schema_migrations` table.
+The schema lives in `internal/core/dbmigrations/`, applied by [golang-migrate](https://github.com/golang-migrate/migrate). Add `YYYYMMDDHHMMSS_name.up.sql` files for changes (the first three are dated `YYYYMMDD`, which sorts before any timestamp) and register the number in `migrationScriptTimestamps` in `internal/core/migrations_test.go`. The `schema_migrations` table holds the version of the last migration applied. A database that holds data is copied to `backups/pre-migration/` first; if a migration fails nothing is changed.
 
 ## Decisions worth knowing
 
-- **No sqlc, no goose (yet).** Queries are plain SQL in `core/repository.go` and migrations are plain `YYYYMMDD_name.up.sql` files tracked in a `schema_migrations` table, so moving to sqlc/goose later is mechanical.
+- **No sqlc (yet).** Queries are plain SQL in `core/repository.go`, so moving to sqlc later is mechanical. Migrations are plain `.up.sql` files run by golang-migrate; there are no down migrations, the copy made before an upgrade is how to go back.
 - **One database connection.** Fine for a single-user CLI. The TUI calls the service directly from its update loop (milliseconds on a local file); a network backend would need those calls moved into background commands, and this pool setting revisited.
 - **Recategorizing re-books the category leg only.** A transaction's category is its single Income/Expenses/Equity posting; the amount, date and your own account never change. Transactions with no such posting or several (transfers, FX conversions) are refused.
 - **Backups are plain SQLite files unless you encrypt them.** Encryption is by passphrase only (age with scrypt); there are no key files or public-key recipients yet, so an unattended encrypted backup needs the passphrase in a file (`--passphrase-file`). The live database itself is not encrypted: use full-disk encryption for that.
