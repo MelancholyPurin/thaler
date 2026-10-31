@@ -195,10 +195,25 @@ func Test_RestoreBackup(t *testing.T) {
 		{
 			name: "a backup made by a newer version", hasLive: true,
 			source: func(t *testing.T, _, _ string) string {
-				return oldDatabase(t, tracked, atInit, `INSERT INTO schema_migrations (name) VALUES ('29991231_from_the_future.up.sql')`)
+				return oldDatabase(t, atVersion(29991231, false)...)
 			},
-			wantErr: "{src} was made by a newer version of Thaler (it has migration 29991231_from_the_future.up.sql): update thaler; nothing was changed",
+			wantErr: "{src} was made by a newer version of Thaler (it has migration 29991231): update thaler; nothing was changed",
 			want:    observed{Accounts: live},
+		},
+		{
+			name: "a backup saved while an upgrade of it was stopped halfway", hasLive: true,
+			source: func(t *testing.T, _, _ string) string {
+				return oldDatabase(t, atVersion(20261025, true)...)
+			},
+			wantErr: "{src} was saved while an upgrade of it was stopped halfway (migration 20261025), and nothing was changed",
+			want:    observed{Accounts: live},
+		},
+		{
+			name: "a backup made by the current version needs no upgrade", hasLive: true,
+			source: func(t *testing.T, _, _ string) string {
+				return oldDatabase(t, append(atVersion(latestMigration(t), false), anAcct)...)
+			},
+			want: observed{Replaced: kept, Accounts: []string{"Assets:Bank"}, WasKept: live},
 		},
 		{
 			name: "a damaged backup", hasLive: true, source: file(append(append([]byte{}, sqliteMagic...), bytes.Repeat([]byte{0xff}, 8192)...)),

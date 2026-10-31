@@ -2,6 +2,7 @@ package core
 
 import (
 	"database/sql"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,17 +17,14 @@ import (
 
 var uuidV4 = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
-func migrationNames(t *testing.T) []string {
+// latestMigration is the version of the newest migration in this build.
+func latestMigration(t *testing.T) uint {
 	t.Helper()
-	entries, err := migrationFS.ReadDir("dbmigrations")
+	files, err := migrationFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var names []string
-	for _, e := range entries {
-		names = append(names, e.Name())
-	}
-	return names
+	return files[len(files)-1].version
 }
 
 func Test_Open(t *testing.T) {
@@ -266,29 +264,71 @@ func oldDatabase(t *testing.T, statements ...string) string {
 	return path
 }
 
+// atVersion are the statements that make a database say it is at a migration,
+// the way golang-migrate records it.
+func atVersion(version uint, dirty bool) []string {
+	d := 0
+	if dirty {
+		d = 1
+	}
+	return []string{
+		`CREATE TABLE schema_migrations (version uint64, dirty bool)`,
+		`CREATE UNIQUE INDEX version_unique ON schema_migrations (version)`,
+		fmt.Sprintf(`INSERT INTO schema_migrations (version, dirty) VALUES (%d, %d)`, version, d),
+	}
+}
+
 func Test_migrate(t *testing.T) {
-	all := migrationNames(t)
+	latest := latestMigration(t)
 	const tracked = `CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT '')`
+	type recorded struct {
+		Version uint
+		Dirty   bool
+		Rows    int // in schema_migrations: golang-migrate keeps one
+	}
 	tcs := []struct {
 		name       string
 		statements []string // on top of the initial schema
-		want       []string // the migrations recorded afterwards
+		want       recorded
 		wantErr    string
 	}{
 		{
-			name:       "a database from before migrations were tracked is adopted at the initial schema, then brought up to date",
-			statements: []string{`PRAGMA user_version = 1`},
-			want:       all,
+			name:       "a database that recorded migrations by file name is converted and brought up to date",
+			statements: []string{tracked, `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`},
+			want:       recorded{Version: latest, Rows: 1},
 		},
 		{
-			name:       "a database at the initial schema is brought up to date",
-			statements: []string{tracked, `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql')`},
-			want:       all,
+			name: "one that recorded all of them by file name is converted, and needs nothing else",
+			statements: []string{
+				tracked,
+				`INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql'), ('20261025_users_and_identity.up.sql'), ('20261026_transfer_links.up.sql')`,
+			},
+			want: recorded{Version: latest, Rows: 1},
+		},
+		{
+			name:       "a database at the initial version is brought up to date",
+			statements: atVersion(20261022, false),
+			want:       recorded{Version: latest, Rows: 1},
+		},
+		{
+			name:       "one that is up to date stays as it is",
+			statements: atVersion(latest, false),
+			want:       recorded{Version: latest, Rows: 1},
 		},
 		{
 			name:       "a database that has a migration this build does not know is refused",
+			statements: atVersion(29991231, false),
+			wantErr:    "database has migration 29991231 that this build does not know; update thaler",
+		},
+		{
+			name:       "so is one that has the name of such a migration in the old table",
 			statements: []string{tracked, `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql'), ('29991231_from_the_future.up.sql')`},
-			wantErr:    "database has migration 29991231_from_the_future.up.sql that this build does not know; update thaler",
+			wantErr:    "database has migration 29991231 that this build does not know; update thaler",
+		},
+		{
+			name:       "a database whose last upgrade stopped halfway is refused",
+			statements: atVersion(20261025, true),
+			wantErr:    "the last upgrade of the database stopped halfway, at migration 20261025, and it is not safe to go on",
 		},
 	}
 	for _, tc := range tcs {
@@ -305,21 +345,15 @@ func Test_migrate(t *testing.T) {
 				return
 			}
 			defer st.Close()
-			rows, err := st.repo.db.QueryContext(t.Context(), `SELECT name FROM schema_migrations ORDER BY name`)
-			if err != nil {
+			var got recorded
+			if err := st.repo.db.QueryRowContext(t.Context(), `SELECT version, dirty FROM schema_migrations`).Scan(&got.Version, &got.Dirty); err != nil {
 				t.Fatal(err)
 			}
-			defer rows.Close()
-			var got []string
-			for rows.Next() {
-				var name string
-				if err := rows.Scan(&name); err != nil {
-					t.Fatal(err)
-				}
-				got = append(got, name)
+			if err := st.repo.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM schema_migrations`).Scan(&got.Rows); err != nil {
+				t.Fatal(err)
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("recorded migrations mismatch (-want +got):\n%s", diff)
+				t.Errorf("recorded migration mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -666,19 +700,17 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 			},
 		},
 		{
-			// Not Tracked: the table that records migrations is created by the upgrade, so
-			// a copy without it was made before the upgrade wrote anything.
-			name: "one from before migrations were tracked is copied before anything is written to it", statements: []string{`PRAGMA user_version = 1`, anAcct},
+			name: "so is one that already keeps golang-migrate's table", statements: append(atVersion(20261022, false), anAcct),
 			want: observed{
 				Copies: []string{firstNew}, Reported: firstNew, Upgraded: true,
-				NotUpgraded: true, KeepsRow: true, Private: true,
+				NotUpgraded: true, Tracked: true, KeepsRow: true, Private: true,
 			},
 		},
 		{name: "a new database has nothing to lose", want: observed{Upgraded: true}},
 		{name: "and one opened again is up to date", reopen: true, want: observed{Upgraded: true}},
 		{
-			name: "a database from a newer build is refused, with no copy made", statements: []string{tracked, atInit, `INSERT INTO schema_migrations (name) VALUES ('29991231_from_the_future.up.sql')`},
-			want: observed{Err: "database has migration 29991231_from_the_future.up.sql that this build does not know; update thaler"},
+			name: "a database from a newer build is refused, with no copy made", statements: atVersion(29991231, false),
+			want: observed{Err: "database has migration 29991231 that this build does not know; update thaler"},
 		},
 		{
 			name: "when the copy cannot be made the upgrade does not happen", statements: []string{tracked, atInit, anAcct}, block: "backups",

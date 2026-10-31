@@ -178,12 +178,12 @@ func checkRestorable(ctx context.Context, staged, src string) (upgrade bool, err
 		return false, err
 	}
 	defer db.Close()
-	state, err := readMigrationState(ctx, db, files)
+	state, err := readMigrationState(ctx, db)
 	if err != nil {
 		return false, fmt.Errorf("%s cannot be read, and nothing was changed: %w", src, err)
 	}
-	// Other programs use user_version too, so a legacy-looking database also has
-	// to have Thaler's own tables.
+	// Other programs use SQLite too, so a database that records migrations also
+	// has to have Thaler's own tables.
 	var ours int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('accounts', 'transactions', 'postings')`).Scan(&ours); err != nil {
 		return false, err
@@ -191,21 +191,13 @@ func checkRestorable(ctx context.Context, staged, src string) (upgrade bool, err
 	if !state.existing || ours != 3 {
 		return false, fmt.Errorf("%s is a SQLite database but not a Thaler one, and nothing was changed", src)
 	}
-	known := map[string]bool{}
-	for _, f := range files {
-		known[f] = true
+	if latest := files[len(files)-1].version; state.version > latest {
+		return false, fmt.Errorf("%s was made by a newer version of Thaler (it has migration %d): update thaler; nothing was changed", src, state.version)
 	}
-	for name := range state.applied {
-		if !known[name] {
-			return false, fmt.Errorf("%s was made by a newer version of Thaler (it has migration %s): update thaler; nothing was changed", src, name)
-		}
+	if state.dirty {
+		return false, fmt.Errorf("%s was saved while an upgrade of it was stopped halfway (migration %d), and nothing was changed", src, state.version)
 	}
-	for _, f := range files {
-		if !state.applied[f] {
-			upgrade = true
-		}
-	}
-	return upgrade, nil
+	return state.version < files[len(files)-1].version, nil
 }
 
 // dbFiles are the files one SQLite database can be spread over.
