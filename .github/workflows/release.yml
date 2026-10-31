@@ -1,0 +1,147 @@
+name: Release
+
+# Releases a version (ROADMAP.md, "Releasing"). A new minor version, v0.3.0, is run
+# from main and releases a commit of main: the newest one, or the one in `commit`
+# (the last commit before the cut-off, when main has moved on since). A fix to a
+# release, v0.3.1, is run from the branch release/0.3 and releases its newest commit.
+#
+# It checks the commit, writes the release notes, and then either stops (a dry run:
+# the archives are built and kept as an artifact, nothing is published) or tags the
+# commit and publishes it with GoReleaser. The notes and the line for the roadmap's
+# Releases table are in the run's summary; committing them is a pull request of
+# yours (docs/releases/<version>.md and the table).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to release, for example v0.3.0 (from main) or v0.3.1 (from release/0.3)"
+        required: true
+      commit:
+        description: "The commit to release, when it is not the newest one of the branch this runs from"
+        required: false
+      publish:
+        description: "Tag and publish. Off is a dry run that publishes nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to push the tag and create the GitHub release
+  actions: read # to look up the CI run of the commit
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags and the history the notes are written from
+      - name: which commit, and the release before it
+        id: plan
+        env:
+          VERSION: ${{ inputs.version }}
+          COMMIT: ${{ inputs.commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$VERSION" =~ ^v([0-9]+\.[0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::'$VERSION' is not a version like v0.3.0"
+            exit 1
+          fi
+          minor="${BASH_REMATCH[1]}"
+          patch="${BASH_REMATCH[2]}"
+          if [ "$patch" = "0" ]; then
+            want="main"
+          else
+            want="release/$minor"
+          fi
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "::error::$VERSION is released from $want, but this runs from $GITHUB_REF_NAME"
+            exit 1
+          fi
+          if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::$VERSION exists already"
+            exit 1
+          fi
+          if [ -z "$COMMIT" ]; then
+            COMMIT="$(git rev-parse HEAD)"
+          else
+            COMMIT="$(git rev-parse --verify "$COMMIT^{commit}")"
+          fi
+          if ! git merge-base --is-ancestor "$COMMIT" HEAD; then
+            echo "::error::$COMMIT is not part of $GITHUB_REF_NAME"
+            exit 1
+          fi
+          # Only main is tested by CI on every push; a fix on a release branch was tested
+          # in its pull request, and is tested again below.
+          if [ "$want" = "main" ]; then
+            passed="$(gh run list --workflow ci.yml --commit "$COMMIT" --status success --json databaseId --jq length)"
+            if [ "$passed" -lt 1 ]; then
+              echo "::error::CI has not passed at $COMMIT. Wait for it, or name a commit that did."
+              exit 1
+            fi
+          fi
+          # The release before: what the notes start from, and what the upgrade is tested against.
+          previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$COMMIT" 2>/dev/null || true)"
+          echo "commit=$COMMIT" >>"$GITHUB_OUTPUT"
+          echo "previous=$previous" >>"$GITHUB_OUTPUT"
+          echo "Releasing $VERSION from $COMMIT (after ${previous:-nothing})." >>"$GITHUB_STEP_SUMMARY"
+      - name: check out that commit
+        env:
+          COMMIT: ${{ steps.plan.outputs.commit }}
+        run: git checkout --detach "$COMMIT"
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: the tests pass
+        run: go test -shuffle=on ./...
+      - name: the smoke test passes, including the upgrade from the previous release
+        env:
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+        run: make smoke FROM="$PREVIOUS"
+      - name: the release notes
+        env:
+          VERSION: ${{ inputs.version }}
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+        run: |
+          range="${PREVIOUS:+$PREVIOUS..}HEAD"
+          day="$(date -u +%F)"
+          go run ./cmd/releasenotes -version "$VERSION" -date "$day" "$range" >notes.md
+          go run ./cmd/releasenotes -row -version "$VERSION" -date "$day" "$range" >row.md
+          {
+            echo "### Notes for $VERSION"
+            echo
+            cat notes.md
+            echo
+            echo "### Line for the Releases table in ROADMAP.md"
+            echo
+            echo '```'
+            cat row.md
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: dry run, build the archives
+        if: ${{ !inputs.publish }}
+        run: make release-check
+      - name: keep the dry run
+        if: ${{ !inputs.publish }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dry-run-${{ inputs.version }}
+          path: |
+            dist/*.tar.gz
+            dist/checksums.txt
+            notes.md
+      - name: tag
+        if: ${{ inputs.publish }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git tag "$VERSION"
+          git push origin "refs/tags/$VERSION"
+      - name: publish
+        if: ${{ inputs.publish }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: make release NOTES=notes.md
