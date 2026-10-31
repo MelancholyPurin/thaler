@@ -1,0 +1,48 @@
+# GoReleaser builds and publishes a release: the archives for macOS and Linux, their
+# checksums, and the GitHub release. The release workflow runs it (see
+# .github/workflows/release.yml and the release train in ROADMAP.md); `make
+# release-check` checks this file and builds the archives into dist/ without
+# publishing anything. Its version is pinned in the Makefile.
+version: 2
+project_name: thaler
+
+builds:
+  - id: thaler
+    main: ./cmd/thaler
+    binary: thaler
+    env:
+      - CGO_ENABLED=0 # the SQLite driver is pure Go, so every target builds from one machine
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version=v{{ .Version }} # what `thaler --version` prints
+    mod_timestamp: "{{ .CommitTimestamp }}" # the same commit gives the same bytes
+
+archives:
+  - id: thaler
+    formats: [tar.gz]
+    name_template: "thaler_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - config.example.toml
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# The notes come from cmd/releasenotes (REL-5) and are passed in with
+# --release-notes, so GoReleaser writes no changelog of its own.
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: melancholypurin
+    name: thaler
+  name_template: "{{ .Tag }}"
+  prerelease: auto # a tag like v0.3.0-rc.1 is marked as a pre-release
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}"
