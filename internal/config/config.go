@@ -26,9 +26,12 @@ type Config struct {
 	// KeepBackups is how many of the newest backups in each backups folder are
 	// kept when old ones are pruned; 0 means keep everything. Nil means not set:
 	// see KeepCount.
-	KeepBackups *int               `toml:"keep_backups"`
-	Profiles    []importer.Profile `toml:"profile"`
-	Rules       []importer.Rule    `toml:"rule"`
+	KeepBackups *int `toml:"keep_backups"`
+	// Features switches on the stories that are merged but not finished; see
+	// Feature. Only the names in knownFeatures are accepted.
+	Features map[string]bool    `toml:"features"`
+	Profiles []importer.Profile `toml:"profile"`
+	Rules    []importer.Rule    `toml:"rule"`
 }
 
 // DefaultBackupReminderDays is the reminder interval when config.toml does not
@@ -77,6 +80,9 @@ func Load(path string, mustExist bool) (*Config, error) {
 	}
 	if n := c.KeepBackups; n != nil && *n < 0 {
 		return nil, fmt.Errorf("%s: keep_backups is %d: use a number of backups to keep, or 0 to keep them all", path, *n)
+	}
+	if err := checkFeatures(c.Features, knownFeatures); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return &c, nil
 }
