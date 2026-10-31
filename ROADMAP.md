@@ -311,7 +311,7 @@ Getting every transaction into the right category with as little typing as possi
 - ~~`PLT-3` Config and data folders where Windows expects them~~ (dropped: no Windows support)
 - ~~`PLT-4` Open the config in a Windows editor, and behave on Windows terminals~~ (dropped: no Windows support)
 - ~~`PLT-5` Run the tests on macOS and Windows as well as Linux~~ (dropped: the tests run on Linux and macOS in CI; Windows is not supported)
-- [ ] `PLT-6` Install instructions per platform
+- [x] `PLT-6` Install instructions per platform
 - [ ] `PLT-7` A Homebrew package
 
 ### REL: The release train

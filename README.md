@@ -10,31 +10,48 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 > **Status: early, single-user.** It works locally and has tests, but the Sparkasse import profile has not been
 > tried on a real bank export yet, and there is no multi-user mode or server (see the [roadmap](#roadmap)).
 
-## Quick start
+## Install
 
-Requires Go 1.27 or newer. Install straight from GitHub:
+Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. For now Thaler is built from source, which needs **Go 1.27 or newer**; release binaries and a Homebrew package are planned (`PLT-2`, `PLT-7` in the [roadmap](ROADMAP.md)).
+
+**1. Get Go.** On macOS, `brew install go`. On Linux, follow [go.dev/doc/install](https://go.dev/doc/install): the distribution's own package is often older than 1.27. `go version` says which one you have.
+
+**2. Install Thaler.** Straight from GitHub:
 
 ```sh
 go install github.com/melancholypurin/thaler/cmd/thaler@latest
 ```
 
-or build from a clone:
+or from a clone, which leaves `./thaler` and gives it its version from git:
 
 ```sh
-go test ./...
-go build -o thaler ./cmd/thaler
-
-./thaler cli account add Assets:Sparkasse --currency EUR
-./thaler cli import --account Assets:Sparkasse --dry-run export.csv   # preview, writes nothing
-./thaler cli import --account Assets:Sparkasse export.csv
-./thaler cli balance
-./thaler cli list -a Expenses:Uncategorized
-
-./thaler                         # no arguments: the interactive UI
-./thaler --version               # which build this is
+git clone https://github.com/melancholypurin/thaler
+cd thaler
+make build
 ```
 
-`thaler --version` prints the version the binary was built with. `make build` sets it from git (the nearest tag, else the commit, with `-dirty` when files changed); a plain `go build` or `go install` uses the version Go recorded, and `dev` when it recorded none.
+`go install` puts `thaler` in `$(go env GOPATH)/bin` (`~/go/bin` unless you changed it). If the shell then says `thaler: command not found`, add that folder to the `PATH` in `~/.zshrc` (macOS) or `~/.bashrc` (Linux), and open a new terminal:
+
+```sh
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+**3. Check it.** `thaler --version` prints the version, and `thaler` opens the interface. The database and the config are in the same folders on both systems (see below).
+
+## Quick start
+
+```sh
+thaler cli account add Assets:Sparkasse --currency EUR
+thaler cli import --account Assets:Sparkasse --dry-run export.csv   # preview, writes nothing
+thaler cli import --account Assets:Sparkasse export.csv
+thaler cli balance
+thaler cli list -a Expenses:Uncategorized
+
+thaler                         # no arguments: the interactive UI
+thaler --version               # which build this is
+```
+
+`thaler --version` prints the version the binary was built with. `make build` sets it from git (the nearest tag, else the commit, with `-dirty` when files changed); a plain `go build` or `go install` uses the version Go recorded, and `dev` when it recorded none. From a clone, run the commands as `./thaler`.
 
 For development, `make` lists the shortcuts: `make test`, `make lint` (gofmt and golangci-lint with the pinned version and `.golangci.yml`; the same checks as CI, and the first run builds the linter, about a minute), `make tidy-check` (fails if `go.mod` or `go.sum` need a `go mod tidy`), `make check` (lint, tidy-check and the tests, in a random order: a failure prints the seed to repeat it with `-shuffle=SEED`), `make test-race` (the tests with the race detector), `make vuln` (govulncheck against the dependencies and the standard library; needs the network), `make check-coverage` (per-package and total test coverage) and `make build` (which also sets the version). CI first looks at which files a change touches (`.github/scripts/changed-paths.sh`, shared through the reusable workflow `changes.yml`). If only documentation and similar files changed (Markdown, `LICENSE`, `.gitignore`, `docs/`, `dependabot.yml`) the Go checks are skipped; any other file, including everything that is compiled in or configures the build, runs them. Otherwise it runs lint and the `go.mod` check, the tests, and the race detector as three parallel jobs. A last job, `Report Result`, passes when all three passed, or when all three were rightly skipped, and fails in every other case (require that one in branch protection, so jobs can change without touching the settings). `make test-scripts` tests the filter itself. Besides those it runs govulncheck on every push and on every pull request that is not documentation only, and once a week, since advisories appear without any change here. Dependabot opens one weekly pull request for routine Go dependency updates and one for the GitHub Actions; the pinned golangci-lint and govulncheck versions in the `Makefile` are not covered by it and are bumped by hand.
 
