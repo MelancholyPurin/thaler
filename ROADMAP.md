@@ -330,13 +330,18 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 - ~~`REL-2` SemVer and the upgrade rule~~ (folded into `REL-1`)
 - ~~`REL-3` The release branch~~ (folded into `REL-1`)
 - [x] `REL-4` Feature flags in the configuration, so unfinished stories can be merged and stay off
-- [ ] `REL-5` Release notes written from the `[ID]` in the commit titles, grouped by epic; the release that shipped each story recorded in this file; and the release-notes page of the documentation built from the same
+- [x] `REL-5` Release notes written from the `[ID]` in the commit titles, grouped by epic (`make release-notes`); the release that shipped each story recorded in the table below; and the release-notes page of the documentation built from the same
 - [ ] `REL-6` A release candidate and a smoke-test checklist, including making and restoring a backup; and tests that upgrade a database from the previous train, with data in it
 - ~~`REL-7` Tests that upgrade a database from the previous train, with data in it~~ (folded into `REL-6`)
 - ~~`REL-8` How a fix is made on the release branch and carried back to `main`~~ (folded into `REL-1`)
 - [ ] `REL-9` One workflow cuts, tags and builds everything the train ships: the binaries for macOS and Linux with their checksums, and later the image and the web app
 - ~~`REL-10` The published schedule, and which release shipped each story, recorded in this file~~ (folded into `REL-5`)
 - [ ] `REL-11` Signed checksums for every artifact
+
+**Releases.** What each release shipped, one line per release, newest last. The line comes from `make release-notes ROW=1` (the story IDs in the titles of the commits the release holds, grouped by epic as the notes are), and the notes themselves from `make release-notes`. The workflow of `REL-9` publishes the notes with the release, keeps them in `docs/releases/<version>.md`, and adds the line here.
+
+| Release | Date | Stories |
+| --- | --- | --- |
 
 ### ENG: Build, test and delivery
 
