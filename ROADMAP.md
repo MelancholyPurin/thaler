@@ -329,7 +329,7 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 - [x] `REL-1` The rules of the train, written above: the schedule (every second Monday, cut-off the Friday before), SemVer and which versions can upgrade to which, the release branch, and how a fix is made there and carried back to `main`
 - ~~`REL-2` SemVer and the upgrade rule~~ (folded into `REL-1`)
 - ~~`REL-3` The release branch~~ (folded into `REL-1`)
-- [ ] `REL-4` Feature flags in the configuration, so unfinished stories can be merged and stay off
+- [x] `REL-4` Feature flags in the configuration, so unfinished stories can be merged and stay off
 - [ ] `REL-5` Release notes written from the `[ID]` in the commit titles, grouped by epic; the release that shipped each story recorded in this file; and the release-notes page of the documentation built from the same
 - [ ] `REL-6` A release candidate and a smoke-test checklist, including making and restoring a backup; and tests that upgrade a database from the previous train, with data in it
 - ~~`REL-7` Tests that upgrade a database from the previous train, with data in it~~ (folded into `REL-6`)

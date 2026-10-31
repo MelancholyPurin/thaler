@@ -73,6 +73,8 @@ category = "Expenses:Groceries"
 
 The first matching rule wins. Anything unmatched lands in `Expenses:Uncategorized` / `Income:Uncategorized`. Rules run at import time, and again on demand: after editing your rules, `thaler cli recategorize --dry-run` previews and `thaler cli recategorize` applies them to everything still uncategorized. Transactions you categorised yourself are never touched.
 
+**Features that are not finished.** A story that is merged before it is done stays off until `config.toml` switches it on, in a `[features]` table (`some_feature = true`). That keeps an unfinished story from holding up a release. A name that does not exist is refused, and the error lists the ones that do. Nothing is behind a flag in this version.
+
 Re-importing the same or an overlapping export is safe: every row gets a stable hash (account, date, amount, counterparty, IBAN, purpose, booking text). Two truly identical bookings on one day are numbered, so they are kept as two. Rows the bank marks *Umsatz vorgemerkt* (pending) are ignored until booked.
 
 ## Terminal UI
