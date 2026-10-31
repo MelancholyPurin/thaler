@@ -16,6 +16,8 @@ import (
 // app holds state shared by all commands. The database and config file are
 // opened lazily so that --help and shell completion never create files.
 type app struct {
+	// version is what --version prints; empty only in tests that do not ask.
+	version string
 	dbFlag  string
 	cfgFlag string
 	svc     core.Service
@@ -98,7 +100,7 @@ func (a *app) close() {
 }
 
 func main() {
-	a := &app{}
+	a := &app{version: currentVersion()}
 	err := newRoot(a).ExecuteContext(context.Background())
 	a.close()
 	if err != nil {
@@ -117,11 +119,13 @@ func newRoot(a *app) *cobra.Command {
 
 Run without arguments to open the interactive interface. For scripting, cron
 and one-off commands use "thaler cli"; see "thaler cli --help".`,
+		Version:       a.version,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE:          a.runTUI,
 	}
+	root.SetVersionTemplate("thaler {{.Version}}\n")
 	root.PersistentFlags().StringVar(&a.dbFlag, "db", "", "path to the SQLite database (default: $THALER_DB or ~/.local/share/thaler/thaler.db)")
 	root.PersistentFlags().StringVar(&a.cfgFlag, "config", "", "path to config.toml (default: ~/.config/thaler/config.toml)")
 

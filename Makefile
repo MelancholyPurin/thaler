@@ -6,6 +6,8 @@ GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lin
 # Also pinned and run through `go run`; needs the network, since it reads the vulnerability database.
 GOVULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0
 BIN       ?= thaler
+# What `thaler --version` prints: the nearest tag, else the commit, and -dirty when files changed.
+VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
@@ -14,8 +16,8 @@ COVERFILE ?= coverage.out
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
 
-build: ## Build ./thaler
-	$(GO) build -o $(BIN) ./cmd/thaler
+build: ## Build ./thaler, with its version (see VERSION)
+	$(GO) build -ldflags "-X main.version=$(VERSION)" -o $(BIN) ./cmd/thaler
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...

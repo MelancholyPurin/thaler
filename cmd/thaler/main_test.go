@@ -87,7 +87,7 @@ func (e *cliEnv) run(args ...string) (string, error) {
 		full = append(full, strings.ReplaceAll(a, "{dir}", e.dir))
 	}
 	full = append(full, "--config", e.cfg)
-	a := &app{}
+	a := &app{version: "v1.2.3"}
 	if e.answers != nil {
 		answers := e.answers
 		a.ask = func(prompt string) (string, error) {
@@ -489,6 +489,7 @@ func Test_newRoot(t *testing.T) {
 	tcs := []cliCase{
 		{name: "balance is a `cli` command now", args: []string{"balance"}, wantErr: `unknown command "balance" for "thaler"`},
 		{name: "there is no tui subcommand", args: []string{"tui"}, wantErr: `unknown command "tui" for "thaler"`},
+		{name: "--version prints the version of the build", args: []string{"--version"}, want: "thaler v1.2.3\n"},
 		{name: "the scripting commands live under cli", setup: [][]string{addBank}, args: []string{"cli", "account", "list"}, want: "Assets:Bank  Assets, EUR\n"},
 	}
 	for _, tc := range tcs {
