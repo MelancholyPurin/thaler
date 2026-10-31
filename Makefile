@@ -11,6 +11,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
+VERSION_DATE ?= $(shell date +%F)
 .PHONY: help build test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
@@ -18,6 +19,9 @@ help: ## List the targets
 
 build: ## Build ./thaler, with its version (see VERSION)
 	$(GO) build -ldflags "-X main.version=$(VERSION)" -o $(BIN) ./cmd/thaler
+
+release-notes: ## Print the release notes of the commits in RANGE (RANGE=v0.2.0..HEAD VERSION=v0.3.0; ROW=1 prints the roadmap line)
+	@$(GO) run ./cmd/releasenotes $(if $(ROW),-row) -version $(VERSION) -date $(VERSION_DATE) $(RANGE)
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...
