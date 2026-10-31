@@ -36,17 +36,44 @@ jobs:
       - name: CI scripts
         run: make test-scripts
 
+  # Linux and macOS, because Thaler runs on both and they differ in details that
+  # matter to it (paths, file modes, how SQLite locks files). `go test` is what
+  # `make test` runs; it is used here because make is not on every runner.
   test:
+    name: test (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: test
-        run: make test
+        run: go test -shuffle=on ./...
+
+  # Windows is a supported platform (PLT-5), but the tests were written on Unix and
+  # still assume it in places: forward slashes in the paths they expect, Unix file
+  # modes. Until they are made portable this job runs to show what fails, and is
+  # kept out of the result check below so that it cannot block a merge. When it
+  # passes, move it into the `test` matrix and out of this comment.
+  test-windows:
+    name: test (windows-latest, not required yet)
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: test
+        run: go test -shuffle=on ./...
 
   # Its own job so it runs beside the others instead of after them: the race
   # detector makes the tests several times slower.
