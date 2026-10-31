@@ -38,7 +38,7 @@ jobs:
 
   # Linux and macOS, because Thaler runs on both and they differ in details that
   # matter to it (paths, file modes, how SQLite locks files). `go test` is what
-  # `make test` runs; it is used here because make is not on every runner.
+  # `make test` runs. The smoke test runs the built binary (see .github/scripts/smoke.sh).
   test:
     name: test (${{ matrix.os }})
     needs: changes
@@ -55,6 +55,8 @@ jobs:
           go-version-file: go.mod
       - name: test
         run: go test -shuffle=on ./...
+      - name: smoke test
+        run: make smoke
 
   # Its own job so it runs beside the others instead of after them: the race
   # detector makes the tests several times slower.
