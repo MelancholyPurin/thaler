@@ -5,6 +5,8 @@ GO        ?= go
 GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 # Also pinned and run through `go run`; needs the network, since it reads the vulnerability database.
 GOVULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0
+# Pinned like the others; it builds and publishes the release (see .goreleaser.yaml). The first run builds it.
+GORELEASER ?= $(GO) run github.com/goreleaser/goreleaser/v2@v2.19.0
 BIN       ?= thaler
 # What `thaler --version` prints: the nearest tag, else the commit, and -dirty when files changed.
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
@@ -12,7 +14,7 @@ COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke release-check release test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -33,6 +35,14 @@ smoke: ## Run a built binary through the paths that must not break; FROM=<tag or
 	else \
 		.github/scripts/smoke.sh "$$dir/thaler"; \
 	fi
+
+release-check: ## Check .goreleaser.yaml and build the release archives into dist/ without publishing anything
+	$(GORELEASER) check
+	$(GORELEASER) release --snapshot --clean
+
+release: ## Publish the release of the tag at HEAD with the notes in NOTES (the Release workflow does this; needs GITHUB_TOKEN)
+	@test -n "$(NOTES)" || { echo "usage: make release NOTES=notes.md"; exit 2; }
+	$(GORELEASER) release --clean --release-notes $(NOTES)
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...
@@ -68,5 +78,5 @@ check-coverage: ## Run the tests and print coverage per package and in total
 	@echo
 	@$(GO) tool cover -func=$(COVERFILE) | tail -n 1
 
-clean: ## Remove build output and the coverage profile
-	rm -f $(BIN) $(COVERFILE)
+clean: ## Remove build output, the release archives and the coverage profile
+	rm -rf $(BIN) $(COVERFILE) dist
