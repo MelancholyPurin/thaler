@@ -12,7 +12,7 @@ COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -22,6 +22,17 @@ build: ## Build ./thaler, with its version (see VERSION)
 
 release-notes: ## Print the release notes of the commits in RANGE (RANGE=v0.2.0..HEAD VERSION=v0.3.0; ROW=1 prints the roadmap line)
 	@$(GO) run ./cmd/releasenotes $(if $(ROW),-row) -version $(VERSION) -date $(VERSION_DATE) $(RANGE)
+
+smoke: ## Run a built binary through the paths that must not break; FROM=<tag or commit> also checks that a database of that release opens in this build
+	@dir="$$(mktemp -d)" && trap 'rm -rf "$$dir"' EXIT && \
+	$(GO) build -o "$$dir/thaler" ./cmd/thaler && \
+	if [ -n "$(FROM)" ]; then \
+		mkdir "$$dir/src" && git archive "$(FROM)" | tar -x -C "$$dir/src" && \
+		(cd "$$dir/src" && $(GO) build -o "$$dir/previous" ./cmd/thaler) && \
+		.github/scripts/smoke.sh "$$dir/thaler" "$$dir/previous"; \
+	else \
+		.github/scripts/smoke.sh "$$dir/thaler"; \
+	fi
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...
@@ -50,7 +61,7 @@ vuln: ## Scan the dependencies and the standard library for known vulnerabilitie
 fmt: ## Format all Go files in place
 	gofmt -w .
 
-check: lint tidy-check test-scripts test ## Most of what CI runs: lint, go.mod check, tests (also try test-race and vuln)
+check: lint tidy-check test-scripts test smoke ## Most of what CI runs: lint, go.mod check, tests, smoke test (also try test-race and vuln)
 
 check-coverage: ## Run the tests and print coverage per package and in total
 	$(GO) test -coverprofile=$(COVERFILE) ./...
