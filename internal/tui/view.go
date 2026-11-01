@@ -163,7 +163,7 @@ func (m *Model) accountsPanel(l layout) string {
 		label, value := "All accounts", m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0)
 		if i > 0 {
 			e := m.accounts[i-1]
-			label, value = shortName(e.account.Name), m.loc.Money(e.balance)
+			label, value = m.loc.ShortName(e.account.Name), m.loc.Money(e.balance)
 		}
 		line := leftRight(label, value, iw)
 		if i == m.accts.cursor {
@@ -186,7 +186,7 @@ func (m *Model) transactionsPanel(l layout) string {
 	iw := l.leftW - 2
 	title := "[3] Transactions"
 	if m.scopeAccount() != "" {
-		title += " · " + shortName(m.scopeAccount())
+		title += " · " + m.loc.ShortName(m.scopeAccount())
 	}
 	if m.onlyUncat {
 		title += " · uncategorized"
@@ -464,7 +464,7 @@ func (m *Model) formSuggestions(w, h int) []string {
 			}
 			hint := ""
 			if p.category != "" {
-				hint = "→ " + shortName(p.category)
+				hint = "→ " + m.loc.ShortName(p.category)
 			}
 			line := leftRight(p.name, dim.Render(hint), w)
 			if i == f.payeeCur {

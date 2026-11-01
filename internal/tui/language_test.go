@@ -151,3 +151,36 @@ func Test_Update_addForm_language_error(t *testing.T) {
 		})
 	}
 }
+
+// The accounts Thaler makes, and the types of accounts, are written in the language
+// where a person reads them; the names a person chose are not touched.
+func Test_View_builtinNames(t *testing.T) {
+	tcs := []struct {
+		name  string
+		tag   language.Tag
+		keys  string
+		shows []string
+		hides []string
+	}{
+		{name: "the postings of a transaction, German", tag: language.German, keys: "tab tab down", shows: []string{"Ausgaben:Ohne Kategorie", "Vermögen:Bank"}, hides: []string{"Expenses:Uncategorized", "Assets:Bank"}},
+		{name: "the postings of a transaction, Spanish", tag: language.Spanish, keys: "tab tab down", shows: []string{"Gastos:Sin categoría", "Activos:Bank"}, hides: []string{"Expenses:Uncategorized"}},
+		{name: "the postings of a transaction, English", tag: language.English, keys: "tab tab down", shows: []string{"Expenses:Uncategorized", "Assets:Bank"}, hides: []string{"Ausgaben", "Activos"}},
+		{name: "the budget, German", tag: language.German, keys: "B", shows: []string{"Ohne Kategorie", "Groceries"}, hides: []string{"Uncategorized:", " Uncategorized "}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR")
+			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
+			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
+			m := inLanguage(t, st, tc.tag)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}

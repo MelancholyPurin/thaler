@@ -445,9 +445,9 @@ func (m *Model) finishImport() {
 	m.setFocus(paneTransactions)
 	m.applyFilter(false)
 
-	msg := fmt.Sprintf("Imported %d into %s", res.Inserted, shortName(acc.Name))
+	msg := fmt.Sprintf("Imported %d into %s", res.Inserted, m.loc.ShortName(acc.Name))
 	if res.Inserted == 0 {
-		msg = fmt.Sprintf("Matched %d of your entries on %s with the bank's rows", res.Adopted, shortName(acc.Name))
+		msg = fmt.Sprintf("Matched %d of your entries on %s with the bank's rows", res.Adopted, m.loc.ShortName(acc.Name))
 	} else if res.Adopted > 0 {
 		msg += fmt.Sprintf(" · %d matched your entries", res.Adopted)
 	}
@@ -624,7 +624,7 @@ func (m *Model) importReviewPopup(w, h int) string {
 	case len(f.problems) > 0:
 		footer = "y import the rest · esc back"
 	}
-	title := fmt.Sprintf("Import %s → %s", filepath.Base(f.path), shortName(f.req.Account))
+	title := fmt.Sprintf("Import %s → %s", filepath.Base(f.path), m.loc.ShortName(f.req.Account))
 	return box(title, lines, w, h, true, footer)
 }
 
@@ -646,9 +646,9 @@ func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selecte
 	}
 	catW := 16
 	payeeW := max(4, w-17-catW-amtW)
-	category := shortName(r.Category)
+	category := loc.ShortName(r.Category)
 	if r.Transfer != nil {
-		category = "⇄ " + shortName(r.Transfer.Account)
+		category = "⇄ " + loc.ShortName(r.Transfer.Account)
 	}
 	if r.Adopts != nil {
 		category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, clean(r.Adopts.Payee))
