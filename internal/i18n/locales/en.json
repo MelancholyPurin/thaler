@@ -419,5 +419,7 @@
   "prune_folder_backups": "backups",
   "prune_folder_replaced": "replaced by a restore",
   "prune_folder_pre_migration": "copies before an upgrade",
-  "prune_folder_heading": "{{.Folder}} · {{.Count}} of {{.Total}}"
+  "prune_folder_heading": "{{.Folder}} · {{.Count}} of {{.Total}}",
+  "prune_folder_line": "{{.Folder}}: {{.Dir}}, {{.Count}} of {{.Total}}",
+  "help_keys_categorize_rule": "c, then tab"
 }
