@@ -63,6 +63,7 @@ const (
 	modeBackup               // writing a backup of the database
 	modeRestore              // putting a backup in place of the database
 	modePrune                // removing the oldest backups
+	modeLanguage             // choosing the language
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -151,6 +152,7 @@ type Model struct {
 	bkp           *backupForm
 	rst           *restoreForm
 	prn           *pruneForm
+	lang          *languageForm
 	lastBackup    time.Time      // when the newest backup was made, zero if there is none; see refreshBackups
 	remindDays    int            // days after which that is worth a reminder, 0 for never
 	prunable      core.PrunePlan // the backups that are more than are kept, see refreshBackups
@@ -357,6 +359,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRestore(msg)
 		case modePrune:
 			return m.updatePrune(msg)
+		case modeLanguage:
+			return m.updateLanguage(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -382,6 +386,9 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openRestore()
 	case "ctrl+p":
 		m.openPrune()
+		return m, nil
+	case "ctrl+l":
+		m.openLanguage()
 		return m, nil
 	case "f1", "L":
 		m.setScreen(screenLedger)
@@ -569,9 +576,9 @@ func (m *Model) applyCategory(category string) {
 		moved = len(res.Moves)
 	}
 	if len(back) > 0 {
-		undone := m.loc.T("undid_categorize", map[string]any{"ID": id})
+		undone := func() string { return m.loc.T("undid_categorize", map[string]any{"ID": id}) }
 		if moved > 0 {
-			undone = m.loc.T("undid_categorize_more", map[string]any{"ID": id, "Count": moved})
+			undone = func() string { return m.loc.T("undid_categorize_more", map[string]any{"ID": id, "Count": moved}) }
 		}
 		m.undo = append(m.undo, undoOp{undone: undone, run: func() error {
 			_, err := m.svc.SetCategories(m.ctx, back)

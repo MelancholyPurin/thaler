@@ -157,3 +157,31 @@ func Test_Languages_catalogs(t *testing.T) {
 		})
 	}
 }
+
+func Test_Localizer_Code(t *testing.T) {
+	tcs := []struct {
+		name string
+		tag  language.Tag
+		want string
+	}{
+		{name: "English", tag: language.English, want: "en"},
+		{name: "Spanish", tag: language.Spanish, want: "es"},
+		{name: "German", tag: language.German, want: "de"},
+		{name: "a region of German", tag: language.MustParse("de-AT"), want: "de"},
+		{name: "the pseudo-language is English with its text changed", tag: PseudoTag, want: "en"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			loc := New(tc.tag)
+
+			// when
+			got := loc.Code()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

@@ -213,6 +213,10 @@ func wholeNumber(n any) (int64, bool) {
 	return 0, false
 }
 
+// Code is the code of the language this Localizer speaks, as config.toml writes it:
+// en, es or de. The pseudo-language is English with its text changed, so it is en.
+func (l *Localizer) Code() string { return l.lang.Code }
+
 // Tag is the language this Localizer speaks.
 func (l *Localizer) Tag() language.Tag { return l.tag }
 
