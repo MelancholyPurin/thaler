@@ -85,7 +85,7 @@ func Test_prune(t *testing.T) {
 			args: []string{"cli", "prune", "--keep", "2", "--yes"},
 			env:  map[string]string{"LANG": "de_DE.UTF-8"},
 			want: "Aufbewahrt pro Ordner: 2. 2 Sicherungen (10 B) würden entfernt:\n\n" +
-				"backups: {db}/backups, 2 of 4\n  {when}  thaler-20261020-090000.db.age  5 B\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"Sicherungen: {db}/backups, 2 von 4\n  {when}  thaler-20261020-090000.db.age  5 B\n  {when}  thaler-20261015-090000.db  5 B\n" +
 				"\n2 Sicherungen entfernt (10 B).\n",
 			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
@@ -95,7 +95,7 @@ func Test_prune(t *testing.T) {
 			args:   []string{"cli", "prune", "--yes"},
 			env:    map[string]string{"LANG": "es_ES.UTF-8"},
 			want: "Copias que se conservan por carpeta: 3. 1 copia de seguridad (5 B) se eliminaría:\n\n" +
-				"backups: {db}/backups, 1 of 4\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"copias de seguridad: {db}/backups, 1 de 4\n  {when}  thaler-20261015-090000.db  5 B\n" +
 				"\nSe eliminó 1 copia de seguridad (5 B).\n",
 			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
