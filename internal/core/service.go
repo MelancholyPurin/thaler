@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -59,7 +60,7 @@ func (s *Local) SetBaseCurrency(ctx context.Context, c ledger.Currency) error {
 // SetRate records that on date one unit of base is worth rate units of quote.
 func (s *Local) SetRate(ctx context.Context, date string, base, quote ledger.Currency, rate string) error {
 	if base == quote {
-		return errors.New("base and quote currency must differ")
+		return coded.New("currencies_must_differ", nil)
 	}
 	return s.repo.queries().putRate(ctx, date, base, quote, rate)
 }
@@ -151,7 +152,7 @@ func (s *Local) AddTransaction(ctx context.Context, nt NewTransaction) (AddResul
 // validate checks what can be checked without the database.
 func (nt NewTransaction) validate() error {
 	if nt.Date.IsZero() {
-		return errors.New("transaction has no date")
+		return coded.New("no_date", nil)
 	}
 	return ledger.CheckBalanced(nt.Postings)
 }
@@ -183,7 +184,7 @@ func storeTransaction(ctx context.Context, q queries, nt NewTransaction, id int6
 			return 0, err
 		}
 		if dup {
-			return 0, ErrDuplicate
+			return 0, coded.New("already_imported", nil)
 		}
 	}
 	accountIDs, err := resolvePostings(ctx, q, nt, created)
@@ -405,16 +406,16 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 		return TransferResult{}, err
 	}
 	if src.Currency == "" || dst.Currency == "" {
-		return TransferResult{}, errors.New("transfers work between accounts with a fixed currency (Assets or Liabilities)")
+		return TransferResult{}, coded.New("transfer_fixed_currency", nil)
 	}
 	if src.ID == dst.ID {
-		return TransferResult{}, errors.New("source and destination are the same account")
+		return TransferResult{}, coded.New("transfer_same_account", nil)
 	}
 	if req.Amount.Currency != src.Currency {
-		return TransferResult{}, fmt.Errorf("amount is in %s, but %s holds %s", req.Amount.Currency, src.Name, src.Currency)
+		return TransferResult{}, coded.New("amount_wrong_currency", map[string]any{"Currency": string(req.Amount.Currency), "Account": src.Name, "Holds": string(src.Currency)})
 	}
 	if req.Amount.Minor <= 0 {
-		return TransferResult{}, errors.New("amount must be greater than zero")
+		return TransferResult{}, coded.New("amount_not_positive", nil)
 	}
 
 	// Each side of the transfer is its own transaction on its own account,
@@ -434,10 +435,10 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 				src.Currency, dst.Currency, dst.Currency)
 		}
 		if req.ToAmount.Currency != dst.Currency {
-			return TransferResult{}, fmt.Errorf("amount received is in %s, but %s holds %s", req.ToAmount.Currency, dst.Name, dst.Currency)
+			return TransferResult{}, coded.New("received_wrong_currency", map[string]any{"Currency": string(req.ToAmount.Currency), "Account": dst.Name, "Holds": string(dst.Currency)})
 		}
 		if req.ToAmount.Minor <= 0 {
-			return TransferResult{}, errors.New("amount received must be greater than zero")
+			return TransferResult{}, coded.New("received_not_positive", nil)
 		}
 		clearing, received = ledger.ConversionAccount, req.ToAmount
 		res.In, res.CrossCurrency = req.ToAmount, true
@@ -507,7 +508,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		rows = append(rows, r)
 	}
 	if len(res.Rejected) > 0 && !req.IgnoreRejected {
-		return res, fmt.Errorf("%w: %d row(s)", ErrRowsRejected, len(res.Rejected))
+		return res, coded.New("rows_rejected", map[string]any{"Count": len(res.Rejected)})
 	}
 
 	dedupe := importer.NewDeduper(strconv.FormatInt(acc.ID, 10))
@@ -911,10 +912,10 @@ func (s *Local) SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest
 			return fmt.Errorf("%s is a %s account; only asset and liability accounts have a balance to set", acc.Name, acc.Type)
 		}
 		if req.Balance.Currency != acc.Currency {
-			return fmt.Errorf("%s holds %s, but the balance is in %s", acc.Name, acc.Currency, req.Balance.Currency)
+			return coded.New("balance_wrong_currency", map[string]any{"Account": acc.Name, "Holds": string(acc.Currency), "Currency": string(req.Balance.Currency)})
 		}
 		if req.AsOf.IsZero() {
-			return errors.New("the balance has no date")
+			return coded.New("balance_no_date", nil)
 		}
 		asOf := req.AsOf.Format(ledger.DateLayout)
 

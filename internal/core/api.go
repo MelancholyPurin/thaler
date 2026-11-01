@@ -14,24 +14,24 @@ package core
 
 import (
 	"context"
-	"errors"
 	"io"
 	"time"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 var (
 	// ErrNoAccount means a named account does not exist.
-	ErrNoAccount = errors.New("account does not exist")
+	ErrNoAccount = coded.New("account_not_found", nil)
 	// ErrAccountExists means an account with that name is already present.
-	ErrAccountExists = errors.New("account already exists")
+	ErrAccountExists = coded.New("account_exists", nil)
 	// ErrDuplicate means a transaction with the same import hash is already stored.
-	ErrDuplicate = errors.New("transaction already imported")
+	ErrDuplicate = coded.New("already_imported", nil)
 	// ErrRowsRejected means an import contained rows that do not fit the target
 	// account and the caller did not ask to skip them. Nothing was written.
-	ErrRowsRejected = errors.New("some rows do not fit the account")
+	ErrRowsRejected = coded.New("rows_rejected", nil)
 )
 
 // Service is everything a front end can ask of Thaler. Amounts are always

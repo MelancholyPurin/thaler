@@ -14,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -129,7 +130,7 @@ func (q queries) insertAccount(ctx context.Context, name string, typ ledger.Acco
 		uuid.NewV4().String(), name, string(typ), c)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return Account{}, fmt.Errorf("%w: %s", ErrAccountExists, name)
+			return Account{}, coded.New("account_exists", map[string]any{"Name": name})
 		}
 		return Account{}, err
 	}
@@ -149,7 +150,7 @@ func (q queries) account(ctx context.Context, name string) (Account, error) {
 	err := q.db.QueryRowContext(ctx, `SELECT id, name, type, currency FROM accounts WHERE name = ?`, name).
 		Scan(&a.ID, &a.Name, &typ, &cur)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, fmt.Errorf("%w: %s", ErrNoAccount, name)
+		return Account{}, coded.New("account_not_found", map[string]any{"Name": name})
 	}
 	if err != nil {
 		return Account{}, err
