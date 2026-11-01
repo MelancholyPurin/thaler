@@ -181,7 +181,7 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 
 English is the source language; Spanish and German are translations. This epic is the machinery that every surface uses.
 
-- [ ] `LOC-1` Message catalogs in Go, one file per language, with a tool that extracts new strings; and the language setting: `config.toml`, then the environment (`LANG`), then English
+- [x] `LOC-1` Message catalogs in Go, one file per language, with a tool that extracts new strings; and the language setting: `config.toml`, then the environment (`LANG`), then English
 - ~~`LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English~~ (folded into `LOC-1`)
 - [ ] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`), and typed amounts and dates read in that format, with the ambiguous cases still refused
 - ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)

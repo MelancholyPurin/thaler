@@ -59,7 +59,7 @@ and equity accounts accept any currency unless you give one.`,
 			}
 			out := cmd.OutOrStdout()
 			if len(accs) == 0 {
-				fmt.Fprintln(out, "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR")
+				fmt.Fprintln(out, a.localizer().T("no_accounts_yet", nil))
 				return nil
 			}
 			lines := make([]column, 0, len(accs))

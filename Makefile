@@ -14,7 +14,7 @@ COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke release-check release i18n-todo test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -43,6 +43,9 @@ release-check: ## Check .goreleaser.yaml and build the release archives into dis
 release: ## Publish the release of the tag at HEAD with the notes in NOTES (the Release workflow does this; needs GITHUB_TOKEN)
 	@test -n "$(NOTES)" || { echo "usage: make release NOTES=notes.md"; exit 2; }
 	$(GORELEASER) release --clean --release-notes $(NOTES)
+
+i18n-todo: ## List the messages a language still has to translate, as JSON to fill in, with the English on standard error (make i18n-todo LOCALE=es)
+	@$(GO) run ./cmd/i18ntodo $(LOCALE)
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...
