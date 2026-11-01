@@ -1,10 +1,11 @@
 package ledger
 
 import (
-	"fmt"
 	"math/big"
 	"sort"
 	"strings"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // ParseRate parses an exchange rate such as "0.92" or "1,0850". It returns the
@@ -18,11 +19,11 @@ func ParseRate(s string) (*big.Rat, string, error) {
 		}
 	}
 	if bad {
-		return nil, "", fmt.Errorf("invalid rate %q: use a positive decimal number such as 0.92", s)
+		return nil, "", coded.New("invalid_rate", map[string]any{"Text": s})
 	}
 	r, ok := new(big.Rat).SetString(clean)
 	if !ok || r.Sign() <= 0 {
-		return nil, "", fmt.Errorf("invalid rate %q: must be greater than zero", s)
+		return nil, "", coded.New("rate_not_positive", map[string]any{"Text": s})
 	}
 	return r, clean, nil
 }

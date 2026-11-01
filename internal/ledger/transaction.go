@@ -51,12 +51,12 @@ func CheckBalanced(postings []Posting) error {
 	var off []string
 	for cur, sum := range sums {
 		if sum != 0 {
-			off = append(off, fmt.Sprintf("%s is off by %s", cur, Money{Minor: sum, Currency: cur}.Decimal()))
+			off = append(off, fmt.Sprintf("%s %s", cur, Money{Minor: sum, Currency: cur}.Decimal()))
 		}
 	}
 	if len(off) > 0 {
 		sort.Strings(off)
-		return fmt.Errorf("postings do not balance: %s", strings.Join(off, ", "))
+		return coded.New("postings_unbalanced", map[string]any{"Off": strings.Join(off, ", ")})
 	}
 	return nil
 }
