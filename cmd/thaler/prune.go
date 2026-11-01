@@ -72,7 +72,7 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 func describe(w io.Writer, loc *i18n.Localizer, plan core.PrunePlan) {
 	fmt.Fprintln(w, loc.T("prune_listing", map[string]any{"Keep": plan.Keep, "Count": plan.Count(), "Size": units.HumanSize(plan.Size())}))
 	for _, f := range plan.Folders {
-		fmt.Fprintf(w, "\n%s: %s, %d of %d\n", loc.BackupFolder(f.Kind), f.Dir, len(f.Remove), f.Total)
+		fmt.Fprintln(w, "\n"+loc.T("prune_folder_line", map[string]any{"Folder": loc.BackupFolder(f.Kind), "Dir": f.Dir, "Count": len(f.Remove), "Total": f.Total}))
 		for _, file := range f.Remove {
 			fmt.Fprintf(w, "  %s  %s  %s\n", file.When.Local().Format("2006-01-02 15:04"), filepath.Base(file.Path), units.HumanSize(file.Size))
 		}

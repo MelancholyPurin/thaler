@@ -195,8 +195,8 @@ func Test_Localizer_DateTime_Decimal_MonthYear_Size(t *testing.T) {
 		wantSize      string // Size(12700)
 	}{
 		{name: "English", tag: language.English, wantDateTime: "2026-10-01 14:05", wantDecimal: "1.0850", wantMonthYear: "Oct 2026", wantSize: "12.4 KB"},
-		{name: "Spanish", tag: language.Spanish, wantDateTime: "01/10/2026 14:05", wantDecimal: "1,0850", wantMonthYear: "Oct 2026", wantSize: "12,4 KB"},
-		{name: "German", tag: language.German, wantDateTime: "01.10.2026 14:05", wantDecimal: "1,0850", wantMonthYear: "Oct 2026", wantSize: "12,4 KB"},
+		{name: "Spanish", tag: language.Spanish, wantDateTime: "01/10/2026 14:05", wantDecimal: "1,0850", wantMonthYear: "oct 2026", wantSize: "12,4 KB"},
+		{name: "German", tag: language.German, wantDateTime: "01.10.2026 14:05", wantDecimal: "1,0850", wantMonthYear: "Okt 2026", wantSize: "12,4 KB"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

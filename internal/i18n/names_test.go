@@ -137,7 +137,8 @@ func Test_Localizer_BackupFolder(t *testing.T) {
 		{name: "replaced", tag: language.English, kind: "replaced", want: "replaced by a restore"},
 		{name: "before an upgrade", tag: language.English, kind: "pre_migration", want: "copies before an upgrade"},
 		{name: "a kind nobody knows", tag: language.English, kind: "elsewhere", want: "elsewhere"},
-		{name: "a language that lacks the text shows English", tag: language.German, kind: "replaced", want: "replaced by a restore"},
+		{name: "German", tag: language.German, kind: "replaced", want: "durch eine Wiederherstellung ersetzt"},
+		{name: "Spanish", tag: language.Spanish, kind: "pre_migration", want: "copias previas a una actualización"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

@@ -240,3 +240,41 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		})
 	}
 }
+
+// Spanish and German are translated: the screens and popups show their words, and no
+// English message is left among them.
+func Test_View_translated(t *testing.T) {
+	tcs := []struct {
+		name  string
+		tag   language.Tag
+		keys  string
+		shows []string
+		hides []string
+	}{
+		{name: "Spanish, the tabs and panels", tag: language.Spanish, keys: "", shows: []string{"Libro", "Presupuesto", "Previsión", "Informes", "[2] Cuentas", "Todas las cuentas"}, hides: []string{"Ledger", "Accounts"}},
+		{name: "German, the tabs and panels", tag: language.German, keys: "", shows: []string{"Buchungen", "Prognose", "Berichte", "[2] Konten", "Alle Konten"}, hides: []string{"Forecast", "Accounts"}},
+		{name: "Spanish, the add form", tag: language.Spanish, keys: "a", shows: []string{"Añadir transacción", "Importe", "Comercio", "Categoría", "enter siguiente"}, hides: []string{"Add transaction", "Payee"}},
+		{name: "German, the add form", tag: language.German, keys: "a", shows: []string{"Buchung hinzufügen", "Betrag", "Empfänger", "Kategorie", "enter weiter"}, hides: []string{"Add transaction", "Payee"}},
+		{name: "Spanish, the transfer", tag: language.Spanish, keys: "x", shows: []string{"Transferencia entre tus cuentas", "Recibido", "Desde", "Hacia"}, hides: []string{"Transfer between"}},
+		{name: "German, the transfer", tag: language.German, keys: "x", shows: []string{"Umbuchung zwischen deinen Konten", "Erhalten", "Von", "Nach"}, hides: []string{"Transfer between"}},
+		{name: "Spanish, the help", tag: language.Spanish, keys: "?", shows: []string{"Teclas", "c, luego tab", "deshacer el último cambio"}, hides: []string{"then tab", "undo the last change"}},
+		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "c, dann tab", "die letzte Änderung rückgängig machen"}, hides: []string{"then tab", "undo the last change"}},
+		{name: "Spanish, the budget", tag: language.Spanish, keys: "B", shows: []string{"Presupuesto · oct 2026", "Ingresos", "Gastado"}, hides: []string{"Income", "Spent"}},
+		{name: "German, the budget", tag: language.German, keys: "B", shows: []string{"Budget · Okt 2026", "Einnahmen", "Ausgegeben"}, hides: []string{"Income", "Spent"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
+			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
+			m := inLanguage(t, st, tc.tag)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
