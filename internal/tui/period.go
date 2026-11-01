@@ -6,15 +6,15 @@ import "time"
 const monthLayout = "2006-01"
 
 // periodLabel is the human name of a period.
-func periodLabel(period string) string {
+func (m *Model) periodLabel(period string) string {
 	if period == "" {
-		return "All time"
+		return m.loc.T("all_time", nil)
 	}
 	t, err := time.Parse(monthLayout, period)
 	if err != nil {
 		return period
 	}
-	return t.Format("Jan 2006")
+	return m.loc.MonthYear(t)
 }
 
 // periodRange returns the first and last day (YYYY-MM-DD) of a period; both

@@ -648,7 +648,7 @@ func Test_Update_form_navigation(t *testing.T) {
 			// then
 			got := observed{Mode: modeNames[m.mode]}
 			if m.form != nil {
-				got.Field, got.Footer = formFieldNames[m.form.field], m.form.footer()
+				got.Field, got.Footer = formFieldNames[m.form.field], m.formFooter()
 			}
 			added, _ := delta(before, storedLines(t, st))
 			got.Saved = len(added) > 0 || strings.HasPrefix(m.status, "Updated")

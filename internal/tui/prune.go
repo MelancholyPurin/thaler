@@ -8,7 +8,6 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
-	"github.com/melancholypurin/thaler/internal/units"
 )
 
 // The prune popup removes the oldest backups, keeping the newest few in each
@@ -54,10 +53,10 @@ func (m *Model) openPrune() {
 	}
 	f := &pruneForm{plan: plan}
 	for _, folder := range plan.Folders {
-		f.lines = append(f.lines, pruneLine{text: fmt.Sprintf("%s · %d of %d", folder.Label, len(folder.Remove), folder.Total), heading: true})
+		f.lines = append(f.lines, pruneLine{text: m.loc.T("prune_folder_heading", map[string]any{"Folder": m.loc.BackupFolder(folder.Kind), "Count": len(folder.Remove), "Total": folder.Total}), heading: true})
 		for _, file := range folder.Remove {
 			f.lines = append(f.lines, pruneLine{text: fmt.Sprintf("  %s · %s · %s",
-				file.When.Local().Format("2006-01-02 15:04"), units.HumanSize(file.Size), filepath.Base(file.Path))})
+				m.loc.DateTime(file.When.Local()), m.loc.Size(file.Size), filepath.Base(file.Path))})
 		}
 	}
 	m.prn = f
@@ -73,11 +72,11 @@ func (m *Model) nothingToPrune() string {
 	}
 	switch {
 	case m.opts.DatabasePath == "":
-		return "there are no backups to prune: this database is not a file"
+		return m.loc.T("prune_not_a_file", nil)
 	case cfg.KeepCount() == 0:
-		return "keep_backups is 0 in config.toml: all backups are kept"
+		return m.loc.T("prune_keep_zero", nil)
 	}
-	return fmt.Sprintf("nothing to remove: no folder has more than %d backups", cfg.KeepCount())
+	return m.loc.T("prune_nothing_over", map[string]any{"Count": cfg.KeepCount()})
 }
 
 func (m *Model) updatePrune(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -109,7 +108,7 @@ func (m *Model) prune() {
 		return
 	}
 	m.mode, m.prn = modeList, nil
-	m.setStatus(m.loc.T("old_backups_removed", map[string]any{"Count": removed, "Size": units.HumanSize(f.plan.Size())}), false)
+	m.setStatus(m.loc.T("old_backups_removed", map[string]any{"Count": removed, "Size": m.loc.Size(f.plan.Size())}), false)
 }
 
 func (m *Model) prunePopup() string {
@@ -117,8 +116,8 @@ func (m *Model) prunePopup() string {
 	w := m.backupWidth()
 	iw := w - 2
 	lines := []string{
-		fit(fmt.Sprintf("Keeping the newest %d in each folder. These %d would go:", f.plan.Keep, f.plan.Count()), iw),
-		dim.Render(fit(fmt.Sprintf("%s freed; keep_backups in config.toml changes the number", units.HumanSize(f.plan.Size())), iw)),
+		fit(m.loc.T("old_backups_listing", map[string]any{"Keep": f.plan.Keep, "Count": f.plan.Count()}), iw),
+		dim.Render(fit(m.loc.T("old_backups_freed", map[string]any{"Size": m.loc.Size(f.plan.Size())}), iw)),
 		dim.Render(fit("", iw)),
 	}
 	for i := f.top; i < min(f.top+pruneRows, len(f.lines)); i++ {
@@ -134,9 +133,9 @@ func (m *Model) prunePopup() string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	footer := fmt.Sprintf("enter remove %d · esc cancel", f.plan.Count())
+	footer := m.loc.T("prune_footer", map[string]any{"Count": f.plan.Count()})
 	if len(f.lines) > pruneRows {
-		footer = fmt.Sprintf("enter remove %d · ↑/↓ scroll · esc cancel", f.plan.Count())
+		footer = m.loc.T("prune_footer_scroll", map[string]any{"Count": f.plan.Count()})
 	}
-	return box("Remove old backups", lines, w, h, true, footer)
+	return box(m.loc.T("remove_old_backups", nil), lines, w, h, true, footer)
 }

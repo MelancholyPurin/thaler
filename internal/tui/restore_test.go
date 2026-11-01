@@ -362,7 +362,7 @@ func Test_Update_restore_ends(t *testing.T) {
 			cmd := settle(m)
 
 			// then
-			got := observed{Quit: cmd != nil && cmd() == tea.Quit(), Fatal: strings.ReplaceAll(m.fatal.Error(), dir, "{dir}")}
+			got := observed{Quit: cmd != nil && cmd() == tea.Quit(), Fatal: strings.ReplaceAll(m.errText(m.fatal), dir, "{dir}")}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}

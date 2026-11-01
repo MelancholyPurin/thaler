@@ -116,7 +116,7 @@ func Test_Update_import(t *testing.T) {
 		},
 		{
 			name: "a row that cannot be read is listed, and enter does not import past it", file: exportCSV + "07.10.26;;Broken;abc;EUR;Umsatz gebucht\n", script: "i enter enter",
-			want:  observed{Flow: Flow{Mode: "import", Err: "1 row(s) have problems and would be skipped; press y to import the rest"}},
+			want:  observed{Flow: Flow{Mode: "import", Err: "1 row has problems and would be skipped; press y to import the rest"}},
 			shows: []string{"1 with problems", "line 6"},
 		},
 		{
@@ -473,7 +473,7 @@ func Test_Update_import_pairingTransfers(t *testing.T) {
 		},
 		{
 			name: "z takes the import back, pairing included", script: "i enter enter z",
-			want: observed{Flow: Flow{Mode: "list", Status: "Undid the import of 1 transactions"}},
+			want: observed{Flow: Flow{Mode: "list", Status: "Undid the import of 1 transaction"}},
 		},
 	}
 	for _, tc := range tcs {
@@ -609,7 +609,7 @@ func Test_Update_import_adoptingEntries(t *testing.T) {
 		},
 		{
 			name: "and importing it again says there is nothing new", file: onlyMatch, script: "i enter enter i enter enter",
-			want: observed{Flow: Flow{Mode: "list", Status: "Nothing new: all 1 rows were already imported"}, Hashed: []bool{false, false, true, false, false}},
+			want: observed{Flow: Flow{Mode: "list", Status: "Nothing new: the 1 row was already imported"}, Hashed: []bool{false, false, true, false, false}},
 		},
 	}
 	for _, tc := range tcs {

@@ -35,7 +35,7 @@ func Test_editorCommand(t *testing.T) {
 		{name: "a blank VISUAL is unset", vars: map[string]string{"VISUAL": "  ", "EDITOR": "vim"}, look: none, want: []string{"vim", "/c.toml"}},
 		{name: "vi when it is all there is", look: only("vi"), want: []string{"vi", "/c.toml"}},
 		{name: "nano before vi", look: func(string) (string, error) { return "x", nil }, want: []string{"nano", "/c.toml"}},
-		{name: "nothing at all", look: none, wantErr: "no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=nano"},
+		{name: "nothing at all", look: none, wantErr: "no_editor"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -203,7 +203,7 @@ func Test_configEdited(t *testing.T) {
 		wantMsg   string
 		wantErr   bool
 	}{
-		{name: "saved", load: rules, wantMsg: "Config saved: 3 rule(s), 1 bank profile(s); used by the next import"},
+		{name: "saved", load: rules, wantMsg: "Config saved (rules: 3, bank profiles: 1); used by the next import"},
 		{
 			name: "saved with a mistake", load: broken,
 			wantMsg: "The config has a problem, imports will refuse it until it is fixed (press C): config.toml: unknown key(s): [rule.typo]", wantErr: true,

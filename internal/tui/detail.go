@@ -62,7 +62,7 @@ func (m *Model) rightPane(l layout) string {
 	var lines []string
 	switch {
 	case m.screen == screenBudget:
-		title, lines = "Budget · "+periodLabel(m.period), m.budgetDetail(iw)
+		title, lines = m.loc.T("budget_title", map[string]any{"Period": m.periodLabel(m.period)}), m.budgetDetail(iw)
 	case m.focus == paneAccounts:
 		title, lines = m.accountDetail(iw)
 	case m.focus == paneTransactions:
@@ -71,7 +71,7 @@ func (m *Model) rightPane(l layout) string {
 		title, lines = appName, m.homeDetail(iw, l.avail-2)
 	}
 	if ih := l.avail - 2; ih > 1 && len(lines) > ih {
-		lines = append(lines[:ih-1:ih-1], dim.Render(fmt.Sprintf("… %d more lines", len(lines)-ih+1)))
+		lines = append(lines[:ih-1:ih-1], dim.Render(m.loc.T("more_lines", map[string]any{"Count": len(lines) - ih + 1})))
 	}
 	return box(title, lines, l.rightW, l.avail, false, "")
 }
@@ -103,7 +103,7 @@ func (m *Model) homeDetail(w, h int) []string {
 	uncat := m.uncategorizedCount()
 	uncatText := fmt.Sprint(uncat)
 	if uncat > 0 {
-		uncatText = warn.Render(uncatText + "  ●  press 3, then u to review")
+		uncatText = warn.Render(m.loc.T("uncat_review", map[string]any{"Count": uncat}))
 	}
 	span := "—"
 	if n := len(m.rows); n > 0 {
@@ -116,22 +116,22 @@ func (m *Model) homeDetail(w, h int) []string {
 			facts = append(facts, pad+line)
 		}
 	}
-	add("Net worth", bold.Render(netText))
+	add(m.loc.T("label_net_worth", nil), bold.Render(netText))
 	if len(m.netWorth.Missing) > 0 {
 		codes := make([]string, len(m.netWorth.Missing))
 		for i, c := range m.netWorth.Missing {
 			codes[i] = string(c)
 		}
-		add("", warn.Render("no rate for "+strings.Join(codes, ", ")+"; add one with: thaler cli rate set "+codes[0]+" "+string(m.netWorth.Base)+" RATE"))
+		add("", warn.Render(m.loc.T("home_no_rate", map[string]any{"Codes": strings.Join(codes, ", "), "First": codes[0], "Base": string(m.netWorth.Base)})))
 	}
-	add("Accounts", fmt.Sprint(len(m.accounts)))
-	add("Transactions", fmt.Sprint(len(m.rows)))
-	add("Period", span)
-	add("Uncategorized", uncatText)
-	add("Base currency", string(m.netWorth.Base))
-	facts = append(facts, "", centered(dim.Render("? for keys · 2 accounts · 3 transactions"), w))
+	add(m.loc.T("label_accounts", nil), fmt.Sprint(len(m.accounts)))
+	add(m.loc.T("label_transactions", nil), fmt.Sprint(len(m.rows)))
+	add(m.loc.T("label_period", nil), span)
+	add(m.loc.T("label_uncategorized", nil), uncatText)
+	add(m.loc.T("label_base_currency", nil), string(m.netWorth.Base))
+	facts = append(facts, "", centered(dim.Render(m.loc.T("home_keys_hint", nil)), w))
 
-	credit := []string{"", centered(dim.Render("From Purin • https://github.com/MelancholyPurin"), w), ""}
+	credit := []string{"", centered(dim.Render(m.loc.T("home_credit", nil)), w), ""}
 	art, blankAbove := homeBanner(w, h-len(credit)-len(facts))
 	var lines []string
 	if blankAbove {
@@ -150,7 +150,7 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	const keyW = 15
 	var lines []string
 	if m.scopeAccount() == "" {
-		lines = append(lines, bold.Render("All accounts"), "")
+		lines = append(lines, bold.Render(m.loc.T("all_accounts", nil)), "")
 		for _, e := range m.accounts {
 			lines = append(lines, leftRight(m.loc.AccountName(e.account.Name), m.loc.Money(e.balance), w))
 		}
@@ -159,30 +159,30 @@ func (m *Model) accountDetail(w int) (string, []string) {
 		if len(m.netWorth.Missing) > 0 {
 			netText = "≈ " + netText
 		}
-		lines = append(lines, kv("Net worth", bold.Render(netText), keyW, w)...)
+		lines = append(lines, kv(m.loc.T("label_net_worth", nil), bold.Render(netText), keyW, w)...)
 		for _, c := range m.netWorth.Missing {
-			lines = append(lines, warn.Render(fmt.Sprintf("no exchange rate %s → %s: thaler cli rate set %s %s RATE", c, m.netWorth.Base, c, m.netWorth.Base)))
+			lines = append(lines, warn.Render(m.loc.T("account_no_rate", map[string]any{"From": c, "To": m.netWorth.Base})))
 		}
-		return "All accounts", lines
+		return m.loc.T("all_accounts", nil), lines
 	}
 
 	e := m.accounts[m.accts.cursor-1]
 	lines = append(lines, bold.Render(m.loc.AccountName(e.account.Name)), "")
-	lines = append(lines, kv("Type", m.loc.AccountName(string(e.account.Type)), keyW, w)...)
-	lines = append(lines, kv("Currency", string(e.account.Currency), keyW, w)...)
-	lines = append(lines, kv("Balance", bold.Render(m.loc.Money(e.balance)), keyW, w)...)
-	lines = append(lines, kv("Transactions", fmt.Sprint(e.txCount), keyW, w)...)
+	lines = append(lines, kv(m.loc.T("label_type", nil), m.loc.AccountName(string(e.account.Type)), keyW, w)...)
+	lines = append(lines, kv(m.loc.T("label_currency", nil), string(e.account.Currency), keyW, w)...)
+	lines = append(lines, kv(m.loc.T("label_balance", nil), bold.Render(m.loc.Money(e.balance)), keyW, w)...)
+	lines = append(lines, kv(m.loc.T("label_transactions", nil), fmt.Sprint(e.txCount), keyW, w)...)
 	if e.uncat > 0 {
-		lines = append(lines, kv("Uncategorized", warn.Render(fmt.Sprint(e.uncat)), keyW, w)...)
+		lines = append(lines, kv(m.loc.T("label_uncategorized", nil), warn.Render(fmt.Sprint(e.uncat)), keyW, w)...)
 	}
 	if e.last != "" {
-		lines = append(lines, kv("Last activity", m.loc.StoredDate(e.last), keyW, w)...)
+		lines = append(lines, kv(m.loc.T("label_last_activity", nil), m.loc.StoredDate(e.last), keyW, w)...)
 	}
 
 	in, out := m.periodFlow(e.account.Name)
-	lines = append(lines, "", dim.Render("Money moved · "+periodLabel(m.period)))
-	lines = append(lines, kv("In", accent.Render(m.loc.Money(in)), keyW, w)...)
-	lines = append(lines, kv("Out", m.loc.Money(out), keyW, w)...)
+	lines = append(lines, "", dim.Render(m.loc.T("money_moved", map[string]any{"Period": m.periodLabel(m.period)})))
+	lines = append(lines, kv(m.loc.T("label_in", nil), accent.Render(m.loc.Money(in)), keyW, w)...)
+	lines = append(lines, kv(m.loc.T("label_out", nil), m.loc.Money(out), keyW, w)...)
 	return m.loc.AccountName(e.account.Name), lines
 }
 
@@ -219,7 +219,7 @@ func (m *Model) periodFlow(account string) (in, out ledger.Money) {
 func (m *Model) transactionDetail(w int) (string, []string) {
 	r, ok := m.selected()
 	if !ok {
-		return "Transaction", []string{dim.Render("Nothing selected.")}
+		return m.loc.T("transaction_title", nil), []string{dim.Render(m.loc.T("nothing_selected", nil))}
 	}
 	const keyW = 10
 	var lines []string
@@ -231,7 +231,7 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 		lines = append(lines, strings.Split(ansi.Wrap(d, w, ""), "\n")...)
 	}
 
-	lines = append(lines, "", dim.Render("Postings"))
+	lines = append(lines, "", dim.Render(m.loc.T("postings_heading", nil)))
 	for _, p := range r.tx.Postings {
 		name := m.loc.AccountName(p.Account)
 		amount := m.loc.Signed(p.Amount)
@@ -244,21 +244,21 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 	lines = append(lines, "")
 	switch {
 	case r.simple:
-		lines = append(lines, kv("Account", m.loc.AccountName(r.source.Account), keyW, w)...)
-		lines = append(lines, kv("Category", m.loc.AccountName(r.category.Account), keyW, w)...)
+		lines = append(lines, kv(m.loc.T("label_account", nil), m.loc.AccountName(r.source.Account), keyW, w)...)
+		lines = append(lines, kv(m.loc.T("label_category", nil), m.loc.AccountName(r.category.Account), keyW, w)...)
 		if r.uncategorized {
-			lines = append(lines, "", warn.Render("● Uncategorized")+dim.Render(" – press c to choose a category"))
+			lines = append(lines, "", warn.Render(m.loc.T("uncat_label", nil))+dim.Render(" "+m.loc.T("uncat_notice", nil)))
 		}
 		if r.transfer {
 			lines = append(lines, "")
 			if partner, ok := m.findRow(r.tx.TransferWith); ok && r.tx.TransferWith != 0 {
-				lines = append(lines, accent.Render("⇄ Transfer")+dim.Render(fmt.Sprintf(" with #%d on %s, %s", partner.tx.ID, partner.source.Account, m.loc.StoredDate(partner.tx.Date))))
+				lines = append(lines, accent.Render(m.loc.T("transfer_label", nil))+dim.Render(" "+m.loc.T("transfer_with", map[string]any{"ID": partner.tx.ID, "Account": m.loc.AccountName(partner.source.Account), "Date": m.loc.StoredDate(partner.tx.Date)})))
 			} else {
-				lines = append(lines, warn.Render("⇄ Transfer")+dim.Render(" – waiting for its other half: import the other account"))
+				lines = append(lines, warn.Render(m.loc.T("transfer_label", nil))+dim.Render(" "+m.loc.T("transfer_waiting", nil)))
 			}
 		}
 	default:
-		lines = append(lines, dim.Render("Transfer or split: shown here, but it cannot be recategorized."))
+		lines = append(lines, dim.Render(m.loc.T("transfer_or_split", nil)))
 	}
-	return fmt.Sprintf("Transaction #%d", r.tx.ID), lines
+	return m.loc.T("transaction_n_title", map[string]any{"ID": r.tx.ID}), lines
 }

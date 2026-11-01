@@ -1,14 +1,13 @@
 package tui
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 )
 
@@ -20,7 +19,7 @@ type configEditedMsg struct{ err error }
 // runs and resumes when it exits.
 func (m *Model) editConfig() tea.Cmd {
 	if m.opts.ConfigPath == "" {
-		m.setStatus("no config file location is known", true)
+		m.setStatus(m.loc.T("no_config_location", nil), true)
 		return nil
 	}
 	// Find the editor first: with none, nothing should be created.
@@ -49,25 +48,25 @@ func editorCommand(getenv func(string) string, lookPath func(string) (string, er
 			return exec.Command(name, path), nil
 		}
 	}
-	return nil, errors.New("no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=nano")
+	return nil, coded.New("no_editor", nil)
 }
 
 // configEdited reports how the file looks after the editor closed, so a typo
 // is noticed now and not at the next import.
 func (m *Model) configEdited(editorErr error) {
 	if editorErr != nil {
-		m.setStatus("the editor failed: "+editorErr.Error(), true)
+		m.setStatus(m.loc.T("editor_failed", map[string]any{"Error": editorErr.Error()}), true)
 		return
 	}
 	if m.loadConfig == nil {
-		m.setStatus("Config closed", false)
+		m.setStatus(m.loc.T("config_closed", nil), false)
 		return
 	}
 	cfg, err := m.loadConfig()
 	if err != nil {
-		m.setStatus("The config has a problem, imports will refuse it until it is fixed (press C): "+m.errText(err), true)
+		m.setStatus(m.loc.T("config_problem", map[string]any{"Error": m.errText(err)}), true)
 		return
 	}
 	m.refreshBackups()
-	m.setStatus(fmt.Sprintf("Config saved: %d rule(s), %d bank profile(s); used by the next import", len(cfg.Rules), len(cfg.Profiles)), false)
+	m.setStatus(m.loc.T("config_saved", map[string]any{"Rules": len(cfg.Rules), "Profiles": len(cfg.Profiles)}), false)
 }

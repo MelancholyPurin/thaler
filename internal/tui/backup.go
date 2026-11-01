@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,9 +9,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
-	"github.com/melancholypurin/thaler/internal/units"
+	"github.com/melancholypurin/thaler/internal/i18n"
 )
 
 // The backup popup writes a snapshot of the database where you say, by default
@@ -99,10 +99,10 @@ func (m *Model) backupReminder() string {
 		return ""
 	}
 	if m.lastBackup.IsZero() {
-		return "No backup yet: S makes one"
+		return m.loc.T("backup_none_yet", nil)
 	}
 	if days := daysAgo(m.now(), m.lastBackup); days >= m.remindDays {
-		return fmt.Sprintf("Last backup %d days ago: S makes a new one", days)
+		return m.loc.T("backup_last_days", map[string]any{"Count": days})
 	}
 	return ""
 }
@@ -141,7 +141,7 @@ func listBackups(dir string) []backupFile {
 // openBackup shows the popup, ready to write a new backup into the backups folder.
 func (m *Model) openBackup() tea.Cmd {
 	if m.opts.BackupDir == "" {
-		m.setStatus("no backup location is known", true)
+		m.setStatus(m.loc.T("backup_no_location", nil), true)
 		return nil
 	}
 	f := &backupForm{files: listBackups(m.opts.BackupDir)}
@@ -208,7 +208,7 @@ func (m *Model) updateBackup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
 	typed = strings.TrimSpace(typed)
 	if typed == "" {
-		return "", fmt.Errorf("say where to write the backup")
+		return "", coded.New("backup_say_where", nil)
 	}
 	if typed == "~" || strings.HasPrefix(typed, "~/") {
 		home, err := os.UserHomeDir()
@@ -241,11 +241,11 @@ type backupDone struct {
 func (m *Model) saveBackup() tea.Cmd {
 	f := m.bkp
 	if f.encrypting() && f.pass.Value() != f.repeat.Value() {
-		f.err = "the two passphrases differ: type it again in Repeat"
+		f.err = m.loc.T("passphrases_differ", map[string]any{"Repeat": m.loc.T("label_repeat", nil)})
 		return m.focusBackup(bfRepeat)
 	}
 	if !f.encrypting() && f.repeat.Value() != "" {
-		f.err = "Repeat is filled in but Passphrase is empty"
+		f.err = m.loc.T("repeat_without_passphrase", map[string]any{"Repeat": m.loc.T("label_repeat", nil), "Passphrase": m.loc.T("label_passphrase", nil)})
 		return m.focusBackup(bfPass)
 	}
 	dest, err := m.backupTarget(f.dest.Value(), f.encrypting())
@@ -254,9 +254,9 @@ func (m *Model) saveBackup() tea.Cmd {
 		return nil
 	}
 	ctx, svc, pass, encrypting := m.ctx, m.svc, f.pass.Value(), f.encrypting()
-	note := "Writing the backup, then checking it"
+	note := m.loc.T("backup_writing", nil)
 	if encrypting {
-		note = "Encrypting the backup (slow on purpose: a moment)"
+		note = m.loc.T("backup_encrypting", nil)
 	}
 	return m.start(note, func() tea.Msg {
 		var err error
@@ -280,13 +280,14 @@ func (m *Model) finishBackup(msg backupDone) tea.Cmd {
 	m.refreshBackups()
 	size := "?"
 	if info, err := os.Stat(msg.dest); err == nil {
-		size = units.HumanSize(info.Size())
+		size = m.loc.Size(info.Size())
 	}
-	how := "checked, NOT encrypted"
+	args := map[string]any{"Size": size, "Dest": tailFit(msg.dest, max(24, m.width-56))}
 	if msg.encrypted {
-		how = "checked, encrypted"
+		m.setStatus(m.loc.T("backed_up_encrypted", args), false)
+	} else {
+		m.setStatus(m.loc.T("backed_up_plain", args), false)
 	}
-	m.setStatus(fmt.Sprintf("Backed up (%s, %s) → %s", size, how, tailFit(msg.dest, max(24, m.width-56))), false)
 	return quit
 }
 
@@ -305,34 +306,30 @@ func (m *Model) backupPopup() string {
 
 	db := m.opts.DatabasePath
 	if f.dbSize > 0 {
-		db += " · " + units.HumanSize(f.dbSize)
+		db += " · " + m.loc.Size(f.dbSize)
 	}
-	last := "never: enter makes the first one"
+	last := m.loc.T("backup_never", nil)
 	if len(f.files) > 0 {
 		b := f.files[0]
-		last = fmt.Sprintf("%s · %s · %s", b.When.Local().Format("2006-01-02 15:04"), ago(m.now(), b.When), units.HumanSize(b.Size))
+		args := map[string]any{"When": m.loc.DateTime(b.When.Local()), "Ago": ago(m.loc, m.now(), b.When), "Size": m.loc.Size(b.Size)}
 		if b.Encrypted {
-			last += " · encrypted"
+			last = m.loc.T("backup_last_encrypted", args)
 		} else {
-			last += " · not encrypted"
+			last = m.loc.T("backup_last_plain", args)
 		}
 	}
 	folder := m.opts.BackupDir
-	switch len(f.files) {
-	case 0:
-	case 1:
-		folder += " · 1 backup"
-	default:
-		folder += fmt.Sprintf(" · %d backups", len(f.files))
+	if len(f.files) > 0 {
+		folder = m.loc.T("backup_folder_count", map[string]any{"Folder": folder, "Count": len(f.files)})
 	}
 	lines := []string{
-		label("Database") + " " + value(tailFit(db, iw-backupLabelWidth-1)),
-		label("Last backup") + " " + value(last),
-		label("Folder") + " " + value(tailFit(folder, iw-backupLabelWidth-1)),
+		label(m.loc.T("label_database", nil)) + " " + value(tailFit(db, iw-backupLabelWidth-1)),
+		label(m.loc.T("label_last_backup", nil)) + " " + value(last),
+		label(m.loc.T("label_folder", nil)) + " " + value(tailFit(folder, iw-backupLabelWidth-1)),
 		dim.Render(strings.Repeat("─", iw)),
-		field("Save to", bfDest, f.dest),
-		field("Passphrase", bfPass, f.pass),
-		field("Repeat", bfRepeat, f.repeat),
+		field(m.loc.T("label_save_to", nil), bfDest, f.dest),
+		field(m.loc.T("label_passphrase", nil), bfPass, f.pass),
+		field(m.loc.T("label_repeat", nil), bfRepeat, f.repeat),
 		"",
 	}
 	for _, h := range m.backupHints() {
@@ -342,12 +339,12 @@ func (m *Model) backupPopup() string {
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
-	last, footer := errStyle.Render(fit(f.err, iw)), "enter back up · tab next field · esc cancel"
+	last, footer := errStyle.Render(fit(f.err, iw)), m.loc.T("footer_backup", nil)
 	if m.busy != nil {
 		last, footer = accent.Render(fit(m.busy.line(), iw)), m.footerBusy()
 	}
 	lines = append(lines, last)
-	return box("Back up the database", lines, w, h, true, footer)
+	return box(m.loc.T("backup_title", nil), lines, w, h, true, footer)
 }
 
 // backupHints say what the backup will be and what that means for you.
@@ -355,15 +352,15 @@ func (m *Model) backupHints() []string {
 	f := m.bkp
 	if f.encrypting() {
 		return []string{
-			"Encrypted with age; the file gets the ending .age.",
-			"Lose the passphrase and the backup cannot be opened.",
-			"Open it again with: thaler cli decrypt FILE",
+			m.loc.T("backup_hint_age", nil),
+			m.loc.T("backup_hint_lose", nil),
+			m.loc.T("backup_hint_decrypt", nil),
 		}
 	}
 	return []string{
-		"A plain SQLite file, NOT encrypted. Type a passphrase to",
-		"encrypt it, or keep it on an encrypted disk. A folder in",
-		"Save to gets a timestamped name.",
+		m.loc.T("backup_hint_plain", nil),
+		m.loc.T("backup_hint_encrypt_it", nil),
+		m.loc.T("backup_hint_folder", map[string]any{"SaveTo": m.loc.T("label_save_to", nil)}),
 	}
 }
 
@@ -385,14 +382,14 @@ func daysAgo(now, t time.Time) int {
 }
 
 // ago says how long before now t was, in calendar days: today, yesterday, 3 days ago.
-func ago(now, t time.Time) string {
+func ago(loc *i18n.Localizer, now, t time.Time) string {
 	days := daysAgo(now, t)
 	switch {
 	case days <= 0:
-		return "today"
+		return loc.T("ago_today", nil)
 	case days == 1:
-		return "yesterday"
+		return loc.T("ago_yesterday", nil)
 	default:
-		return fmt.Sprintf("%d days ago", days)
+		return loc.T("ago_days", map[string]any{"Count": days})
 	}
 }

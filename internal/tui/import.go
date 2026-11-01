@@ -88,7 +88,7 @@ func (m *Model) importWidth() int {
 // add form's: the one selected in the Accounts panel, else the last one used.
 func (m *Model) openImport() tea.Cmd {
 	if len(m.accounts) == 0 {
-		m.setStatus("no accounts yet: press n to create one", true)
+		m.setStatus(m.loc.T("form_no_accounts", nil), true)
 		return nil
 	}
 	cfg := &config.Config{}
@@ -101,7 +101,7 @@ func (m *Model) openImport() tea.Cmd {
 	}
 	f := &importFlow{cfg: cfg, account: m.defaultAccount(), file: newInput(""), fileCur: -1}
 	f.file.CharLimit = 512
-	f.file.Placeholder = "paste or drop a file path, or pick one below"
+	f.file.Placeholder = m.loc.T("import_file_placeholder", nil)
 	f.file.Width = m.importWidth()
 	f.profiles = importer.ProfileNames(cfg.Profiles)
 	for i, name := range f.profiles {
@@ -296,16 +296,16 @@ func (m *Model) updateImport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Problems are shown in the form and nothing is written.
 func (m *Model) reviewImport() {
 	f := m.imp
-	fail := func(format string, args ...any) { f.err = fmt.Sprintf(format, args...) }
+	fail := func(text string) { f.err = text }
 
 	path := f.chosenPath()
 	if path == "" {
-		fail("choose a CSV file: paste its path, or pick one from the list")
+		fail(m.loc.T("import_choose_file", nil))
 		return
 	}
 	profile, err := importer.FindProfile(f.profiles[f.profile], f.cfg.Profiles)
 	if err != nil {
-		fail("%s", m.errText(err))
+		fail(m.errText(err))
 		return
 	}
 	acc := m.accounts[f.account].account
@@ -313,27 +313,27 @@ func (m *Model) reviewImport() {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			fail("no such file: %s", path)
+			fail(m.loc.T("import_no_such_file", map[string]any{"Path": path}))
 		} else {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 		}
 		return
 	}
 	defer file.Close()
 	parsed, err := importer.Parse(file, profile, acc.Currency)
 	if err != nil {
-		fail("%s", m.errText(err))
+		fail(m.errText(err))
 		return
 	}
 	if len(parsed.Rows) == 0 && len(parsed.Errors) == 0 {
-		fail("no booked transactions found (%d pending ignored); is the profile right?", parsed.Skipped)
+		fail(m.loc.T("import_no_booked", map[string]any{"Count": parsed.Skipped}))
 		return
 	}
 
 	req := core.ImportRequest{Account: acc.Name, Rows: parsed.Rows, Rules: f.cfg.Rules, DryRun: true, IgnoreRejected: true}
 	res, err := m.svc.Import(m.ctx, req)
 	if err != nil {
-		fail("%s", m.errText(err))
+		fail(m.errText(err))
 		return
 	}
 
@@ -342,7 +342,7 @@ func (m *Model) reviewImport() {
 		f.problems = append(f.problems, e.Error())
 	}
 	for _, r := range res.Rejected {
-		f.problems = append(f.problems, fmt.Sprintf("line %d: %s", r.Line, r.Reason))
+		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": r.Line, "Reason": r.Reason}))
 	}
 	f.newUncat = 0
 	for _, r := range res.Rows {
@@ -367,9 +367,9 @@ func (m *Model) updateImportReview(key string) {
 		switch {
 		case f.res.Inserted+f.res.Adopted == 0:
 			m.closeImport()
-			m.setStatus(fmt.Sprintf("Nothing new: all %d rows were already imported", f.res.Duplicates), false)
+			m.setStatus(m.loc.T("import_nothing_new", map[string]any{"Count": f.res.Duplicates}), false)
 		case len(f.problems) > 0:
-			f.err = fmt.Sprintf("%d row(s) have problems and would be skipped; press y to import the rest", len(f.problems))
+			f.err = m.loc.T("import_problems", map[string]any{"Count": len(f.problems)})
 		default:
 			m.finishImport()
 		}
@@ -413,7 +413,7 @@ func (m *Model) finishImport() {
 			unpair = append(unpair, core.CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
 		}
 		m.undo = append(m.undo, undoOp{
-			label: fmt.Sprintf("the import of %d transactions", len(ids)+len(adopted)),
+			undone: m.loc.T("undid_import", map[string]any{"Count": len(ids) + len(adopted)}),
 			run: func() error {
 				var errs []error
 				if len(adopted) > 0 {
@@ -445,22 +445,23 @@ func (m *Model) finishImport() {
 	m.setFocus(paneTransactions)
 	m.applyFilter(false)
 
-	msg := fmt.Sprintf("Imported %d into %s", res.Inserted, m.loc.ShortName(acc.Name))
+	parts := []string{m.loc.T("imported_into", map[string]any{"Count": res.Inserted, "Account": m.loc.ShortName(acc.Name)})}
 	if res.Inserted == 0 {
-		msg = fmt.Sprintf("Matched %d of your entries on %s with the bank's rows", res.Adopted, m.loc.ShortName(acc.Name))
+		parts[0] = m.loc.T("matched_into", map[string]any{"Count": res.Adopted, "Account": m.loc.ShortName(acc.Name)})
 	} else if res.Adopted > 0 {
-		msg += fmt.Sprintf(" · %d matched your entries", res.Adopted)
+		parts = append(parts, m.loc.T("imported_matched", map[string]any{"Count": res.Adopted}))
 	}
 	if res.Duplicates > 0 {
-		msg += fmt.Sprintf(" · %d already there", res.Duplicates)
+		parts = append(parts, m.loc.T("imported_dupes", map[string]any{"Count": res.Duplicates}))
 	}
 	if res.Transfers > 0 {
-		msg += fmt.Sprintf(" · %d paired as transfers", res.Transfers)
+		parts = append(parts, m.loc.T("imported_paired", map[string]any{"Count": res.Transfers}))
 	}
 	if newUncat > 0 {
-		msg += fmt.Sprintf(" · %d need a category (u shows all)", newUncat)
+		parts = append(parts, m.loc.T("imported_need_category", map[string]any{"Count": newUncat}))
 	}
-	m.setStatus(msg+" · z undoes", false)
+	parts = append(parts, m.loc.T("hint_z_undoes", nil))
+	m.setStatus(strings.Join(parts, " · "), false)
 }
 
 func (m *Model) accountIndex(name string) int {
@@ -492,15 +493,15 @@ func (m *Model) importPopup() string {
 	accText := fmt.Sprintf("%s · %s", acc.Name, acc.Currency)
 	profText := f.profiles[f.profile]
 	if f.field == importAccount {
-		accText += dim.Render("   ◂ ▸ change")
+		accText += dim.Render("   " + m.loc.T("change_hint", nil))
 	}
 	if f.field == importProfile {
-		profText += dim.Render("   ◂ ▸ change")
+		profText += dim.Render("   " + m.loc.T("change_hint", nil))
 	}
 	lines := []string{
-		label("File", importFile) + " " + f.file.View(),
-		label("Account", importAccount) + " " + accText,
-		label("Profile", importProfile) + " " + profText,
+		label(m.loc.T("label_file", nil), importFile) + " " + f.file.View(),
+		label(m.loc.T("label_account", nil), importAccount) + " " + accText,
+		label(m.loc.T("label_profile", nil), importProfile) + " " + profText,
 		dim.Render(strings.Repeat("─", iw)),
 	}
 	lines = append(lines, m.importFileList(iw, h-7)...)
@@ -508,7 +509,7 @@ func (m *Model) importPopup() string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(f.err))
-	return box("Import a bank export", lines, w, h, true, "enter review · tab next field · esc cancel")
+	return box(m.loc.T("import_title", nil), lines, w, h, true, m.loc.T("footer_import_choose", nil))
 }
 
 // importFileList is the list of files under the fields, or a hint.
@@ -517,23 +518,23 @@ func (m *Model) importFileList(w, h int) []string {
 	typed := f.typedPath()
 	switch {
 	case f.browsing != "" && len(f.matches) == 0:
-		return []string{dim.Render("No CSV files in " + tildePath(f.browsing) + ".")}
+		return []string{dim.Render(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.browsing)}))}
 	case f.browsing == "" && typed != "" && looksLikePath(typed):
-		return []string{dim.Render("enter reads this file")}
+		return []string{dim.Render(m.loc.T("import_enter_reads", nil))}
 	case f.browsing == "" && len(f.files) == 0:
 		return []string{
-			dim.Render("No CSV files in " + tildePath(f.dir) + "."),
-			dim.Render("Paste or drag a file's path (or a folder's) into the File field."),
+			dim.Render(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.dir)})),
+			dim.Render(m.loc.T("import_paste_hint", map[string]any{"File": m.loc.T("label_file", nil)})),
 		}
 	case len(f.matches) == 0:
-		return []string{dim.Render("No file matches. Paste or drag the file's path instead.")}
+		return []string{dim.Render(m.loc.T("import_no_match", nil))}
 	}
-	header := "CSV files in " + tildePath(f.dir) + ", newest first"
+	header := m.loc.T("import_csv_in", map[string]any{"Dir": tildePath(f.dir)})
 	switch {
 	case f.browsing != "":
-		header = "CSV files in " + tildePath(f.browsing) + ", newest first"
+		header = m.loc.T("import_csv_in", map[string]any{"Dir": tildePath(f.browsing)})
 	case typed != "":
-		header = "Matching files in " + tildePath(f.dir)
+		header = m.loc.T("import_matching", map[string]any{"Dir": tildePath(f.dir)})
 	}
 	out := []string{dim.Render(fit(header, w))}
 	start := 0
@@ -565,25 +566,21 @@ func (m *Model) importReviewPopup(w, h int) string {
 	iw := w - 2
 	listH := h - 5 // minus the border, the summary, its rule and the message line
 
-	parts := []string{fmt.Sprintf("%d new", f.res.Inserted), fmt.Sprintf("%d already imported", f.res.Duplicates)}
+	parts := []string{m.loc.T("import_sum_new", map[string]any{"Count": f.res.Inserted}), m.loc.T("import_sum_dup", map[string]any{"Count": f.res.Duplicates})}
 	if f.res.Adopted > 0 {
-		parts = append(parts, accent.Render(fmt.Sprintf("%d matched your entries", f.res.Adopted)))
+		parts = append(parts, accent.Render(m.loc.T("import_sum_matched", map[string]any{"Count": f.res.Adopted})))
 	}
 	if f.res.Transfers > 0 {
-		noun := "transfers"
-		if f.res.Transfers == 1 {
-			noun = "transfer"
-		}
-		parts = append(parts, accent.Render(fmt.Sprintf("%d %s paired", f.res.Transfers, noun)))
+		parts = append(parts, accent.Render(m.loc.T("import_sum_paired", map[string]any{"Count": f.res.Transfers})))
 	}
 	if f.newUncat > 0 {
-		parts = append(parts, warn.Render(fmt.Sprintf("%d uncategorized", f.newUncat)))
+		parts = append(parts, warn.Render(m.loc.T("import_sum_uncat", map[string]any{"Count": f.newUncat})))
 	}
 	if f.skipped > 0 {
-		parts = append(parts, fmt.Sprintf("%d pending ignored", f.skipped))
+		parts = append(parts, m.loc.T("import_sum_pending", map[string]any{"Count": f.skipped}))
 	}
 	if len(f.problems) > 0 {
-		parts = append(parts, errStyle.Render(fmt.Sprintf("%d with problems", len(f.problems))))
+		parts = append(parts, errStyle.Render(m.loc.T("import_sum_problems", map[string]any{"Count": len(f.problems)})))
 	}
 	lines := []string{
 		fit(strings.Join(parts, dim.Render(" · ")), iw),
@@ -612,19 +609,19 @@ func (m *Model) importReviewPopup(w, h int) string {
 	case f.err != "":
 		lines = append(lines, errStyle.Render(fit(f.err, iw)))
 	case len(f.problems) > 0:
-		lines = append(lines, warn.Render(fit("Rows with problems are skipped.", iw)))
+		lines = append(lines, warn.Render(fit(m.loc.T("import_rows_skipped", nil), iw)))
 	default:
 		lines = append(lines, "")
 	}
 
-	footer := "enter import · esc back"
+	footer := m.loc.T("footer_import_review", nil)
 	switch {
 	case f.res.Inserted+f.res.Adopted == 0:
-		footer = "enter close · esc back"
+		footer = m.loc.T("footer_import_close", nil)
 	case len(f.problems) > 0:
-		footer = "y import the rest · esc back"
+		footer = m.loc.T("footer_import_rest", nil)
 	}
-	title := fmt.Sprintf("Import %s → %s", filepath.Base(f.path), m.loc.ShortName(f.req.Account))
+	title := m.loc.T("import_review_title", map[string]any{"File": filepath.Base(f.path), "Account": m.loc.ShortName(f.req.Account)})
 	return box(title, lines, w, h, true, footer)
 }
 
@@ -640,9 +637,9 @@ func importAmount(loc *i18n.Localizer, a ledger.Money) string {
 // importRowLine is one row of the review list: whether it is new, its date,
 // the category the rules chose, the payee and the amount.
 func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selected bool) string {
-	status := "new"
+	status := loc.T("import_status_new", nil)
 	if r.Duplicate {
-		status = "dup"
+		status = loc.T("import_status_dup", nil)
 	}
 	catW := 16
 	payeeW := max(4, w-17-catW-amtW)

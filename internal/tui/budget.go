@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/melancholypurin/thaler/internal/core"
@@ -47,28 +46,28 @@ func (m *Model) updateBudget(key string) {
 func (m *Model) budgetDetail(w int) []string {
 	var lines []string
 	net := ledger.Money{Minor: m.budget.IncomeTotal.Minor - m.budget.ExpenseTotal.Minor, Currency: m.netWorth.Base}
-	lines = append(lines, bold.Render(periodLabel(m.period)), "")
-	lines = append(lines, leftRight("Income", accent.Render(m.loc.Money(m.budget.IncomeTotal)), w))
-	lines = append(lines, leftRight("Spent", m.loc.Money(m.budget.ExpenseTotal), w))
+	lines = append(lines, bold.Render(m.periodLabel(m.period)), "")
+	lines = append(lines, leftRight(m.loc.T("budget_income", nil), accent.Render(m.loc.Money(m.budget.IncomeTotal)), w))
+	lines = append(lines, leftRight(m.loc.T("budget_spent", nil), m.loc.Money(m.budget.ExpenseTotal), w))
 	netText := m.loc.Money(net)
 	if net.Minor < 0 {
 		netText = warn.Render(netText)
 	}
-	lines = append(lines, leftRight("Net", bold.Render(netText), w))
+	lines = append(lines, leftRight(m.loc.T("budget_net", nil), bold.Render(netText), w))
 	for _, c := range m.budget.Missing {
-		lines = append(lines, warn.Render(fmt.Sprintf("no exchange rate %s → %s: left out. thaler cli rate set %s %s RATE", c, m.netWorth.Base, c, m.netWorth.Base)))
+		lines = append(lines, warn.Render(m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.netWorth.Base})))
 	}
 
-	lines = append(lines, "", dim.Render("Spending"))
+	lines = append(lines, "", dim.Render(m.loc.T("budget_spending", nil)))
 	lines = append(lines, categoryRows(m.loc, m.budget.Expenses, m.budget.ExpenseTotal, w, false)...)
 	if len(m.budget.Expenses) == 0 {
-		lines = append(lines, dim.Render("  nothing spent in this period"))
+		lines = append(lines, dim.Render("  "+m.loc.T("budget_nothing_spent", nil)))
 	}
 	if len(m.budget.Income) > 0 {
-		lines = append(lines, "", dim.Render("Income"))
+		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
 		lines = append(lines, categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true)...)
 	}
-	lines = append(lines, "", dim.Render("Targets and envelopes will appear here as columns next to these figures."))
+	lines = append(lines, "", dim.Render(m.loc.T("budget_targets_soon", nil)))
 	return lines
 }
 
