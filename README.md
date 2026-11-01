@@ -7,12 +7,25 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 - Idempotent CSV import for **Hamburger Sparkasse** exports, with rule-based categorisation
 - Run `thaler` for the interactive terminal UI (lazygit-style panels); every operation is also available as a `thaler cli …` subcommand, so it is scriptable (cron, shell)
 
-> **Status: early, single-user.** It works locally and has tests, but the Sparkasse import profile has not been
-> tried on a real bank export yet, and there is no multi-user mode or server (see the [roadmap](#roadmap)).
+> **Status: early, single-user.** It works locally and has tests, and the Sparkasse import profile has been tried on
+> a real bank export, but there is no multi-user mode or server (see the [roadmap](#roadmap)).
 
 ## Install
 
-Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. For now Thaler is built from source, which needs **Go 1.27 or newer**; release binaries and a Homebrew package are planned (`REL-9`, `PLT-7` in the [roadmap](ROADMAP.md)).
+Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. Either download a release, or build it from source, which needs **Go 1.27 or newer**. A Homebrew package is planned (`PLT-7` in the [roadmap](ROADMAP.md)).
+
+**A release.** Each release on the [releases page](https://github.com/melancholypurin/thaler/releases) has an archive per system (`thaler_<version>_darwin_arm64.tar.gz` for a Mac with Apple silicon, `darwin_amd64` for an Intel Mac, `linux_amd64` and `linux_arm64`) and `checksums.txt`. Check the one you downloaded, unpack it, and put `thaler` on your `PATH`:
+
+```sh
+grep thaler_0.1.0_linux_amd64.tar.gz checksums.txt | sha256sum -c      # on macOS: shasum -a 256 -c
+tar -xzf thaler_0.1.0_linux_amd64.tar.gz
+mkdir -p ~/.local/bin && mv thaler ~/.local/bin/                        # ~/.local/bin has to be on the PATH
+thaler --version
+```
+
+The binaries are not signed or notarized. If you download one in a browser on a Mac, macOS refuses to open it the first time; `xattr -d com.apple.quarantine thaler` clears that (a download with `curl` is not marked at all).
+
+**From source.** The same steps for Go and Thaler, in two parts:
 
 **1. Get Go.** On macOS, `brew install go`. On Linux, follow [go.dev/doc/install](https://go.dev/doc/install): the distribution's own package is often older than 1.27. `go version` says which one you have.
 

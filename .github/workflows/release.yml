@@ -112,7 +112,12 @@ jobs:
         run: |
           range="${PREVIOUS:+$PREVIOUS..}HEAD"
           day="$(date -u +%F)"
-          go run ./cmd/releasenotes -version "$VERSION" -date "$day" "$range" >notes.md
+          # A page written by hand wins over the generated one (the first release has one).
+          if [ -f "docs/releases/$VERSION.md" ]; then
+            cp "docs/releases/$VERSION.md" notes.md
+          else
+            go run ./cmd/releasenotes -version "$VERSION" -date "$day" "$range" >notes.md
+          fi
           go run ./cmd/releasenotes -row -version "$VERSION" -date "$day" "$range" >row.md
           {
             echo "### Notes for $VERSION"
