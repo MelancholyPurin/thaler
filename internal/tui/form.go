@@ -359,7 +359,7 @@ func (m *Model) saveForm() {
 	income := strings.HasPrefix(text, "+")
 	amount, err := ledger.ParseAmount(strings.TrimLeft(text, "+-−"), acc.Currency, 0)
 	if err != nil {
-		fail("amount: %v", err)
+		fail("amount: %s", m.errText(err))
 		return
 	}
 	// Banks book zero amounts (card verifications) and may correct a charge to
@@ -374,7 +374,7 @@ func (m *Model) saveForm() {
 
 	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
-		fail("date: %v", err)
+		fail("date: %s", m.errText(err))
 		return
 	}
 
@@ -403,11 +403,11 @@ func (m *Model) saveForm() {
 		id = f.editing
 		old, err := f.old.NewTransaction()
 		if err != nil {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 			return
 		}
 		if _, err := m.svc.ReplaceTransaction(m.ctx, id, nt); err != nil {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 			return
 		}
 		undo = undoOp{
@@ -417,7 +417,7 @@ func (m *Model) saveForm() {
 	} else {
 		res, err := m.svc.AddTransaction(m.ctx, nt)
 		if err != nil {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 			return
 		}
 		id = res.ID
@@ -431,7 +431,7 @@ func (m *Model) saveForm() {
 	m.mode, m.form = modeList, nil
 
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.applyFilter(true)

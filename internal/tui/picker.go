@@ -198,7 +198,7 @@ func (m *Model) toggleRuleField() tea.Cmd {
 		if m.loadConfig != nil {
 			var err error
 			if cfg, err = m.loadConfig(); err != nil {
-				m.pickNote, m.pickNoteBad = "fix the config first (esc, then C): "+err.Error(), true
+				m.pickNote, m.pickNoteBad = "fix the config first (esc, then C): "+m.errText(err), true
 				return nil
 			}
 		}
@@ -245,7 +245,7 @@ func (m *Model) checkRule(match, category string) ruleCheck {
 	}
 	rules, err := importer.NewRuleset(m.pickCfg.Rules)
 	if err != nil {
-		c.problem = "the config's rules are invalid: " + err.Error()
+		c.problem = "the config's rules are invalid: " + m.errText(err)
 		return c
 	}
 	if i, existing, found := rules.Find(row.tx.Payee, row.tx.Description); found {
@@ -257,7 +257,7 @@ func (m *Model) checkRule(match, category string) ruleCheck {
 	}
 	res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: []importer.Rule{{Contains: match, Category: category}}, DryRun: true})
 	if err != nil {
-		c.problem = err.Error()
+		c.problem = m.errText(err)
 		return c
 	}
 	for _, mv := range res.Moves {

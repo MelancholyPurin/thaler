@@ -4,11 +4,12 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // Currency is an upper-case ISO 4217 style code such as EUR, USD or MXN.
@@ -52,12 +53,12 @@ type Money struct {
 }
 
 // ErrCurrencyMismatch is returned when amounts of different currencies are mixed.
-var ErrCurrencyMismatch = errors.New("currency mismatch")
+var ErrCurrencyMismatch = coded.New("currency_mismatch", nil)
 
 // Add returns m+o. Both must have the same currency.
 func (m Money) Add(o Money) (Money, error) {
 	if m.Currency != o.Currency {
-		return Money{}, fmt.Errorf("%w: %s vs %s", ErrCurrencyMismatch, m.Currency, o.Currency)
+		return Money{}, coded.New("currency_mismatch", map[string]any{"First": string(m.Currency), "Second": string(o.Currency)})
 	}
 	return Money{Minor: m.Minor + o.Minor, Currency: m.Currency}, nil
 }

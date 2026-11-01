@@ -1,11 +1,12 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // DateLayout is the storage and display format for dates.
@@ -19,7 +20,7 @@ func ParseDate(s string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("invalid date %q: use YYYY-MM-DD or DD.MM.YYYY", s)
+	return time.Time{}, coded.New("invalid_date", map[string]any{"Text": s, "Formats": "YYYY-MM-DD or DD.MM.YYYY"})
 }
 
 // Posting is one leg of a transaction: an amount moving into (positive) or out
@@ -35,15 +36,15 @@ type Posting struct {
 // interactive entry points reject a zero amount themselves.
 func CheckBalanced(postings []Posting) error {
 	if len(postings) < 2 {
-		return errors.New("a transaction needs at least two postings")
+		return coded.New("too_few_postings", nil)
 	}
 	sums := make(map[Currency]int64)
 	for _, p := range postings {
 		if p.Account == "" {
-			return errors.New("posting without an account")
+			return coded.New("posting_without_account", nil)
 		}
 		if p.Amount.Currency == "" {
-			return fmt.Errorf("posting to %s has no currency", p.Account)
+			return coded.New("posting_no_currency", map[string]any{"Account": p.Account})
 		}
 		sums[p.Amount.Currency] += p.Amount.Minor
 	}

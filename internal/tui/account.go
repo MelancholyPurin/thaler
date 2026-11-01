@@ -183,7 +183,7 @@ func (m *Model) saveAccountForm() {
 		}
 		name = f.accountName()
 		if err := ledger.ValidateAccountName(name); err != nil {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 			return
 		}
 		if typ, _ := ledger.TypeOf(name); !typ.NeedsCurrency() {
@@ -192,7 +192,7 @@ func (m *Model) saveAccountForm() {
 		}
 		var err error
 		if cur, err = ledger.ParseCurrency(f.currency.Value()); err != nil {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 			return
 		}
 	}
@@ -204,12 +204,12 @@ func (m *Model) saveAccountForm() {
 	if text != "" || f.setting {
 		var err error
 		if shown, err = ledger.ParseAmount(text, cur, 0); err != nil {
-			fail("balance: %v", err)
+			fail("balance: %s", m.errText(err))
 			return
 		}
 		when, err := parseFormDate(m.loc, f.asOf.Value(), m.now())
 		if err != nil {
-			fail("date: %v", err)
+			fail("date: %s", m.errText(err))
 			return
 		}
 		typ := ledger.Assets
@@ -226,7 +226,7 @@ func (m *Model) saveAccountForm() {
 			if errors.Is(err, core.ErrAccountExists) {
 				fail("%s already exists", name)
 			} else {
-				fail("%v", err)
+				fail("%s", m.errText(err))
 			}
 			return
 		}
@@ -238,7 +238,7 @@ func (m *Model) saveAccountForm() {
 		res, err := m.svc.SetOpeningBalance(m.ctx, *req)
 		if err != nil {
 			m.closeAccountForm(f.existing.Name)
-			m.setStatus(strings.Join(parts, " · ")+fmt.Sprintf(": the balance was not set: %v (b tries again)", err), true)
+			m.setStatus(strings.Join(parts, " · ")+fmt.Sprintf(": the balance was not set: %s (b tries again)", m.errText(err)), true)
 			return
 		}
 		m.pushBalanceUndo(res)
@@ -284,7 +284,7 @@ func (m *Model) pushBalanceUndo(res core.OpeningBalanceResult) {
 func (m *Model) closeAccountForm(selectName string) {
 	m.mode, m.acct = modeList, nil
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	for i, e := range m.accounts {

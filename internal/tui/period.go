@@ -33,7 +33,7 @@ func (m *Model) setPeriod(period string) {
 	m.period = period
 	m.applyFilter(false)
 	if err := m.refreshBudget(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 	}
 }
 

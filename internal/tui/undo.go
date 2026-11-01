@@ -23,11 +23,11 @@ func (m *Model) undoLast() {
 	op := m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
 	if err := op.run(); err != nil {
-		m.setStatus("undo failed: "+err.Error(), true)
+		m.setStatus("undo failed: "+m.errText(err), true)
 		return
 	}
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.applyFilter(true)
@@ -58,11 +58,11 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) deleteTx(tx core.TxView) {
 	old, err := tx.NewTransaction()
 	if err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	if err := m.svc.DeleteTransaction(m.ctx, tx.ID); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.undo = append(m.undo, undoOp{
@@ -70,7 +70,7 @@ func (m *Model) deleteTx(tx core.TxView) {
 		run:   func() error { return m.svc.RestoreTransaction(m.ctx, tx.ID, old) },
 	})
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.applyFilter(true)

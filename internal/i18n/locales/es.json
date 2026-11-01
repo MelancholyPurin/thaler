@@ -1,5 +1,23 @@
 {
   "upgrade_notice": "Se actualizó la base de datos a esta versión de Thaler. Una copia de antes está en {{.Copy}} (sin cifrar)",
   "no_accounts_yet": "Todavía no hay cuentas. Crea una con: thaler cli account add Assets:Sparkasse --currency EUR",
-  "invalid_date": "fecha no válida \"{{.Text}}\": usa {{.Formats}}"
+  "invalid_date": "fecha no válida \"{{.Text}}\": usa {{.Formats}}",
+  "account_not_found": "la cuenta no existe: {{.Name}}",
+  "account_exists": "la cuenta ya existe: {{.Name}}",
+  "already_imported": "la transacción ya se importó",
+  "rows_rejected": "algunas filas no encajan con la cuenta: {{.Count}} fila(s)",
+  "currency_mismatch": "monedas distintas: {{.First}} y {{.Second}}",
+  "posting_no_currency": "el apunte en {{.Account}} no tiene moneda",
+  "too_few_postings": "una transacción necesita al menos dos apuntes",
+  "posting_without_account": "apunte sin cuenta",
+  "no_date": "la transacción no tiene fecha",
+  "balance_no_date": "el saldo no tiene fecha",
+  "currencies_must_differ": "la moneda base y la de cotización deben ser distintas",
+  "transfer_fixed_currency": "las transferencias son entre cuentas con una moneda fija (Assets o Liabilities)",
+  "transfer_same_account": "el origen y el destino son la misma cuenta",
+  "amount_wrong_currency": "el importe está en {{.Currency}}, pero {{.Account}} tiene {{.Holds}}",
+  "amount_not_positive": "el importe debe ser mayor que cero",
+  "received_wrong_currency": "el importe recibido está en {{.Currency}}, pero {{.Account}} tiene {{.Holds}}",
+  "received_not_positive": "el importe recibido debe ser mayor que cero",
+  "balance_wrong_currency": "{{.Account}} tiene {{.Holds}}, pero el saldo está en {{.Currency}}"
 }

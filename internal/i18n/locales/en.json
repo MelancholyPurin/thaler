@@ -1,5 +1,23 @@
 {
   "upgrade_notice": "Upgraded the database to this version of Thaler. A copy of it from before is at {{.Copy}} (not encrypted)",
   "no_accounts_yet": "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR",
-  "invalid_date": "invalid date \"{{.Text}}\": use {{.Formats}}"
+  "invalid_date": "invalid date \"{{.Text}}\": use {{.Formats}}",
+  "account_not_found": "account does not exist: {{.Name}}",
+  "account_exists": "account already exists: {{.Name}}",
+  "already_imported": "transaction already imported",
+  "rows_rejected": "some rows do not fit the account: {{.Count}} row(s)",
+  "currency_mismatch": "currency mismatch: {{.First}} vs {{.Second}}",
+  "posting_no_currency": "posting to {{.Account}} has no currency",
+  "too_few_postings": "a transaction needs at least two postings",
+  "posting_without_account": "posting without an account",
+  "no_date": "transaction has no date",
+  "balance_no_date": "the balance has no date",
+  "currencies_must_differ": "base and quote currency must differ",
+  "transfer_fixed_currency": "transfers work between accounts with a fixed currency (Assets or Liabilities)",
+  "transfer_same_account": "source and destination are the same account",
+  "amount_wrong_currency": "amount is in {{.Currency}}, but {{.Account}} holds {{.Holds}}",
+  "amount_not_positive": "amount must be greater than zero",
+  "received_wrong_currency": "amount received is in {{.Currency}}, but {{.Account}} holds {{.Holds}}",
+  "received_not_positive": "amount received must be greater than zero",
+  "balance_wrong_currency": "{{.Account}} holds {{.Holds}}, but the balance is in {{.Currency}}"
 }

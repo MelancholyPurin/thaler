@@ -257,3 +257,7 @@ func (m *Model) refreshPayees() {
 		}
 	}
 }
+
+// errText is err written in the language of the person: a coded error of the
+// service is looked up in the catalog, any other error is shown as it is.
+func (m *Model) errText(err error) string { return m.loc.Error(err) }

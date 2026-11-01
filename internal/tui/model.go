@@ -528,12 +528,12 @@ func (m *Model) applyCategory(category string) {
 	// file cannot be written nothing has happened.
 	if match != "" && check.covered == 0 {
 		if err := config.AppendRule(m.opts.ConfigPath, m.opts.ConfigTemplate, rule); err != nil {
-			m.setStatus("could not add the rule: "+err.Error(), true)
+			m.setStatus("could not add the rule: "+m.errText(err), true)
 			return
 		}
 	}
 	if _, err := m.svc.SetCategories(m.ctx, []core.CategoryChange{{TransactionID: id, Category: category}}); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	var back []core.CategoryChange // what z puts back
@@ -544,7 +544,7 @@ func (m *Model) applyCategory(category string) {
 	if match != "" {
 		res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: []importer.Rule{rule}})
 		if err != nil {
-			m.setStatus("the rule was added, but categorizing the others failed: "+err.Error(), true)
+			m.setStatus("the rule was added, but categorizing the others failed: "+m.errText(err), true)
 		}
 		for _, mv := range res.Moves {
 			was := ledger.UncategorizedExpense
@@ -566,7 +566,7 @@ func (m *Model) applyCategory(category string) {
 		}})
 	}
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.applyFilter(true)

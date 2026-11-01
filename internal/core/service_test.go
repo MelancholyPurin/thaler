@@ -8,7 +8,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/text/language"
 
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -136,11 +138,13 @@ func pe(account string, minor int64) PostingView {
 	return PostingView{Account: account, Amount: eur(minor)}
 }
 
+// errText is the message of err in English, or "" for nil, so that a failure is
+// compared by what it says. A coded error is looked up in the catalog.
 func errText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return err.Error()
+	return i18n.New(language.English).Error(err)
 }
 
 // checkErr compares a failure by its message and, when the caller relies on it,

@@ -250,7 +250,7 @@ func (m *Model) saveBackup() tea.Cmd {
 	}
 	dest, err := m.backupTarget(f.dest.Value(), f.encrypting())
 	if err != nil {
-		f.err = err.Error()
+		f.err = m.errText(err)
 		return nil
 	}
 	ctx, svc, pass, encrypting := m.ctx, m.svc, f.pass.Value(), f.encrypting()
@@ -273,7 +273,7 @@ func (m *Model) saveBackup() tea.Cmd {
 func (m *Model) finishBackup(msg backupDone) tea.Cmd {
 	quit := m.idle()
 	if msg.err != nil {
-		m.bkp.err = msg.err.Error()
+		m.bkp.err = m.errText(msg.err)
 		return quit
 	}
 	m.mode, m.bkp = modeList, nil

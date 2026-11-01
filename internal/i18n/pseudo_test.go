@@ -114,7 +114,10 @@ func Test_Localizer_T_pseudo(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
 			loc := New(PseudoTag)
-			args := map[string]any{"Copy": "/c", "Text": "t", "Formats": "f", "Name": "n", "Count": "2"}
+			args := map[string]any{}
+			for _, name := range arguments(english.entries[tc.id]) {
+				args[name] = "x"
+			}
 
 			// when
 			got := loc.T(tc.id, args)

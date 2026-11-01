@@ -118,12 +118,18 @@ func (a *app) close() {
 	}
 }
 
+// errorLine is what main prints when a command fails: the error in the language of
+// the person, a coded error of the service looked up in the catalog.
+func (a *app) errorLine(err error) string {
+	return "error: " + a.localizer().Error(err)
+}
+
 func main() {
 	a := &app{version: currentVersion()}
 	err := newRoot(a).ExecuteContext(context.Background())
 	a.close()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, a.errorLine(err))
 		os.Exit(1)
 	}
 }

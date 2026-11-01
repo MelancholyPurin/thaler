@@ -92,10 +92,10 @@ func Test_usageProblems(t *testing.T) {
 		want []string
 	}{
 		{name: "every message used once or twice", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}, {"bye", "b.go:3"}, {"bye", "c.go:4"}}},
-		{name: "a message nobody uses", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}}, want: []string{`en: "bye" is not used by any call of T`}},
+		{name: "a message nobody uses", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}}, want: []string{`en: "bye" is not used by any call of T or coded.New`}},
 		{name: "an id that does not exist", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}, {"bye", "a.go:3"}, {"helo", "a.go:9"}}, want: []string{`a.go:9: "helo" is not a message of English`}},
-		{name: "an id that is not a literal", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}, {"bye", "a.go:3"}, {"", "a.go:8"}}, want: []string{"a.go:8: the id given to T is not a string literal, so it cannot be checked"}},
-		{name: "nothing is used", want: []string{`en: "hello" is not used by any call of T`, `en: "files" is not used by any call of T`, `en: "bye" is not used by any call of T`}},
+		{name: "an id that is not a literal", uses: []use{{"hello", "a.go:1"}, {"files", "a.go:2"}, {"bye", "a.go:3"}, {"", "a.go:8"}}, want: []string{"a.go:8: the id given to T or coded.New is not a string literal, so it cannot be checked"}},
+		{name: "nothing is used", want: []string{`en: "hello" is not used by any call of T or coded.New`, `en: "files" is not used by any call of T or coded.New`, `en: "bye" is not used by any call of T or coded.New`}},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
