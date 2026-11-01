@@ -2,6 +2,12 @@
 # Copy this example there to start. In the TUI, press C to open the config in your editor.
 # Unknown keys are rejected, so a typo cannot silently disable a rule.
 
+# The language of Thaler's messages: "en", "es" or "de". Without this key the
+# environment decides (LC_ALL, LC_MESSAGES, then LANG, as in de_DE.UTF-8), and a
+# language Thaler does not speak is English. A message not yet translated is shown
+# in English.
+# language = "de"
+
 # The folder the interface lists bank exports from when you press `i` to import
 # (default: ~/Downloads). You can always type or drop another file or folder.
 # import_dir = "~/Documents/bank-exports"

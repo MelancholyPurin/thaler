@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 )
 
@@ -19,6 +20,9 @@ import (
 type Config struct {
 	// ImportDir is the folder the TUI lists bank exports from; default ~/Downloads.
 	ImportDir string `toml:"import_dir"`
+	// Language is the language of the messages: en, es or de. Empty means that the
+	// environment decides (see i18n.Detect).
+	Language string `toml:"language"`
 	// BackupReminderDays is how many days may pass since the last backup before
 	// the TUI reminds you; 0 switches the reminder off. Nil means not set: see
 	// ReminderDays.
@@ -74,6 +78,9 @@ func Load(path string, mustExist bool) (*Config, error) {
 	}
 	if unknown := md.Undecoded(); len(unknown) > 0 {
 		return nil, fmt.Errorf("%s: unknown key(s): %v", path, unknown)
+	}
+	if _, ok := i18n.Parse(c.Language); c.Language != "" && !ok {
+		return nil, fmt.Errorf("%s: language is %q: use one of %s", path, c.Language, strings.Join(i18n.Codes(), ", "))
 	}
 	if d := c.BackupReminderDays; d != nil && *d < 0 {
 		return nil, fmt.Errorf("%s: backup_reminder_days is %d: use a number of days, or 0 for no reminder", path, *d)
