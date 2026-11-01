@@ -1,12 +1,12 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/i18n"
 )
 
@@ -24,7 +24,7 @@ var (
 // an interruption leaves the old one.
 func SetLanguage(path, example, code string) error {
 	if _, ok := i18n.Parse(code); !ok {
-		return fmt.Errorf("unknown language %q", code)
+		return coded.New("unknown_language", map[string]any{"Code": code})
 	}
 	if err := Ensure(path, example); err != nil {
 		return err

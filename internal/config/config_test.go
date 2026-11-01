@@ -10,7 +10,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"golang.org/x/text/language"
 
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 )
 
@@ -18,7 +20,7 @@ func errText(err error, path string) string {
 	if err == nil {
 		return ""
 	}
-	return strings.ReplaceAll(err.Error(), path, "{path}")
+	return strings.ReplaceAll(i18n.New(language.English).Error(err), path, "{path}")
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -82,7 +84,7 @@ amount = ["Amount"]
 		{name: "an empty file", file: ptr("")},
 		{name: "no file, and none is needed", file: nil},
 		{name: "no file, but one was asked for", file: nil, mustExist: true, wantErr: "reading {path}: open {path}: no such file or directory"},
-		{name: "a typo in a key is not ignored", file: ptr("import_folder = \"/tmp\"\n"), wantErr: "{path}: unknown key(s): [import_folder]"},
+		{name: "a typo in a key is not ignored", file: ptr("import_folder = \"/tmp\"\n"), wantErr: "{path}: unknown key: import_folder"},
 		{name: "a syntax error", file: ptr("rule = ["), wantErr: "reading {path}: toml: line 1 (last key \"rule\"): unexpected EOF; expected value"},
 	}
 	for _, tc := range tcs {

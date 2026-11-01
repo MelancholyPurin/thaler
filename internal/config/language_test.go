@@ -87,7 +87,7 @@ func Test_SetLanguage(t *testing.T) {
 			existing: ptr("keep_backups = 3\n"),
 			code:     "fr",
 			want:     "keep_backups = 3\n",
-			wantErr:  `unknown language "fr"`,
+			wantErr:  "unknown_language(Code=fr)",
 		},
 	}
 	for _, tc := range tcs {

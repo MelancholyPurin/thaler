@@ -64,15 +64,15 @@ func Test_checkFeatures(t *testing.T) {
 		{name: "a known feature, off", set: map[string]bool{"budget_targets": false}, known: []Feature{budgetFlag}},
 		{
 			name: "a name when nothing is behind a flag", set: map[string]bool{"budget_targets": true},
-			wantErr: `unknown feature "budget_targets" under [features]: nothing is behind a feature flag in this version`,
+			wantErr: `unknown_feature_none(Name=budget_targets)`,
 		},
 		{
 			name: "a typo lists what exists", set: map[string]bool{"budget_target": true}, known: []Feature{budgetFlag, second},
-			wantErr: `unknown feature "budget_target" under [features]: the features are budget_targets (TBU-2: set a category's monthly target), forecast (TFC-4: project the balances)`,
+			wantErr: `unknown_feature_list(Features=budget_targets (TBU-2: set a category's monthly target), forecast (TFC-4: project the balances), Name=budget_target)`,
 		},
 		{
 			name: "the first unknown name alphabetically is the one named", set: map[string]bool{"zeta": true, "alpha": false, "budget_targets": true}, known: []Feature{budgetFlag},
-			wantErr: `unknown feature "alpha" under [features]: the features are budget_targets (TBU-2: set a category's monthly target)`,
+			wantErr: `unknown_feature_list(Features=budget_targets (TBU-2: set a category's monthly target), Name=alpha)`,
 		},
 	}
 	for _, tc := range tcs {
