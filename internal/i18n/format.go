@@ -11,6 +11,7 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
+	"github.com/melancholypurin/thaler/internal/units"
 )
 
 // decimalSeparator is the character a language puts between the whole part of a
@@ -61,6 +62,23 @@ func (l *Localizer) Signed(m ledger.Money) string {
 
 // Date is t written the way the language writes dates.
 func (l *Localizer) Date(t time.Time) string { return t.Format(l.lang.DateLayout) }
+
+// Decimal is f with exactly places digits after the decimal separator of the
+// language (1.0850 or 1,0850), for a figure that is not an amount, such as an
+// exchange rate.
+func (l *Localizer) Decimal(f float64, places int) string {
+	return message.NewPrinter(l.lang.Tag).Sprint(number.Decimal(f, number.Scale(places)))
+}
+
+// Size is a file size for reading (12.4 KB, 12,4 KB), with the decimal separator of
+// the language.
+func (l *Localizer) Size(n int64) string {
+	return strings.Replace(units.HumanSize(n), ".", l.decimal, 1)
+}
+
+// DateTime is t with its time of day, the date written the way the language writes it
+// (2026-10-01 14:30).
+func (l *Localizer) DateTime(t time.Time) string { return t.Format(l.lang.DateLayout + " 15:04") }
 
 // StoredDate is a date as the ledger stores it (YYYY-MM-DD) written the way the
 // language writes dates. Text that is not a stored date is returned as it is.

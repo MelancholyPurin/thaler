@@ -46,6 +46,21 @@ func (l *Localizer) builtinName(name string) (string, bool) {
 	return "", false
 }
 
+// BackupFolder is what a folder of backups holds, by the kind core gives it
+// ("backups", "replaced" or "pre_migration"), in the language. A kind nobody knows
+// comes out as it is.
+func (l *Localizer) BackupFolder(kind string) string {
+	switch kind {
+	case "backups":
+		return l.T("prune_folder_backups", nil)
+	case "replaced":
+		return l.T("prune_folder_replaced", nil)
+	case "pre_migration":
+		return l.T("prune_folder_pre_migration", nil)
+	}
+	return kind
+}
+
 // ShortName is an account without its type, the way the lists show it: Savings for
 // Assets:Savings, and for the accounts Thaler makes, its name in the language.
 func (l *Localizer) ShortName(name string) string {

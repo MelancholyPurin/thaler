@@ -181,3 +181,72 @@ func Test_Localizer_ParseDate(t *testing.T) {
 		})
 	}
 }
+
+// A date with its time, a figure with decimals, a month with its year and a file
+// size, each the way the language writes it.
+func Test_Localizer_DateTime_Decimal_MonthYear_Size(t *testing.T) {
+	at := time.Date(2026, time.October, 1, 14, 5, 0, 0, time.UTC)
+	tcs := []struct {
+		name          string
+		tag           language.Tag
+		wantDateTime  string
+		wantDecimal   string // Decimal(1.085, 4)
+		wantMonthYear string
+		wantSize      string // Size(12700)
+	}{
+		{name: "English", tag: language.English, wantDateTime: "2026-10-01 14:05", wantDecimal: "1.0850", wantMonthYear: "Oct 2026", wantSize: "12.4 KB"},
+		{name: "Spanish", tag: language.Spanish, wantDateTime: "01/10/2026 14:05", wantDecimal: "1,0850", wantMonthYear: "Oct 2026", wantSize: "12,4 KB"},
+		{name: "German", tag: language.German, wantDateTime: "01.10.2026 14:05", wantDecimal: "1,0850", wantMonthYear: "Oct 2026", wantSize: "12,4 KB"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			loc := New(tc.tag)
+
+			// when
+			got := []string{loc.DateTime(at), loc.Decimal(1.085, 4), loc.MonthYear(at), loc.Size(12700)}
+
+			// then
+			want := []string{tc.wantDateTime, tc.wantDecimal, tc.wantMonthYear, tc.wantSize}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Every month has a name in English, so that none comes out as its id.
+func Test_Localizer_MonthYear_everyMonth(t *testing.T) {
+	tcs := []struct {
+		name  string
+		month time.Month
+		want  string
+	}{
+		{name: "January", month: time.January, want: "Jan 2026"},
+		{name: "February", month: time.February, want: "Feb 2026"},
+		{name: "March", month: time.March, want: "Mar 2026"},
+		{name: "April", month: time.April, want: "Apr 2026"},
+		{name: "May", month: time.May, want: "May 2026"},
+		{name: "June", month: time.June, want: "Jun 2026"},
+		{name: "July", month: time.July, want: "Jul 2026"},
+		{name: "August", month: time.August, want: "Aug 2026"},
+		{name: "September", month: time.September, want: "Sep 2026"},
+		{name: "October", month: time.October, want: "Oct 2026"},
+		{name: "November", month: time.November, want: "Nov 2026"},
+		{name: "December", month: time.December, want: "Dec 2026"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			loc := New(language.English)
+
+			// when
+			got := loc.MonthYear(time.Date(2026, tc.month, 15, 0, 0, 0, 0, time.UTC))
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
