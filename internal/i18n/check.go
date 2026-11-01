@@ -185,7 +185,7 @@ func contains(c catalog, id string) bool {
 
 // plainErrorDirs are the packages whose errors a person can see: they make coded
 // errors (coded.New), so that the message is in the catalog and follows the language.
-// `thaler cli` is not among them yet (CLI-15).
+// `thaler cli` is not among them: its own messages stay English.
 var plainErrorDirs = []string{"internal/ledger", "internal/core", "internal/importer", "internal/config"}
 
 // plainErrorOK are the error texts that are no message for a person: a build that
