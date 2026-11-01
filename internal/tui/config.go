@@ -26,11 +26,11 @@ func (m *Model) editConfig() tea.Cmd {
 	// Find the editor first: with none, nothing should be created.
 	cmd, err := editorCommand(os.Getenv, exec.LookPath, m.opts.ConfigPath)
 	if err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return nil
 	}
 	if err := config.Ensure(m.opts.ConfigPath, m.opts.ConfigTemplate); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return nil
 	}
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return configEditedMsg{err} })
@@ -65,7 +65,7 @@ func (m *Model) configEdited(editorErr error) {
 	}
 	cfg, err := m.loadConfig()
 	if err != nil {
-		m.setStatus("The config has a problem, imports will refuse it until it is fixed (press C): "+err.Error(), true)
+		m.setStatus("The config has a problem, imports will refuse it until it is fixed (press C): "+m.errText(err), true)
 		return
 	}
 	m.refreshBackups()

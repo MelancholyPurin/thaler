@@ -95,7 +95,7 @@ func (m *Model) openImport() tea.Cmd {
 	if m.loadConfig != nil {
 		var err error
 		if cfg, err = m.loadConfig(); err != nil {
-			m.setStatus(err.Error(), true)
+			m.setStatus(m.errText(err), true)
 			return nil
 		}
 	}
@@ -305,7 +305,7 @@ func (m *Model) reviewImport() {
 	}
 	profile, err := importer.FindProfile(f.profiles[f.profile], f.cfg.Profiles)
 	if err != nil {
-		fail("%v", err)
+		fail("%s", m.errText(err))
 		return
 	}
 	acc := m.accounts[f.account].account
@@ -315,14 +315,14 @@ func (m *Model) reviewImport() {
 		if errors.Is(err, os.ErrNotExist) {
 			fail("no such file: %s", path)
 		} else {
-			fail("%v", err)
+			fail("%s", m.errText(err))
 		}
 		return
 	}
 	defer file.Close()
 	parsed, err := importer.Parse(file, profile, acc.Currency)
 	if err != nil {
-		fail("%v", err)
+		fail("%s", m.errText(err))
 		return
 	}
 	if len(parsed.Rows) == 0 && len(parsed.Errors) == 0 {
@@ -333,7 +333,7 @@ func (m *Model) reviewImport() {
 	req := core.ImportRequest{Account: acc.Name, Rows: parsed.Rows, Rules: f.cfg.Rules, DryRun: true, IgnoreRejected: true}
 	res, err := m.svc.Import(m.ctx, req)
 	if err != nil {
-		fail("%v", err)
+		fail("%s", m.errText(err))
 		return
 	}
 
@@ -390,7 +390,7 @@ func (m *Model) finishImport() {
 	req.DryRun = false
 	res, err := m.svc.Import(m.ctx, req)
 	if err != nil {
-		f.err = err.Error()
+		f.err = m.errText(err)
 		return
 	}
 	acc := m.accounts[f.account].account
@@ -432,7 +432,7 @@ func (m *Model) finishImport() {
 	}
 	m.lastAccount = acc.Name
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	// Show what arrived: this account, newest first, and the rows that still

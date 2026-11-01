@@ -120,3 +120,34 @@ func Test_Update_filter_language(t *testing.T) {
 		})
 	}
 }
+
+// A failure is told in the language: here a date that does not exist (the form
+// cuts the end of the message to fit).
+func Test_Update_addForm_language_error(t *testing.T) {
+	tcs := []struct {
+		name  string
+		tag   language.Tag
+		date  string
+		shows string
+	}{
+		{name: "English", tag: language.English, date: "2026-02-31", shows: `invalid date "2026-02-31"`},
+		{name: "Spanish", tag: language.Spanish, date: "31/02/2026", shows: `fecha no válida "31/02/2026"`},
+		{name: "German", tag: language.German, date: "31.02.2026", shows: `ungültiges Datum "31.02.2026"`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR")
+			m := inLanguage(t, st, tc.tag)
+
+			// when
+			play(m, "a text:5 tab tab tab ctrl+u")
+			typeText(m, tc.date)
+			play(m, "ctrl+s")
+
+			// then
+			checkView(t, m.View(), []string{tc.shows}, nil)
+		})
+	}
+}

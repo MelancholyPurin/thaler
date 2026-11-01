@@ -105,7 +105,7 @@ func (m *Model) prune() {
 	removed, err := core.Prune(f.plan)
 	m.refreshBackups()
 	if err != nil {
-		f.err = err.Error()
+		f.err = m.errText(err)
 		return
 	}
 	m.mode, m.prn = modeList, nil

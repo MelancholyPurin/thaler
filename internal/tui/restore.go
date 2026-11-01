@@ -187,7 +187,7 @@ func (m *Model) finishRestore(msg restoreDone) (tea.Model, tea.Cmd) {
 	}
 	m.svc = msg.svc
 	if err != nil {
-		f.confirm, f.err = false, err.Error()
+		f.confirm, f.err = false, m.errText(err)
 		if b.Encrypted {
 			m.focusRestore(rfPass)
 		}

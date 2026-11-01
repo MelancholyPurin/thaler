@@ -182,24 +182,24 @@ func (m *Model) saveTransfer() {
 
 	out, err := ledger.ParseAmount(f.amount.Value(), src.Currency, 0)
 	if err != nil {
-		fail("amount: %v", err)
+		fail("amount: %s", m.errText(err))
 		return
 	}
 	var in ledger.Money
 	if m.transferCross(f) {
 		if in, err = ledger.ParseAmount(f.received.Value(), dst.Currency, 0); err != nil {
-			fail("received: %v", err)
+			fail("received: %s", m.errText(err))
 			return
 		}
 	}
 	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
-		fail("date: %v", err)
+		fail("date: %s", m.errText(err))
 		return
 	}
 	res, err := m.svc.Transfer(m.ctx, core.TransferRequest{From: src.Name, To: dst.Name, Amount: out, ToAmount: in, Date: when})
 	if err != nil {
-		fail("%v", err)
+		fail("%s", m.errText(err))
 		return
 	}
 
@@ -216,7 +216,7 @@ func (m *Model) saveTransfer() {
 	})
 	m.lastAccount = src.Name
 	if err := m.reload(); err != nil {
-		m.setStatus(err.Error(), true)
+		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.accts.cursor = m.accountIndex(src.Name) + 1
