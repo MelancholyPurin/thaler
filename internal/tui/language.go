@@ -85,6 +85,7 @@ func (m *Model) languagePopup() string {
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, dim.Render(fit("", iw)), dim.Render(fit(m.loc.T("language_hint", nil), iw)))
+	lines = append(lines, "")
+	lines = append(lines, wrapped(m.loc.T("language_hint", nil), iw, dim)...)
 	return box(m.loc.T("language_title", nil), lines, w, len(lines)+2, true, m.loc.T("language_footer", nil))
 }

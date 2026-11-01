@@ -436,15 +436,15 @@ func (m *Model) saveForm() {
 	m.applyFilter(true)
 	visible := m.selectTx(id)
 
-	args := map[string]any{"ID": id, "Payee": nt.Payee, "Amount": m.loc.Signed(amount), "Category": category, "Note": ""}
-	if !visible {
-		args["Note"] = m.loc.T("tx_not_shown", map[string]any{"Period": m.periodLabel(m.period)})
-	}
+	args := map[string]any{"ID": id, "Payee": nt.Payee, "Amount": m.loc.Signed(amount), "Category": category}
+	parts := []string{m.loc.T("tx_added", args)}
 	if f.editing != 0 {
-		m.setStatus(m.loc.T("tx_updated", args), false)
-		return
+		parts[0] = m.loc.T("tx_updated", args)
 	}
-	m.setStatus(m.loc.T("tx_added", args), false)
+	if !visible {
+		parts = append(parts, m.loc.T("tx_not_shown", nil))
+	}
+	m.setStatus(m.statusLine(parts), false)
 }
 
 // selectTx moves the transaction list cursor to id and reports whether it is

@@ -71,7 +71,7 @@ func Test_Update_transfer(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "Transferred 100.00 EUR from Bank to Dollars (108.50 USD arrived, 1 EUR = 1.0850 USD) · z undoes",
+					Status: "Transferred 100.00 EUR from Bank to Dollars · 108.50 USD arrived, 1 EUR = 1.0850 USD · z undoes",
 					Added:  []string{outUSD, inUSD},
 				},
 				Balances: []string{"Assets:Bank -100.00 EUR", "Assets:Dollars 108.50 USD"}, Scope: "Assets:Bank", Undoable: 1,

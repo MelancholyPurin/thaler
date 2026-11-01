@@ -63,7 +63,7 @@ func Test_Update_newAccount(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "Created Assets:Sparkasse (EUR) · opening balance of 1,234.56 EUR booked on 2026-10-22 · i imports a bank export",
+					Status: "Created Assets:Sparkasse (EUR) · opening balance 1,234.56 EUR, 2026-10-22 · i imports a bank export",
 					Added:  []string{"2026-10-22 Opening balance | Assets:Sparkasse 1234.56 | Equity:Opening -1234.56"},
 				},
 				Accounts: []string{"Assets:Sparkasse", "Equity:Opening"}, Balances: []string{"Assets:Sparkasse 1234.56 EUR"}, Scope: "Assets:Sparkasse",
@@ -82,7 +82,7 @@ func Test_Update_newAccount(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "Created Liabilities:Card (EUR) · opening balance of -500.00 EUR booked on 2026-10-22 · i imports a bank export",
+					Status: "Created Liabilities:Card (EUR) · opening balance -500.00 EUR, 2026-10-22 · i imports a bank export",
 					Added:  []string{"2026-10-22 Opening balance | Liabilities:Card -500.00 | Equity:Opening 500.00"},
 				},
 				Accounts: []string{"Equity:Opening", "Liabilities:Card"}, Balances: []string{"Liabilities:Card -500.00 EUR"}, Scope: "Liabilities:Card",
@@ -202,7 +202,7 @@ func Test_Update_setBalance(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "opening balance of 577.00 EUR booked on 2026-09-14 · z undoes",
+					Status: "opening balance 577.00 EUR, 2026-09-14 · z undoes",
 					Added:  []string{line("577.00")},
 				},
 				Balances: []string{"Assets:Bank 500.00 EUR", "Assets:Savings 5.00 EUR"},
@@ -213,7 +213,7 @@ func Test_Update_setBalance(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "opening balance of 777.00 EUR booked on 2026-09-14 · z undoes",
+					Status: "opening balance 777.00 EUR, 2026-09-14 · z undoes",
 					Added:  []string{line("777.00")},
 				},
 				Balances: []string{"Assets:Bank 700.00 EUR", "Assets:Savings 5.00 EUR"},

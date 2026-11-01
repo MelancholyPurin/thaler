@@ -223,13 +223,12 @@ func (m *Model) saveTransfer() {
 	m.clampAll()
 	m.applyFilter(false)
 
-	args := map[string]any{"Amount": m.loc.Money(out), "From": m.loc.ShortName(src.Name), "To": m.loc.ShortName(dst.Name)}
+	parts := []string{m.loc.T("transferred", map[string]any{"Amount": m.loc.Money(out), "From": m.loc.ShortName(src.Name), "To": m.loc.ShortName(dst.Name)})}
 	if res.CrossCurrency {
-		args["Arrived"], args["Rate"] = m.loc.Money(res.In), m.impliedRate(out, res.In)
-		m.setStatus(m.loc.T("transferred_cross", args), false)
-		return
+		parts = append(parts, m.loc.T("transferred_arrived", map[string]any{"Arrived": m.loc.Money(res.In), "Rate": m.impliedRate(out, res.In)}))
 	}
-	m.setStatus(m.loc.T("transferred", args), false)
+	parts = append(parts, m.loc.T("hint_z_undoes", nil))
+	m.setStatus(m.statusLine(parts), false)
 }
 
 // impliedRate describes the exchange rate a cross-currency transfer got. It is
@@ -289,9 +288,9 @@ func (m *Model) transferHints(w int) []string {
 	f := m.xfer
 	switch f.field {
 	case tfAmount:
-		return []string{dim.Render(fit(m.loc.T("transfer_hint_amount", map[string]any{"Account": m.loc.ShortName(m.accounts[f.from].account.Name)}), w))}
+		return wrapped(m.loc.T("transfer_hint_amount", map[string]any{"Account": m.loc.ShortName(m.accounts[f.from].account.Name)}), w, dim)
 	case tfReceived:
-		hint := []string{dim.Render(fit(m.loc.T("transfer_hint_received", nil), w))}
+		hint := wrapped(m.loc.T("transfer_hint_received", nil), w, dim)
 		out, err1 := ledger.ParseAmount(f.amount.Value(), m.accounts[f.from].account.Currency, 0)
 		in, err2 := ledger.ParseAmount(f.received.Value(), m.accounts[f.to].account.Currency, 0)
 		if err1 == nil && err2 == nil {
@@ -301,8 +300,8 @@ func (m *Model) transferHints(w int) []string {
 		}
 		return hint
 	case tfDate:
-		return []string{dim.Render(m.loc.T("date_hint", nil))}
+		return wrapped(m.loc.T("date_hint", nil), w, dim)
 	default:
-		return []string{dim.Render(m.loc.T("transfer_hint_account", nil))}
+		return wrapped(m.loc.T("transfer_hint_account", nil), w, dim)
 	}
 }

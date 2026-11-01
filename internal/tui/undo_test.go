@@ -64,7 +64,7 @@ func Test_Update_undo(t *testing.T) {
 	}{
 		{
 			name: "a categorization and then an add", keys: "3 u c enter a text:2 ctrl+s",
-			want: Flow{Mode: "list", Status: "Added #6    -2.00 EUR → Expenses:Groceries  (not shown: Oct 2026, filtered)", Added: []string{kinoAfter, added}, Removed: []string{kinoBefore}},
+			want: Flow{Mode: "list", Status: "Added #6    -2.00 EUR → Expenses:Groceries · hidden by the filter", Added: []string{kinoAfter, added}, Removed: []string{kinoBefore}},
 		},
 		{
 			name: "z undoes the add", keys: "3 u c enter a text:2 ctrl+s z",

@@ -207,7 +207,7 @@ func Test_Update_categorize_makingARule(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "#4 → Expenses:Fun · rule added to config.toml · 1 more categorized · z undoes the categories, C edits the rules",
+					Status: "#4 → Expenses:Fun · rule added to config.toml · 1 more categorized · z undoes · C edits the rules",
 					Added: []string{
 						"2026-10-03 Kino | Assets:Bank -12.00 | Expenses:Fun 12.00",
 						"2026-10-10 Kino Royal | Assets:Bank -5.00 | Expenses:Fun 5.00",
@@ -244,7 +244,7 @@ func Test_Update_categorize_makingARule(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "#3 → Expenses:Groceries · rule 1 already covers this · z undoes the categories, C edits the rules",
+					Status: "#3 → Expenses:Groceries · rule 1 already covers this · z undoes · C edits the rules",
 					Added:  []string{"2026-10-02 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00"}, Removed: []string{rewe},
 				},
 				Config: []importer.Rule{{Contains: "rewe", Category: "Expenses:Groceries"}}, ConfigExists: true,

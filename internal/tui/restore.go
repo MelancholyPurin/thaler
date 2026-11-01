@@ -250,10 +250,10 @@ func (m *Model) restorePopup() string {
 			m.loc.T("restore_hint_kept", nil),
 			m.loc.T("restore_hint_close", nil),
 		} {
-			lines = append(lines, dim.Render(fit(h, iw)))
+			lines = append(lines, wrapped(h, iw, dim)...)
 		}
 	}
-	h := 17
+	h := max(17, len(lines)+3)
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}

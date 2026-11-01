@@ -55,7 +55,7 @@ func (m *Model) budgetDetail(w int) []string {
 	}
 	lines = append(lines, leftRight(m.loc.T("budget_net", nil), bold.Render(netText), w))
 	for _, c := range m.budget.Missing {
-		lines = append(lines, warn.Render(m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.netWorth.Base})))
+		lines = append(lines, wrapped(m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.netWorth.Base}), w, warn)...)
 	}
 
 	lines = append(lines, "", dim.Render(m.loc.T("budget_spending", nil)))
@@ -67,13 +67,14 @@ func (m *Model) budgetDetail(w int) []string {
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
 		lines = append(lines, categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true)...)
 	}
-	lines = append(lines, "", dim.Render(m.loc.T("budget_targets_soon", nil)))
+	lines = append(lines, "")
+	lines = append(lines, wrapped(m.loc.T("budget_targets_soon", nil), w, dim)...)
 	return lines
 }
 
 // categoryRows draws one line per category: name, amount, share bar.
 func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Money, w int, isIncome bool) []string {
-	const barW = 12
+	const barW = 10
 	amtW := 0
 	for _, l := range list {
 		amtW = max(amtW, len(loc.Amount(l.Amount)))

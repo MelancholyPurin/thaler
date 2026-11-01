@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -461,7 +462,7 @@ func (m *Model) finishImport() {
 		parts = append(parts, m.loc.T("imported_need_category", map[string]any{"Count": newUncat}))
 	}
 	parts = append(parts, m.loc.T("hint_z_undoes", nil))
-	m.setStatus(strings.Join(parts, " · "), false)
+	m.setStatus(m.statusLine(parts), false)
 }
 
 func (m *Model) accountIndex(name string) int {
@@ -518,16 +519,14 @@ func (m *Model) importFileList(w, h int) []string {
 	typed := f.typedPath()
 	switch {
 	case f.browsing != "" && len(f.matches) == 0:
-		return []string{dim.Render(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.browsing)}))}
+		return wrapped(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.browsing)}), w, dim)
 	case f.browsing == "" && typed != "" && looksLikePath(typed):
-		return []string{dim.Render(m.loc.T("import_enter_reads", nil))}
+		return wrapped(m.loc.T("import_enter_reads", nil), w, dim)
 	case f.browsing == "" && len(f.files) == 0:
-		return []string{
-			dim.Render(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.dir)})),
-			dim.Render(m.loc.T("import_paste_hint", map[string]any{"File": m.loc.T("label_file", nil)})),
-		}
+		return append(wrapped(m.loc.T("import_no_csv", map[string]any{"Dir": tildePath(f.dir)}), w, dim),
+			wrapped(m.loc.T("import_paste_hint", map[string]any{"File": m.loc.T("label_file", nil)}), w, dim)...)
 	case len(f.matches) == 0:
-		return []string{dim.Render(m.loc.T("import_no_match", nil))}
+		return wrapped(m.loc.T("import_no_match", nil), w, dim)
 	}
 	header := m.loc.T("import_csv_in", map[string]any{"Dir": tildePath(f.dir)})
 	switch {
@@ -564,8 +563,6 @@ func tildePath(p string) string {
 func (m *Model) importReviewPopup(w, h int) string {
 	f := m.imp
 	iw := w - 2
-	listH := h - 5 // minus the border, the summary, its rule and the message line
-
 	parts := []string{m.loc.T("import_sum_new", map[string]any{"Count": f.res.Inserted}), m.loc.T("import_sum_dup", map[string]any{"Count": f.res.Duplicates})}
 	if f.res.Adopted > 0 {
 		parts = append(parts, accent.Render(m.loc.T("import_sum_matched", map[string]any{"Count": f.res.Adopted})))
@@ -582,10 +579,10 @@ func (m *Model) importReviewPopup(w, h int) string {
 	if len(f.problems) > 0 {
 		parts = append(parts, errStyle.Render(m.loc.T("import_sum_problems", map[string]any{"Count": len(f.problems)})))
 	}
-	lines := []string{
-		fit(strings.Join(parts, dim.Render(" · ")), iw),
-		dim.Render(strings.Repeat("─", iw)),
-	}
+	summary := packed(parts, iw)
+	lines := slices.Concat(summary, []string{dim.Render(strings.Repeat("─", iw))})
+	header := len(lines)
+	listH := h - 3 - header // minus the border, the summary with its rule, and the message line
 
 	amtW := 0
 	for _, r := range f.res.Rows {
@@ -595,7 +592,7 @@ func (m *Model) importReviewPopup(w, h int) string {
 	ls := f.list
 	ls.clamp(total, listH)
 	f.list = ls
-	for i := ls.offset; i < total && len(lines)-2 < listH; i++ {
+	for i := ls.offset; i < total && len(lines)-header < listH; i++ {
 		if i < len(f.problems) {
 			lines = append(lines, warn.Render(fit("⚠ "+f.problems[i], iw)))
 			continue

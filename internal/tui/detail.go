@@ -37,6 +37,9 @@ var bannerCompact = []string{
 	" ╹  ╹ ╹ ╹ ╹ ┗━╸ ┗━╸ ╹┗╸",
 }
 
+// projectURL is where Thaler lives, shown on the home screen.
+const projectURL = "https://github.com/MelancholyPurin"
+
 // homeBanner picks the largest banner that fits w cells with room lines to
 // spare, and whether there is a blank line to spare above it. When even the
 // compact one does not fit, it is used anyway and the pane scrolls its end.
@@ -129,10 +132,22 @@ func (m *Model) homeDetail(w, h int) []string {
 	add(m.loc.T("label_period", nil), span)
 	add(m.loc.T("label_uncategorized", nil), uncatText)
 	add(m.loc.T("label_base_currency", nil), string(m.netWorth.Base))
-	facts = append(facts, "", centered(dim.Render(m.loc.T("home_keys_hint", nil)), w))
+	facts = append(facts, "")
+	for _, l := range wrapped(m.loc.T("home_keys_hint", nil), w, dim) {
+		facts = append(facts, centered(l, w))
+	}
 
-	credit := []string{"", centered(dim.Render(m.loc.T("home_credit", nil)), w), ""}
+	credit := []string{"", centered(dim.Render(m.loc.T("home_credit", nil)), w), centered(dim.Render(projectURL), w), ""}
 	art, blankAbove := homeBanner(w, h-len(credit)-len(facts))
+	if len(art)+len(credit)+len(facts) > h {
+		// Even the small banner does not fit with the facts: the facts matter most,
+		// then the banner, and the credit goes first.
+		credit = nil
+		art, blankAbove = homeBanner(w, h-len(facts))
+		if len(art)+len(facts) > h {
+			art, blankAbove = nil, false
+		}
+	}
 	var lines []string
 	if blankAbove {
 		lines = append(lines, "")
@@ -161,7 +176,7 @@ func (m *Model) accountDetail(w int) (string, []string) {
 		}
 		lines = append(lines, kv(m.loc.T("label_net_worth", nil), bold.Render(netText), keyW, w)...)
 		for _, c := range m.netWorth.Missing {
-			lines = append(lines, warn.Render(m.loc.T("account_no_rate", map[string]any{"From": c, "To": m.netWorth.Base})))
+			lines = append(lines, wrapped(m.loc.T("account_no_rate", map[string]any{"From": c, "To": m.netWorth.Base}), w, warn)...)
 		}
 		return m.loc.T("all_accounts", nil), lines
 	}
@@ -238,7 +253,9 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 		if p.Account == ledger.UncategorizedExpense || p.Account == ledger.UncategorizedIncome {
 			name, amount = warn.Render(name), warn.Render(amount)
 		}
-		lines = append(lines, "  "+leftRight(name, amount, w-2))
+		for _, l := range leftRightLines(name, amount, w-2) {
+			lines = append(lines, "  "+l)
+		}
 	}
 
 	lines = append(lines, "")
@@ -247,18 +264,19 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 		lines = append(lines, kv(m.loc.T("label_account", nil), m.loc.AccountName(r.source.Account), keyW, w)...)
 		lines = append(lines, kv(m.loc.T("label_category", nil), m.loc.AccountName(r.category.Account), keyW, w)...)
 		if r.uncategorized {
-			lines = append(lines, "", warn.Render(m.loc.T("uncat_label", nil))+dim.Render(" "+m.loc.T("uncat_notice", nil)))
+			lines = append(lines, "")
+			lines = append(lines, labelled(m.loc.T("uncat_label", nil), warn, m.loc.T("uncat_notice", nil), dim, w)...)
 		}
 		if r.transfer {
 			lines = append(lines, "")
 			if partner, ok := m.findRow(r.tx.TransferWith); ok && r.tx.TransferWith != 0 {
-				lines = append(lines, accent.Render(m.loc.T("transfer_label", nil))+dim.Render(" "+m.loc.T("transfer_with", map[string]any{"ID": partner.tx.ID, "Account": m.loc.AccountName(partner.source.Account), "Date": m.loc.StoredDate(partner.tx.Date)})))
+				lines = append(lines, labelled(m.loc.T("transfer_label", nil), accent, m.loc.T("transfer_with", map[string]any{"ID": partner.tx.ID, "Account": m.loc.AccountName(partner.source.Account), "Date": m.loc.StoredDate(partner.tx.Date)}), dim, w)...)
 			} else {
-				lines = append(lines, warn.Render(m.loc.T("transfer_label", nil))+dim.Render(" "+m.loc.T("transfer_waiting", nil)))
+				lines = append(lines, labelled(m.loc.T("transfer_label", nil), warn, m.loc.T("transfer_waiting", nil), dim, w)...)
 			}
 		}
 	default:
-		lines = append(lines, dim.Render(m.loc.T("transfer_or_split", nil)))
+		lines = append(lines, wrapped(m.loc.T("transfer_or_split", nil), w, dim)...)
 	}
 	return m.loc.T("transaction_n_title", map[string]any{"ID": r.tx.ID}), lines
 }
