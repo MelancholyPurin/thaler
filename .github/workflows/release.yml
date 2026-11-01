@@ -61,10 +61,6 @@ jobs:
             echo "::error::$VERSION is released from $want, but this runs from $GITHUB_REF_NAME"
             exit 1
           fi
-          if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
-            echo "::error::$VERSION exists already"
-            exit 1
-          fi
           if [ -z "$COMMIT" ]; then
             COMMIT="$(git rev-parse HEAD)"
           else
@@ -73,6 +69,19 @@ jobs:
           if ! git merge-base --is-ancestor "$COMMIT" HEAD; then
             echo "::error::$COMMIT is not part of $GITHUB_REF_NAME"
             exit 1
+          fi
+          # A tag is only there already when an earlier run pushed it and then failed
+          # before publishing. That run can be repeated, for the same commit.
+          if git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+            if [ "$(git rev-parse "refs/tags/$VERSION^{commit}")" != "$COMMIT" ]; then
+              echo "::error::$VERSION exists already, and not at $COMMIT"
+              exit 1
+            fi
+            if gh release view "$VERSION" >/dev/null 2>&1; then
+              echo "::error::$VERSION is released already"
+              exit 1
+            fi
+            echo "$VERSION is tagged at $COMMIT from an earlier run that did not publish; going on from there." >>"$GITHUB_STEP_SUMMARY"
           fi
           # Only main is tested by CI on every push; a fix on a release branch was tested
           # in its pull request, and is tested again below.
@@ -110,24 +119,25 @@ jobs:
           VERSION: ${{ inputs.version }}
           PREVIOUS: ${{ steps.plan.outputs.previous }}
         run: |
+          # Outside the checkout: GoReleaser refuses to release from a dirty tree.
           range="${PREVIOUS:+$PREVIOUS..}HEAD"
           day="$(date -u +%F)"
           # A page written by hand wins over the generated one (the first release has one).
           if [ -f "docs/releases/$VERSION.md" ]; then
-            cp "docs/releases/$VERSION.md" notes.md
+            cp "docs/releases/$VERSION.md" "$RUNNER_TEMP/notes.md"
           else
-            go run ./cmd/releasenotes -version "$VERSION" -date "$day" "$range" >notes.md
+            go run ./cmd/releasenotes -version "$VERSION" -date "$day" "$range" >"$RUNNER_TEMP/notes.md"
           fi
-          go run ./cmd/releasenotes -row -version "$VERSION" -date "$day" "$range" >row.md
+          go run ./cmd/releasenotes -row -version "$VERSION" -date "$day" "$range" >"$RUNNER_TEMP/row.md"
           {
             echo "### Notes for $VERSION"
             echo
-            cat notes.md
+            cat "$RUNNER_TEMP/notes.md"
             echo
             echo "### Line for the Releases table in ROADMAP.md"
             echo
             echo '```'
-            cat row.md
+            cat "$RUNNER_TEMP/row.md"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
       - name: dry run, build the archives
@@ -141,16 +151,18 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/checksums.txt
-            notes.md
+            ${{ runner.temp }}/notes.md
       - name: tag
         if: ${{ inputs.publish }}
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          git tag "$VERSION"
-          git push origin "refs/tags/$VERSION"
+          if ! git rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
       - name: publish
         if: ${{ inputs.publish }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: make release NOTES=notes.md
+        run: make release NOTES="$RUNNER_TEMP/notes.md"
