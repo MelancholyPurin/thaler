@@ -35,6 +35,8 @@ jobs:
         run: make tidy-check
       - name: CI scripts
         run: make test-scripts
+      - name: message catalogs
+        run: make i18n-check
 
   # Linux and macOS, because Thaler runs on both and they differ in details that
   # matter to it (paths, file modes, how SQLite locks files). `go test` is what

@@ -48,6 +48,12 @@ type Language struct {
 	DateInput []string
 	// DateFormats names what is accepted, for the message about a date that is not.
 	DateFormats string
+	// Complete says that the language has every message of English. The tests then
+	// fail when it lacks one, and for a language that is not complete they accept
+	// that it does, because it is still being translated. Set it when the
+	// translation is whole, and clear it when a story adds messages before the
+	// translators have them.
+	Complete bool
 }
 
 // Languages are the languages of Thaler, the source language first.
@@ -55,9 +61,9 @@ var Languages = []Language{
 	{Code: "en", Tag: language.English, Name: "English",
 		DateLayout: "2006-01-02", DateFormats: "YYYY-MM-DD or DD.MM.YYYY"},
 	{Code: "es", Tag: language.Spanish, Name: "Español",
-		DateLayout: "02/01/2006", DateInput: []string{"2/1/2006"}, DateFormats: "DD/MM/YYYY, YYYY-MM-DD or DD.MM.YYYY"},
+		DateLayout: "02/01/2006", DateInput: []string{"2/1/2006"}, DateFormats: "DD/MM/YYYY, YYYY-MM-DD or DD.MM.YYYY", Complete: true},
 	{Code: "de", Tag: language.German, Name: "Deutsch",
-		DateLayout: "02.01.2006", DateInput: []string{"2.1.2006"}, DateFormats: "DD.MM.YYYY or YYYY-MM-DD"},
+		DateLayout: "02.01.2006", DateInput: []string{"2.1.2006"}, DateFormats: "DD.MM.YYYY or YYYY-MM-DD", Complete: true},
 }
 
 // Codes is the codes of Languages, for messages that list them.
@@ -69,8 +75,20 @@ func Codes() []string {
 	return codes
 }
 
+// PseudoTag is the pseudo-language: English made longer and accented, so that text
+// that will not fit in German, or is cut off, or loses a character, shows before a
+// translator is involved. It is not a language to use, so it is not in Languages and
+// is not offered in messages, but `language = "pseudo"` in config.toml selects it.
+var PseudoTag = language.MustParse("en-XA")
+
+// pseudoCode is what config.toml says to get PseudoTag.
+const pseudoCode = "pseudo"
+
 // Parse is the language that a code written in config.toml names.
 func Parse(code string) (language.Tag, bool) {
+	if strings.EqualFold(strings.TrimSpace(code), pseudoCode) {
+		return PseudoTag, true
+	}
 	for _, l := range Languages {
 		if strings.EqualFold(l.Code, strings.TrimSpace(code)) {
 			return l.Tag, true
@@ -158,6 +176,11 @@ func newFromCatalogs(tag language.Tag, instead map[string]string) *Localizer {
 		}
 		if _, err := bundle.ParseMessageFileBytes(text, l.Code+".json"); err != nil {
 			panic(fmt.Sprintf("i18n: %s: %v", name, err))
+		}
+	}
+	if tag == PseudoTag {
+		if err := addPseudo(bundle); err != nil {
+			panic(fmt.Sprintf("i18n: %v", err))
 		}
 	}
 	lang := languageOf(tag)

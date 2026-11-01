@@ -535,6 +535,7 @@ func Test_app_localizer(t *testing.T) {
 		{name: "the language of the environment", args: list, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
 		{name: "config.toml wins over the environment", args: list, files: map[string]string{"config.toml": "language = \"es\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: spanish},
 		{name: "config.toml can ask for English", args: list, files: map[string]string{"config.toml": "language = \"en\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: english},
+		{name: "the pseudo-language, for finding text that does not fit", args: list, files: map[string]string{"config.toml": "language = \"pseudo\"\n"}, want: "[Ñö áççöúñtš ýét. Çréáté öñé wíth: thálér çlí áççöúñt ádd Åššétš:Špárkáššé --çúrréñçý ÉÚR " + strings.Repeat("~", 36) + "]\n"},
 		{name: "a language Thaler does not speak is English", args: list, env: map[string]string{"LANG": "fr_FR.UTF-8"}, want: english},
 		{name: "a config that cannot be read does not stop the messages", args: list, files: map[string]string{"config.toml": "language = \"fr\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
 	}

@@ -70,6 +70,7 @@ amount = ["Amount"]
 		},
 		{name: "a language", file: ptr("language = \"de\"\n"), want: Config{Language: "de"}},
 		{name: "an empty language is the environment's", file: ptr("language = \"\"\n")},
+		{name: "the pseudo-language is accepted, though not offered", file: ptr("language = \"pseudo\"\n"), want: Config{Language: "pseudo"}},
 		{name: "a language Thaler does not speak is refused", file: ptr("language = \"fr\"\n"), wantErr: "{path}: language is \"fr\": use one of en, es, de"},
 		{name: "a backup reminder interval", file: ptr("backup_reminder_days = 14\n"), want: Config{BackupReminderDays: intPtr(14)}},
 		{name: "0 switches the reminder off", file: ptr("backup_reminder_days = 0\n"), want: Config{BackupReminderDays: intPtr(0)}},

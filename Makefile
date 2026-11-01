@@ -14,7 +14,7 @@ COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release i18n-todo test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -46,6 +46,9 @@ release: ## Publish the release of the tag at HEAD with the notes in NOTES (the 
 
 i18n-todo: ## List the messages a language still has to translate, as JSON to fill in, with the English on standard error (make i18n-todo LOCALE=es)
 	@$(GO) run ./cmd/i18ntodo $(LOCALE)
+
+i18n-check: ## Check the message catalogs: missing, stale and unused messages, arguments (also part of make test)
+	$(GO) test -count=1 -run 'Test_Catalogs|Test_catalogProblems|Test_usageProblems' ./internal/i18n
 
 test: ## Run the tests, in a random order (a failure prints the seed to repeat it with -shuffle=SEED)
 	$(GO) test -shuffle=on ./...
