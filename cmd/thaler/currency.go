@@ -121,7 +121,7 @@ rate on or before that date is used.`,
 			if err != nil {
 				return err
 			}
-			when, err := parseDateFlag(date)
+			when, err := a.parseDateFlag(date)
 			if err != nil {
 				return err
 			}

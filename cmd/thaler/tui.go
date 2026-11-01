@@ -32,6 +32,7 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 		DatabasePath:   a.dbPath(),
 		BackupDir:      config.BackupDir(a.dbPath()),
 		Restore:        a.swapDatabase,
+		Loc:            a.localizer(),
 	})
 }
 
