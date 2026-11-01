@@ -151,9 +151,9 @@ func Test_Localizer_ParseDate(t *testing.T) {
 		{name: "Spanish with one-digit day and month", tag: language.Spanish, in: "1/2/2026", want: "2026-02-01"},
 		{name: "Spanish still reads ISO", tag: language.Spanish, in: "2026-10-01", want: "2026-10-01"},
 		{name: "Spanish still reads dots", tag: language.Spanish, in: "01.10.2026", want: "2026-10-01"},
-		{name: "a day that does not exist", tag: language.Spanish, in: "31/02/2026", wantErr: `fecha no válida "31/02/2026": usa DD/MM/YYYY, YYYY-MM-DD or DD.MM.YYYY`},
+		{name: "a day that does not exist", tag: language.Spanish, in: "31/02/2026", wantErr: `fecha no válida "31/02/2026": usa DD/MM/YYYY, YYYY-MM-DD o DD.MM.YYYY`},
 		{name: "German with one-digit day and month", tag: language.German, in: "1.2.2026", want: "2026-02-01"},
-		{name: "German does not read slashes", tag: language.German, in: "01/10/2026", wantErr: `ungültiges Datum "01/10/2026": verwende DD.MM.YYYY or YYYY-MM-DD`},
+		{name: "German does not read slashes", tag: language.German, in: "01/10/2026", wantErr: `ungültiges Datum "01/10/2026": verwende DD.MM.YYYY oder YYYY-MM-DD`},
 		{name: "spaces around it", tag: language.German, in: "  01.10.2026 ", want: "2026-10-01"},
 		{name: "nothing", tag: language.English, in: "", wantErr: `invalid date "": use YYYY-MM-DD or DD.MM.YYYY`},
 	}
@@ -168,7 +168,7 @@ func Test_Localizer_ParseDate(t *testing.T) {
 			// then
 			gotErr, gotDay := "", ""
 			if err != nil {
-				gotErr = err.Error()
+				gotErr = loc.Error(err)
 			} else {
 				gotDay = got.Format("2006-01-02")
 			}

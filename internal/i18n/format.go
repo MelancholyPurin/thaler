@@ -9,6 +9,7 @@ import (
 	"golang.org/x/text/message"
 	"golang.org/x/text/number"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -85,10 +86,5 @@ func (l *Localizer) ParseDate(s string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, &dateError{msg: l.T("invalid_date", map[string]any{"Text": s, "Formats": l.lang.DateFormats})}
+	return time.Time{}, coded.New("invalid_date", map[string]any{"Text": s, "Formats": l.lang.DateFormats})
 }
-
-// dateError is a date that cannot be read, with its message already in the language.
-type dateError struct{ msg string }
-
-func (e *dateError) Error() string { return e.msg }

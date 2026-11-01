@@ -90,8 +90,8 @@ type use struct {
 	Where string // file:line
 }
 
-// usesIn finds every call of a method named T in the non-test Go files below root,
-// with its first argument: the id of a message.
+// usesIn finds every call of a method named T, and of coded.New, in the non-test Go
+// files below root, with its first argument: the id of a message.
 func usesIn(root string) ([]use, error) {
 	var uses []use
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -124,12 +124,14 @@ func usesIn(root string) ([]use, error) {
 				return true
 			}
 			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || sel.Sel.Name != "T" {
+			if !ok || !isMessageCall(sel) {
 				return true
 			}
 			u := use{Where: fmt.Sprintf("%s:%d", filepath.ToSlash(rel), fset.Position(call.Pos()).Line)}
 			if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
 				u.ID, _ = strconv.Unquote(lit.Value)
+			} else if strings.HasPrefix(filepath.ToSlash(rel), "internal/i18n/") {
+				return true // the lookup machinery itself passes ids on, such as the code of an error
 			}
 			uses = append(uses, u)
 			return true
@@ -139,6 +141,16 @@ func usesIn(root string) ([]use, error) {
 	return uses, err
 }
 
+// isMessageCall is x.T, the lookup of a message, and coded.New, which names the
+// message of an error by its code.
+func isMessageCall(sel *ast.SelectorExpr) bool {
+	if sel.Sel.Name == "T" {
+		return true
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "coded" && sel.Sel.Name == "New"
+}
+
 // usageProblems compares the messages of English with the calls of T.
 func usageProblems(english catalog, uses []use) []string {
 	var problems []string
@@ -146,7 +158,7 @@ func usageProblems(english catalog, uses []use) []string {
 	for _, u := range uses {
 		switch {
 		case u.ID == "":
-			problems = append(problems, fmt.Sprintf("%s: the id given to T is not a string literal, so it cannot be checked", u.Where))
+			problems = append(problems, fmt.Sprintf("%s: the id given to T or coded.New is not a string literal, so it cannot be checked", u.Where))
 		case !contains(english, u.ID):
 			problems = append(problems, fmt.Sprintf("%s: %q is not a message of English", u.Where, u.ID))
 		default:
@@ -155,7 +167,7 @@ func usageProblems(english catalog, uses []use) []string {
 	}
 	for _, id := range english.order {
 		if !used[id] {
-			problems = append(problems, fmt.Sprintf("en: %q is not used by any call of T", id))
+			problems = append(problems, fmt.Sprintf("en: %q is not used by any call of T or coded.New", id))
 		}
 	}
 	return problems

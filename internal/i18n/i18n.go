@@ -61,9 +61,9 @@ var Languages = []Language{
 	{Code: "en", Tag: language.English, Name: "English",
 		DateLayout: "2006-01-02", DateFormats: "YYYY-MM-DD or DD.MM.YYYY"},
 	{Code: "es", Tag: language.Spanish, Name: "Español",
-		DateLayout: "02/01/2006", DateInput: []string{"2/1/2006"}, DateFormats: "DD/MM/YYYY, YYYY-MM-DD or DD.MM.YYYY", Complete: true},
+		DateLayout: "02/01/2006", DateInput: []string{"2/1/2006"}, DateFormats: "DD/MM/YYYY, YYYY-MM-DD o DD.MM.YYYY", Complete: true},
 	{Code: "de", Tag: language.German, Name: "Deutsch",
-		DateLayout: "02.01.2006", DateInput: []string{"2.1.2006"}, DateFormats: "DD.MM.YYYY or YYYY-MM-DD", Complete: true},
+		DateLayout: "02.01.2006", DateInput: []string{"2.1.2006"}, DateFormats: "DD.MM.YYYY oder YYYY-MM-DD", Complete: true},
 }
 
 // Codes is the codes of Languages, for messages that list them.
