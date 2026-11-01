@@ -141,7 +141,7 @@ func Test_Money_Add(t *testing.T) {
 		wantErr string
 	}{
 		{name: "same currency", a: Money{100, "EUR"}, b: Money{-30, "EUR"}, want: Money{70, "EUR"}},
-		{name: "different currencies", a: Money{1, "EUR"}, b: Money{1, "USD"}, wantErr: "currency mismatch: EUR vs USD"},
+		{name: "different currencies", a: Money{1, "EUR"}, b: Money{1, "USD"}, wantErr: "currency_mismatch(First=EUR, Second=USD)"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -346,7 +346,7 @@ func Test_CheckBalanced(t *testing.T) {
 		{
 			name:     "one posting",
 			postings: []Posting{{"Assets:Bank", Money{100, "EUR"}}},
-			wantErr:  "a transaction needs at least two postings",
+			wantErr:  "too_few_postings",
 		},
 		{
 			name:     "unbalanced",
@@ -361,12 +361,12 @@ func Test_CheckBalanced(t *testing.T) {
 		{
 			name:     "no currency",
 			postings: []Posting{{"Assets:Bank", Money{-1, ""}}, {"Expenses:Food", Money{1, ""}}},
-			wantErr:  "posting to Assets:Bank has no currency",
+			wantErr:  "posting_no_currency(Account=Assets:Bank)",
 		},
 		{
 			name:     "no account",
 			postings: []Posting{{"", Money{-1, "EUR"}}, {"Expenses:Food", Money{1, "EUR"}}},
-			wantErr:  "posting without an account",
+			wantErr:  "posting_without_account",
 		},
 	}
 	for _, tc := range tcs {
@@ -479,7 +479,6 @@ func Test_AccountType_NeedsCurrency(t *testing.T) {
 }
 
 func Test_ParseDate(t *testing.T) {
-	const hint = `: use YYYY-MM-DD or DD.MM.YYYY`
 	tcs := []struct {
 		name    string
 		in      string
@@ -489,10 +488,10 @@ func Test_ParseDate(t *testing.T) {
 		{name: "iso", in: "2026-10-21", want: "2026-10-21"},
 		{name: "german", in: "21.10.2026", want: "2026-10-21"},
 		{name: "surrounding spaces", in: " 2026-10-21 ", want: "2026-10-21"},
-		{name: "empty", in: "", wantErr: `invalid date ""` + hint},
-		{name: "slashes", in: "21/10/2026", wantErr: `invalid date "21/10/2026"` + hint},
-		{name: "month 13", in: "2026-13-01", wantErr: `invalid date "2026-13-01"` + hint},
-		{name: "a word", in: "yesterday", wantErr: `invalid date "yesterday"` + hint},
+		{name: "empty", in: "", wantErr: `invalid_date(Formats=YYYY-MM-DD or DD.MM.YYYY, Text=)`},
+		{name: "slashes", in: "21/10/2026", wantErr: `invalid_date(Formats=YYYY-MM-DD or DD.MM.YYYY, Text=21/10/2026)`},
+		{name: "month 13", in: "2026-13-01", wantErr: `invalid_date(Formats=YYYY-MM-DD or DD.MM.YYYY, Text=2026-13-01)`},
+		{name: "a word", in: "yesterday", wantErr: `invalid_date(Formats=YYYY-MM-DD or DD.MM.YYYY, Text=yesterday)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
