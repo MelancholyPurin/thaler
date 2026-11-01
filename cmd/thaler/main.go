@@ -11,6 +11,7 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 )
 
 // app holds state shared by all commands. The database and config file are
@@ -18,6 +19,11 @@ import (
 type app struct {
 	// version is what --version prints; empty only in tests that do not ask.
 	version string
+	// loc says the messages in the language of the person; see localizer.
+	loc *i18n.Localizer
+	// getenv is os.Getenv, or a stand-in in a test (the language comes from the
+	// environment unless config.toml sets it).
+	getenv  func(string) string
 	dbFlag  string
 	cfgFlag string
 	svc     core.Service
@@ -47,16 +53,29 @@ func (a *app) service(ctx context.Context) (core.Service, error) {
 		return nil, err
 	}
 	if copied := svc.PreMigrationBackup(); copied != "" {
-		fmt.Fprint(a.noticeOut(), upgradeNotice(copied))
+		fmt.Fprintln(a.noticeOut(), a.localizer().T("upgrade_notice", map[string]any{"Copy": copied}))
 	}
 	a.svc = svc
 	return svc, nil
 }
 
-// upgradeNotice tells the person that opening the database upgraded it, and
-// where the copy from before the upgrade is.
-func upgradeNotice(copied string) string {
-	return fmt.Sprintf("Upgraded the database to this version of Thaler. A copy of it from before is at %s (not encrypted)\n", copied)
+// localizer is the language of the messages: config.toml, else the environment,
+// else English. A config file that cannot be read does not stop the messages: the
+// command that needs it reports that itself.
+func (a *app) localizer() *i18n.Localizer {
+	if a.loc != nil {
+		return a.loc
+	}
+	setting := ""
+	if c, err := a.config(); err == nil {
+		setting = c.Language
+	}
+	getenv := a.getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	a.loc = i18n.New(i18n.Detect(setting, getenv))
+	return a.loc
 }
 
 // noticeOut is where messages that are not a command's result go: standard error.

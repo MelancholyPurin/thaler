@@ -46,6 +46,9 @@ type cliEnv struct {
 	// answers are what the passphrase prompts get, in order; none means there is
 	// no terminal to ask on.
 	answers []string
+	// env is the environment variables the program sees; none are set by default,
+	// so a test does not depend on the language of the machine it runs on.
+	env map[string]string
 }
 
 func newCLIEnv(t *testing.T, files map[string]string, setup ...[]string) *cliEnv {
@@ -53,7 +56,7 @@ func newCLIEnv(t *testing.T, files map[string]string, setup ...[]string) *cliEnv
 	cheapScrypt(t)
 	e := &cliEnv{t: t, db: filepath.Join(t.TempDir(), "t.db"), dir: t.TempDir()}
 	e.cfg = filepath.Join(e.dir, "config.toml")
-	files = mergeFiles(files, map[string]string{"config.toml": ""})
+	files = mergeFiles(map[string]string{"config.toml": ""}, files) // an empty config unless the test brings one
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(e.dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
@@ -87,7 +90,7 @@ func (e *cliEnv) run(args ...string) (string, error) {
 		full = append(full, strings.ReplaceAll(a, "{dir}", e.dir))
 	}
 	full = append(full, "--config", e.cfg)
-	a := &app{version: "v1.2.3"}
+	a := &app{version: "v1.2.3", getenv: func(name string) string { return e.env[name] }}
 	if e.answers != nil {
 		answers := e.answers
 		a.ask = func(prompt string) (string, error) {
@@ -118,10 +121,12 @@ type cliCase struct {
 	args    []string
 	want    string // the output
 	wantErr string // the error text; {dir} stands for the folder
+	env     map[string]string
 }
 
 func (tc cliCase) check(t *testing.T, e *cliEnv) {
 	t.Helper()
+	e.env = tc.env
 	// when
 	got, err := e.run(tc.args...)
 
@@ -520,26 +525,26 @@ func Test_runTUI(t *testing.T) {
 	}
 }
 
-func Test_upgradeNotice(t *testing.T) {
-	tcs := []struct {
-		name   string
-		copied string
-		want   string
-	}{
-		{
-			name: "says where the copy is, and that it is not encrypted", copied: "/data/backups/pre-migration/thaler-20261101-120000-before-20261107_x.db",
-			want: "Upgraded the database to this version of Thaler. A copy of it from before is at /data/backups/pre-migration/thaler-20261101-120000-before-20261107_x.db (not encrypted)\n",
-		},
+func Test_app_localizer(t *testing.T) {
+	const english = "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR\n"
+	const spanish = "Todavía no hay cuentas. Crea una con: thaler cli account add Assets:Sparkasse --currency EUR\n"
+	const german = "Noch keine Konten. Lege eines an mit: thaler cli account add Assets:Sparkasse --currency EUR\n"
+	list := []string{"cli", "account", "list"}
+	tcs := []cliCase{
+		{name: "English when nothing says otherwise", args: list, want: english},
+		{name: "the language of the environment", args: list, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
+		{name: "config.toml wins over the environment", args: list, files: map[string]string{"config.toml": "language = \"es\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: spanish},
+		{name: "config.toml can ask for English", args: list, files: map[string]string{"config.toml": "language = \"en\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: english},
+		{name: "a language Thaler does not speak is English", args: list, env: map[string]string{"LANG": "fr_FR.UTF-8"}, want: english},
+		{name: "a config that cannot be read does not stop the messages", args: list, files: map[string]string{"config.toml": "language = \"fr\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			// when
-			got := upgradeNotice(tc.copied)
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
 
-			// then
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("mismatch (-want +got):\n%s", diff)
-			}
+			// when, then
+			tc.check(t, e)
 		})
 	}
 }
