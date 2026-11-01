@@ -87,7 +87,7 @@ func (s *Local) AddAccount(ctx context.Context, name string, currency ledger.Cur
 	}
 	typ, _ := ledger.TypeOf(name)
 	if typ.NeedsCurrency() && currency == "" {
-		return Account{}, fmt.Errorf("%s accounts need a currency, e.g. EUR", typ)
+		return Account{}, coded.New("account_needs_currency", map[string]any{"Type": typ})
 	}
 	return s.repo.queries().insertAccount(ctx, name, typ, currency)
 }
@@ -117,7 +117,7 @@ func resolveAccount(ctx context.Context, q queries, name string, cur ledger.Curr
 			return Account{}, verr
 		}
 		if typ.NeedsCurrency() {
-			return Account{}, fmt.Errorf("account %s does not exist; create it first as a %s account in %s", name, typ, cur)
+			return Account{}, coded.New("account_must_exist", map[string]any{"Name": name, "Type": typ, "Currency": cur})
 		}
 		acc, err = q.insertAccount(ctx, name, typ, "")
 		if err == nil {
@@ -128,7 +128,7 @@ func resolveAccount(ctx context.Context, q queries, name string, cur ledger.Curr
 		return Account{}, err
 	}
 	if acc.Currency != "" && acc.Currency != cur {
-		return Account{}, fmt.Errorf("account %s holds %s, but the posting is in %s", acc.Name, acc.Currency, cur)
+		return Account{}, coded.New("posting_wrong_currency", map[string]any{"Account": acc.Name, "Holds": acc.Currency, "Currency": cur})
 	}
 	return acc, nil
 }
@@ -205,7 +205,7 @@ func (s *Local) DeleteTransaction(ctx context.Context, id int64) error {
 		return err
 	}
 	if !found {
-		return fmt.Errorf("transaction #%d does not exist", id)
+		return coded.New("transaction_not_found", map[string]any{"ID": id})
 	}
 	return nil
 }
@@ -231,7 +231,7 @@ func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransact
 		return err
 	}
 	if !found {
-		return fmt.Errorf("transaction #%d does not exist", id)
+		return coded.New("transaction_not_found", map[string]any{"ID": id})
 	}
 	if err := nt.validate(); err != nil {
 		return err
@@ -269,7 +269,7 @@ func (s *Local) GetTransaction(ctx context.Context, id int64) (TxView, error) {
 		return TxView{}, err
 	}
 	if len(txs) == 0 {
-		return TxView{}, fmt.Errorf("transaction #%d does not exist", id)
+		return TxView{}, coded.New("transaction_not_found", map[string]any{"ID": id})
 	}
 	return txs[0], nil
 }
@@ -292,7 +292,7 @@ func (s *Local) SetCategories(ctx context.Context, changes []CategoryChange) ([]
 	err := s.repo.inTx(ctx, func(q queries) error {
 		for _, c := range changes {
 			if err := setCategory(ctx, q, c, &created); err != nil {
-				return fmt.Errorf("transaction #%d: %w", c.TransactionID, err)
+				return fmt.Errorf("%w: %w", coded.New("transaction_n", map[string]any{"ID": c.TransactionID}), err)
 			}
 		}
 		return nil
@@ -307,14 +307,14 @@ func setCategory(ctx context.Context, q queries, c CategoryChange, created *[]st
 	if typ, err := ledger.TypeOf(c.Category); err != nil {
 		return err
 	} else if typ.NeedsCurrency() {
-		return fmt.Errorf("%s is not a category; use an Income, Expenses or Equity account", c.Category)
+		return coded.New("not_a_category", map[string]any{"Name": c.Category})
 	}
 	postings, err := q.categoryPostings(ctx, c.TransactionID)
 	if err != nil {
 		return err
 	}
 	if len(postings) != 1 {
-		return fmt.Errorf("has %d category postings; only transactions with exactly one can be recategorized", len(postings))
+		return coded.New("category_postings", map[string]any{"Count": len(postings)})
 	}
 	acc, err := resolveAccount(ctx, q, c.Category, postings[0].currency, created)
 	if err != nil {
@@ -427,12 +427,11 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 	res := TransferResult{In: req.Amount}
 	if src.Currency == dst.Currency {
 		if req.ToAmount != (ledger.Money{}) {
-			return TransferResult{}, fmt.Errorf("both accounts use %s, so there is no separate amount received", src.Currency)
+			return TransferResult{}, coded.New("transfer_same_currency", map[string]any{"Currency": src.Currency})
 		}
 	} else {
 		if req.ToAmount == (ledger.Money{}) {
-			return TransferResult{}, fmt.Errorf("%s -> %s crosses currencies; say how much arrives in %s",
-				src.Currency, dst.Currency, dst.Currency)
+			return TransferResult{}, coded.New("transfer_needs_received", map[string]any{"From": src.Currency, "To": dst.Currency, "Currency": dst.Currency})
 		}
 		if req.ToAmount.Currency != dst.Currency {
 			return TransferResult{}, coded.New("received_wrong_currency", map[string]any{"Currency": string(req.ToAmount.Currency), "Account": dst.Name, "Holds": string(dst.Currency)})
@@ -488,11 +487,11 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		return ImportResult{}, err
 	}
 	if acc.Currency == "" {
-		return ImportResult{}, fmt.Errorf("%s has no fixed currency; import into an Assets or Liabilities account", acc.Name)
+		return ImportResult{}, coded.New("import_no_fixed_currency", map[string]any{"Name": acc.Name})
 	}
 	rules, err := importer.NewRuleset(req.Rules)
 	if err != nil {
-		return ImportResult{}, fmt.Errorf("invalid rules: %w", err)
+		return ImportResult{}, fmt.Errorf("%w: %w", coded.New("invalid_rules", nil), err)
 	}
 
 	var res ImportResult
@@ -500,8 +499,8 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 	for _, r := range req.Rows {
 		if r.Amount.Currency != acc.Currency {
 			res.Rejected = append(res.Rejected, RejectedRow{
-				Line:   r.Line,
-				Reason: fmt.Sprintf("currency %s does not match %s (%s)", r.Amount.Currency, acc.Name, acc.Currency),
+				Line: r.Line,
+				Err:  coded.New("row_currency_mismatch", map[string]any{"Currency": r.Amount.Currency, "Account": acc.Name, "Holds": acc.Currency}),
 			})
 			continue
 		}
@@ -589,7 +588,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			}
 			if p.adopts != nil {
 				if err := q.setImportHash(ctx, p.adopts.id, p.tx.ImportHash); err != nil {
-					return fmt.Errorf("transaction %d (%s %s): %w", i+1, p.tx.Date.Format(ledger.DateLayout), p.tx.Payee, err)
+					return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
 				}
 				res.Adopted++
 				res.AdoptedIDs = append(res.AdoptedIDs, p.adopts.id)
@@ -601,7 +600,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("transaction %d (%s %s): %w", i+1, p.tx.Date.Format(ledger.DateLayout), p.tx.Payee, err)
+				return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
 			}
 			res.Inserted++
 			res.IDs = append(res.IDs, id)
@@ -611,7 +610,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			if p.partner.category != ledger.TransferAccount {
 				change := CategoryChange{TransactionID: p.partner.id, Category: ledger.TransferAccount}
 				if err := setCategory(ctx, q, change, &res.Created); err != nil {
-					return fmt.Errorf("transaction #%d: %w", p.partner.id, err)
+					return fmt.Errorf("%w: %w", coded.New("transaction_n", map[string]any{"ID": p.partner.id}), err)
 				}
 			}
 			if err := q.linkTransfer(ctx, id, p.partner.id); err != nil {
@@ -706,7 +705,7 @@ func (s *Local) DetachImport(ctx context.Context, ids []int64) error {
 				return err
 			}
 			if !found {
-				return fmt.Errorf("transaction #%d does not exist", id)
+				return coded.New("transaction_not_found", map[string]any{"ID": id})
 			}
 			if err := q.clearImportHash(ctx, id); err != nil {
 				return err
@@ -724,7 +723,7 @@ func (s *Local) DetachImport(ctx context.Context, ids []int64) error {
 func (s *Local) Recategorize(ctx context.Context, req RecategorizeRequest) (RecategorizeResult, error) {
 	rules, err := importer.NewRuleset(req.Rules)
 	if err != nil {
-		return RecategorizeResult{}, fmt.Errorf("invalid rules: %w", err)
+		return RecategorizeResult{}, fmt.Errorf("%w: %w", coded.New("invalid_rules", nil), err)
 	}
 	var (
 		res     RecategorizeResult
@@ -909,7 +908,7 @@ func (s *Local) SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest
 			return err
 		}
 		if !acc.Type.NeedsCurrency() {
-			return fmt.Errorf("%s is a %s account; only asset and liability accounts have a balance to set", acc.Name, acc.Type)
+			return coded.New("balance_not_for_type", map[string]any{"Name": acc.Name, "Type": acc.Type})
 		}
 		if req.Balance.Currency != acc.Currency {
 			return coded.New("balance_wrong_currency", map[string]any{"Account": acc.Name, "Holds": string(acc.Currency), "Currency": string(req.Balance.Currency)})
@@ -957,7 +956,7 @@ func (s *Local) SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest
 				return err
 			}
 			if len(views) != 1 {
-				return fmt.Errorf("transaction #%d disappeared", existing)
+				return coded.New("transaction_vanished", map[string]any{"ID": existing})
 			}
 			res.Before = &views[0]
 			if err := replaceTransaction(ctx, q, existing, nt, &res.Created); err != nil {
@@ -1030,20 +1029,20 @@ func (s *Local) PreMigrationBackup() string { return s.repo.migrationBackup }
 // must not exist yet.
 func snapshot(ctx context.Context, q queries, dest string) error {
 	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("%s already exists", dest)
+		return coded.New("file_exists", map[string]any{"Path": dest})
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return err
 	}
 	if err := q.vacuumInto(ctx, dest); err != nil {
-		return fmt.Errorf("backup to %s: %w", dest, err)
+		return fmt.Errorf("%w: %w", coded.New("backup_failed", map[string]any{"Path": dest}), err)
 	}
 	if err := os.Chmod(dest, 0o600); err != nil { // it holds financial data: just for you
 		return err
 	}
 	if err := verifySnapshot(ctx, dest); err != nil {
 		os.Remove(dest) // a snapshot that fails its check must not sit among the good ones
-		return fmt.Errorf("backup to %s failed its check and was removed: %w", dest, err)
+		return fmt.Errorf("%w: %w", coded.New("backup_check_failed", map[string]any{"Path": dest}), err)
 	}
 	return nil
 }
@@ -1067,7 +1066,7 @@ func verifySnapshot(ctx context.Context, path string) error {
 		return err
 	}
 	if result != "ok" {
-		return errors.New(result)
+		return coded.New("integrity_failed", map[string]any{"Result": result})
 	}
 	return nil
 }

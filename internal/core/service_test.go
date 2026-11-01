@@ -319,7 +319,7 @@ func Test_AddAccount(t *testing.T) {
 		{name: "an asset without a currency", account: "Assets:Cash", wantErr: "Assets accounts need a currency, e.g. EUR"},
 		{name: "a liability without a currency", account: "Liabilities:Card", wantErr: "Liabilities accounts need a currency, e.g. EUR"},
 		{name: "a name without a type", account: "bank", currency: "EUR", wantErr: `account "bank" must start with one of Assets, Liabilities, Income, Expenses, Equity`},
-		{name: "a name with a space", account: "Assets:My Bank", currency: "EUR", wantErr: `account "Assets:My Bank": invalid character ' ' (use letters, digits, '-' and '_')`},
+		{name: "a name with a space", account: "Assets:My Bank", currency: "EUR", wantErr: `account "Assets:My Bank": invalid character " " (use letters, digits, '-' and '_')`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -540,7 +540,7 @@ func Test_AddTransaction(t *testing.T) {
 			name: "an unbalanced transaction, which also leaves no new account behind", setup: bank,
 			nt: NewTransaction{Date: day("2026-10-02"), Postings: []ledger.Posting{
 				{Account: "Assets:Bank", Amount: eur(-100)}, {Account: "Expenses:ShouldNotExist", Amount: eur(90)}}},
-			wantErr:   "postings do not balance: EUR is off by -0.10",
+			wantErr:   "postings do not balance: off by EUR -0.10",
 			wantState: ledgerState{Accounts: []string{"Assets:Bank"}},
 		},
 		{
@@ -756,7 +756,7 @@ func Test_ReplaceTransaction(t *testing.T) {
 			name: "an unbalanced edit changes nothing", id: 1,
 			nt: NewTransaction{Date: day("2026-10-02"), Payee: "Edeka", Postings: []ledger.Posting{
 				{Account: "Assets:Bank", Amount: eur(-5)}, {Account: "Expenses:Food", Amount: eur(4)}}},
-			wantTx: unchanged, wantErr: "postings do not balance: EUR is off by -0.01",
+			wantTx: unchanged, wantErr: "postings do not balance: off by EUR -0.01",
 		},
 		{name: "a transaction that does not exist", id: 999, nt: edited, wantTx: unchanged, wantErr: "transaction #999 does not exist"},
 	}
@@ -856,7 +856,7 @@ func Test_RestoreTransaction(t *testing.T) {
 			name: "an unbalanced one is refused", id: 1,
 			nt: NewTransaction{Date: day("2026-10-01"), Postings: []ledger.Posting{
 				{Account: "Assets:Bank", Amount: eur(-5)}, {Account: "Expenses:Groceries", Amount: eur(4)}}},
-			wantErr: "postings do not balance: EUR is off by -0.01",
+			wantErr: "postings do not balance: off by EUR -0.01",
 		},
 	}
 	for _, tc := range tcs {

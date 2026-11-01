@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"filippo.io/age"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // Encrypted backups are age files (https://age-encryption.org) sealed with a
@@ -38,10 +40,10 @@ func recipient(passphrase string) (*age.ScryptRecipient, error) {
 // cannot silently produce a backup nobody can open.
 func (s *Local) BackupEncrypted(ctx context.Context, dest, passphrase string) error {
 	if passphrase == "" {
-		return errors.New("an encrypted backup needs a passphrase")
+		return coded.New("backup_needs_passphrase", nil)
 	}
 	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("%s already exists", dest)
+		return coded.New("file_exists", map[string]any{"Path": dest})
 	}
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -60,11 +62,11 @@ func (s *Local) BackupEncrypted(ctx context.Context, dest, passphrase string) er
 	sum, err := seal(plain, dest, passphrase)
 	if err != nil {
 		os.Remove(dest)
-		return fmt.Errorf("backup to %s: %w", dest, err)
+		return fmt.Errorf("%w: %w", coded.New("backup_failed", map[string]any{"Path": dest}), err)
 	}
 	if err := checkSealed(dest, passphrase, sum); err != nil {
 		os.Remove(dest) // a backup that cannot be opened must not sit among the good ones
-		return fmt.Errorf("backup to %s failed its check and was removed: %w", dest, err)
+		return fmt.Errorf("%w: %w", coded.New("backup_check_failed", map[string]any{"Path": dest}), err)
 	}
 	return nil
 }
@@ -74,7 +76,7 @@ func (s *Local) BackupEncrypted(ctx context.Context, dest, passphrase string) er
 // passphrase or a damaged file leaves nothing behind.
 func DecryptBackup(ctx context.Context, src, dest, passphrase string) error {
 	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("%s already exists", dest)
+		return coded.New("file_exists", map[string]any{"Path": dest})
 	}
 	r, srcFile, err := openDecrypted(src, passphrase)
 	if err != nil {
@@ -91,7 +93,7 @@ func DecryptBackup(ctx context.Context, src, dest, passphrase string) error {
 	fail := func(err error) error {
 		out.Close()
 		os.Remove(dest)
-		return fmt.Errorf("decrypting %s: %w", src, err)
+		return fmt.Errorf("%w: %w", coded.New("decrypting", map[string]any{"Path": src}), err)
 	}
 	if _, err := io.Copy(out, r); err != nil {
 		return fail(err)
@@ -100,7 +102,7 @@ func DecryptBackup(ctx context.Context, src, dest, passphrase string) error {
 		return fail(err)
 	}
 	if err := verifySnapshot(ctx, dest); err != nil {
-		return fail(fmt.Errorf("the result is not a healthy database: %w", err))
+		return fail(fmt.Errorf("%w: %w", coded.New("result_not_healthy", nil), err))
 	}
 	return nil
 }
@@ -123,10 +125,10 @@ func openDecrypted(src, passphrase string) (io.Reader, io.Closer, error) {
 	switch {
 	case errors.As(err, &noMatch):
 		in.Close()
-		return nil, nil, fmt.Errorf("decrypting %s: incorrect passphrase", src)
+		return nil, nil, coded.New("decrypt_wrong_passphrase", map[string]any{"Path": src})
 	case err != nil:
 		in.Close()
-		return nil, nil, fmt.Errorf("decrypting %s: %w", src, err)
+		return nil, nil, fmt.Errorf("%w: %w", coded.New("decrypting", map[string]any{"Path": src}), err)
 	}
 	return r, in, nil
 }
@@ -192,7 +194,7 @@ func checkSealed(path, passphrase string, want [sha256.Size]byte) error {
 	var got [sha256.Size]byte
 	copy(got[:], h.Sum(nil))
 	if got != want {
-		return errors.New("decrypting it does not give back what was encrypted")
+		return coded.New("decrypt_mismatch", nil)
 	}
 	return nil
 }

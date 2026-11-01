@@ -312,8 +312,8 @@ type TransferLink struct {
 
 // RejectedRow is a row that does not fit the target account.
 type RejectedRow struct {
-	Line   int
-	Reason string
+	Line int
+	Err  error // why, as a coded error
 }
 
 // ImportResult summarises an import.

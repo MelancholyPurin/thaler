@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 )
 
@@ -42,7 +43,7 @@ type RestoreResult struct {
 func BackupIsEncrypted(path string) (bool, error) {
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return false, fmt.Errorf("%s does not exist", path)
+		return false, coded.New("path_not_found", map[string]any{"Path": path})
 	}
 	if err != nil {
 		return false, err
@@ -60,7 +61,7 @@ func BackupIsEncrypted(path string) (bool, error) {
 	case bytes.HasPrefix(head, sqliteMagic):
 		return false, nil
 	}
-	return false, fmt.Errorf("%s is not a backup: it is neither a SQLite database nor an age file", path)
+	return false, coded.New("not_a_backup", map[string]any{"Path": path})
 }
 
 // RestoreBackup replaces the database at dbPath with the backup at src, which is
@@ -77,23 +78,23 @@ func BackupIsEncrypted(path string) (bool, error) {
 func RestoreBackup(ctx context.Context, src, dbPath, passphrase string) (RestoreResult, error) {
 	var res RestoreResult
 	if dbPath == ":memory:" || strings.ContainsAny(dbPath, "?#") {
-		return res, fmt.Errorf("cannot restore into %q", dbPath)
+		return res, coded.New("restore_into_invalid", map[string]any{"Path": dbPath})
 	}
 	encrypted, err := BackupIsEncrypted(src)
 	if err != nil {
 		return res, err
 	}
 	if encrypted && passphrase == "" {
-		return res, fmt.Errorf("%s is encrypted: a passphrase is needed", src)
+		return res, coded.New("restore_needs_passphrase", map[string]any{"Path": src})
 	}
 	if a, errA := os.Stat(src); errA == nil {
 		if b, errB := os.Stat(dbPath); errB == nil && os.SameFile(a, b) {
-			return res, fmt.Errorf("cannot restore %s from itself", dbPath)
+			return res, coded.New("restore_from_itself", map[string]any{"Path": dbPath})
 		}
 	}
 	if !encrypted {
 		if wal, err := os.Stat(src + "-wal"); err == nil && wal.Size() > 0 {
-			return res, fmt.Errorf("%s holds changes that are not in %s yet: open that database with Thaler once, or restore from a backup made with thaler cli backup", src+"-wal", src)
+			return res, coded.New("restore_wal", map[string]any{"Path": src + "-wal", "Base": src})
 		}
 	}
 
@@ -125,12 +126,12 @@ func RestoreBackup(ctx context.Context, src, dbPath, passphrase string) (Restore
 	}
 	if err := os.Rename(stagedPath, dbPath); err != nil {
 		if res.Replaced == "" {
-			return RestoreResult{}, fmt.Errorf("nothing was changed: %w", err)
+			return RestoreResult{}, fmt.Errorf("%w: %w", coded.New("nothing_changed", nil), err)
 		}
 		if back := moveFiles(res.Replaced, dbPath, dbFiles); back != nil {
-			return RestoreResult{}, fmt.Errorf("could not put the backup in place (%w), and could not put the old database back either: it is at %s: %w", err, res.Replaced, back)
+			return RestoreResult{}, fmt.Errorf("%w (%w), %w: %w", coded.New("restore_not_in_place", nil), err, coded.New("restore_old_not_back", map[string]any{"Path": res.Replaced}), back)
 		}
-		return RestoreResult{}, fmt.Errorf("nothing was changed: %w", err)
+		return RestoreResult{}, fmt.Errorf("%w: %w", coded.New("nothing_changed", nil), err)
 	}
 	return res, nil
 }
@@ -158,7 +159,7 @@ func fillStaged(staged *os.File, src string, encrypted bool, passphrase string) 
 	}
 	if _, err := io.Copy(staged, from); err != nil {
 		staged.Close()
-		return fmt.Errorf("reading %s: %w", src, err)
+		return fmt.Errorf("%w: %w", coded.New("reading_file", map[string]any{"Path": src}), err)
 	}
 	return staged.Close()
 }
@@ -167,7 +168,7 @@ func fillStaged(staged *os.File, src string, encrypted bool, passphrase string) 
 // is a healthy database that this build can use, and whether it needs upgrading.
 func checkRestorable(ctx context.Context, staged, src string) (upgrade bool, err error) {
 	if err := verifySnapshot(ctx, staged); err != nil {
-		return false, fmt.Errorf("%s is not a healthy database, and nothing was changed: %w", src, err)
+		return false, fmt.Errorf("%w: %w", coded.New("not_healthy", map[string]any{"Path": src}), err)
 	}
 	files, err := migrationFiles()
 	if err != nil {
@@ -180,7 +181,7 @@ func checkRestorable(ctx context.Context, staged, src string) (upgrade bool, err
 	defer db.Close()
 	state, err := readMigrationState(ctx, db)
 	if err != nil {
-		return false, fmt.Errorf("%s cannot be read, and nothing was changed: %w", src, err)
+		return false, fmt.Errorf("%w: %w", coded.New("cannot_be_read", map[string]any{"Path": src}), err)
 	}
 	// Other programs use SQLite too, so a database that records migrations also
 	// has to have Thaler's own tables.
@@ -189,13 +190,13 @@ func checkRestorable(ctx context.Context, staged, src string) (upgrade bool, err
 		return false, err
 	}
 	if !state.existing || ours != 3 {
-		return false, fmt.Errorf("%s is a SQLite database but not a Thaler one, and nothing was changed", src)
+		return false, coded.New("not_thaler_db", map[string]any{"Path": src})
 	}
 	if latest := files[len(files)-1].version; state.version > latest {
-		return false, fmt.Errorf("%s was made by a newer version of Thaler (it has migration %d): update thaler; nothing was changed", src, state.version)
+		return false, coded.New("backup_newer", map[string]any{"Path": src, "Version": state.version})
 	}
 	if state.dirty {
-		return false, fmt.Errorf("%s was saved while an upgrade of it was stopped halfway (migration %d), and nothing was changed", src, state.version)
+		return false, coded.New("backup_halfway", map[string]any{"Path": src, "Version": state.version})
 	}
 	return state.version < files[len(files)-1].version, nil
 }
@@ -238,9 +239,9 @@ func moveFiles(from, to string, suffixes []string) error {
 				}
 			}
 			if len(stuck) > 0 {
-				return fmt.Errorf("%w; and the files already moved could not be put back: %w", err, errors.Join(stuck...))
+				return fmt.Errorf("%w; %w: %w", err, coded.New("files_not_put_back", nil), errors.Join(stuck...))
 			}
-			return fmt.Errorf("nothing was changed: %w", err)
+			return fmt.Errorf("%w: %w", coded.New("nothing_changed", nil), err)
 		}
 		moved = append(moved, suffix)
 	}

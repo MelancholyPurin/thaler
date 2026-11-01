@@ -270,7 +270,7 @@ func Test_migrateFrom_failure(t *testing.T) {
 			look := func(err error) observed {
 				var o observed
 				if err != nil {
-					o.Err = err.Error()
+					o.Err = errText(err)
 				}
 				var dirty bool
 				if err := st.repo.db.QueryRowContext(t.Context(), `SELECT version, dirty FROM schema_migrations`).Scan(&o.Version, &dirty); err != nil {
