@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/i18n"
@@ -67,7 +67,7 @@ func (m *Model) sizeForm(f *form) {
 	for _, in := range []*textinput.Model{&f.payee, &f.category, &f.date, &f.description} {
 		in.Width = m.inputWidth()
 	}
-	f.amount.Width = max(4, m.inputWidth()-len("Expense")-1)
+	f.amount.Width = max(4, m.inputWidth()-max(lipgloss.Width(m.loc.T("form_expense", nil)), lipgloss.Width(m.loc.T("form_income", nil)))-1)
 }
 
 // openForm starts adding a transaction, or editing the selected one. The
@@ -76,7 +76,7 @@ func (m *Model) sizeForm(f *form) {
 // in the database. The form opens on the field named by focus.
 func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 	if len(m.accounts) == 0 {
-		m.setStatus("no accounts yet: press n to create one", true)
+		m.setStatus(m.loc.T("form_no_accounts", nil), true)
 		return nil
 	}
 	f := &form{payeeCur: -1}
@@ -92,7 +92,7 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 			return nil
 		}
 		if !r.simple {
-			m.setStatus("transfers and split transactions cannot be edited here", true)
+			m.setStatus(m.loc.T("cannot_edit_here", nil), true)
 			return nil
 		}
 		f.editing, f.old = r.tx.ID, r.tx
@@ -170,12 +170,11 @@ func (f *form) enterSaves() bool {
 }
 
 // footer is the hint under the form: what Enter does here, and how to move.
-func (f *form) footer() string {
-	verb := "next"
-	if f.enterSaves() {
-		verb = "save"
+func (m *Model) formFooter() string {
+	if m.form.enterSaves() {
+		return m.loc.T("footer_form_enter_save", nil)
 	}
-	return "enter " + verb + " · tab/shift+tab fields · ctrl+s save · esc cancel"
+	return m.loc.T("footer_form_enter_next", nil)
 }
 
 func (f *form) isIncome() bool { return strings.HasPrefix(strings.TrimSpace(f.amount.Value()), "+") }
@@ -223,7 +222,7 @@ func (m *Model) refreshForm() {
 			kept = kept || it.name == f.keepCat
 		}
 		if !kept {
-			f.catItems = append([]pickItem{{name: f.keepCat, hint: "current"}}, f.catItems...)
+			f.catItems = append([]pickItem{{name: f.keepCat, hint: m.loc.T("pick_current", nil)}}, f.catItems...)
 		}
 	}
 	switch {
@@ -352,20 +351,20 @@ func parseFormDate(loc *i18n.Localizer, s string, now time.Time) (time.Time, err
 // in the form and nothing is written.
 func (m *Model) saveForm() {
 	f := m.form
-	fail := func(format string, args ...any) { f.err = fmt.Sprintf(format, args...) }
+	fail := func(text string) { f.err = text }
 	acc := m.accounts[f.account].account
 
 	text := strings.TrimSpace(f.amount.Value())
 	income := strings.HasPrefix(text, "+")
 	amount, err := ledger.ParseAmount(strings.TrimLeft(text, "+-−"), acc.Currency, 0)
 	if err != nil {
-		fail("amount: %s", m.errText(err))
+		fail(m.loc.T("error_amount", map[string]any{"Error": m.errText(err)}))
 		return
 	}
 	// Banks book zero amounts (card verifications) and may correct a charge to
 	// zero, so an edit may be zero; a new entry typed by hand may not.
 	if amount.Minor == 0 && f.editing == 0 {
-		fail("amount must be greater than zero")
+		fail(m.loc.T("form_amount_positive", nil))
 		return
 	}
 	if !income {
@@ -374,7 +373,7 @@ func (m *Model) saveForm() {
 
 	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
-		fail("date: %s", m.errText(err))
+		fail(m.loc.T("error_date", map[string]any{"Error": m.errText(err)}))
 		return
 	}
 
@@ -383,7 +382,7 @@ func (m *Model) saveForm() {
 	case f.catCur < len(f.catItems):
 		category = f.catItems[f.catCur].name
 	default:
-		fail("no category matches; type a full name like Expenses:Gifts to create one")
+		fail(m.loc.T("form_no_category", nil))
 		return
 	}
 
@@ -403,27 +402,27 @@ func (m *Model) saveForm() {
 		id = f.editing
 		old, err := f.old.NewTransaction()
 		if err != nil {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 			return
 		}
 		if _, err := m.svc.ReplaceTransaction(m.ctx, id, nt); err != nil {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 			return
 		}
 		undo = undoOp{
-			label: fmt.Sprintf("edit of #%d", id),
-			run:   func() error { _, err := m.svc.ReplaceTransaction(m.ctx, id, old); return err },
+			undone: m.loc.T("undid_edit", map[string]any{"ID": id}),
+			run:    func() error { _, err := m.svc.ReplaceTransaction(m.ctx, id, old); return err },
 		}
 	} else {
 		res, err := m.svc.AddTransaction(m.ctx, nt)
 		if err != nil {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 			return
 		}
 		id = res.ID
 		undo = undoOp{
-			label: fmt.Sprintf("adding #%d", id),
-			run:   func() error { return m.svc.DeleteTransaction(m.ctx, id) },
+			undone: m.loc.T("undid_add", map[string]any{"ID": id}),
+			run:    func() error { return m.svc.DeleteTransaction(m.ctx, id) },
 		}
 	}
 	m.undo = append(m.undo, undo)
@@ -437,15 +436,15 @@ func (m *Model) saveForm() {
 	m.applyFilter(true)
 	visible := m.selectTx(id)
 
-	verb := "Added"
-	if f.editing != 0 {
-		verb = "Updated"
-	}
-	msg := fmt.Sprintf("%s #%d  %s  %s → %s", verb, id, nt.Payee, m.loc.Signed(amount), category)
+	args := map[string]any{"ID": id, "Payee": nt.Payee, "Amount": m.loc.Signed(amount), "Category": category, "Note": ""}
 	if !visible {
-		msg += "  (not shown: " + periodLabel(m.period) + ", filtered)"
+		args["Note"] = m.loc.T("tx_not_shown", map[string]any{"Period": m.periodLabel(m.period)})
 	}
-	m.setStatus(msg, false)
+	if f.editing != 0 {
+		m.setStatus(m.loc.T("tx_updated", args), false)
+		return
+	}
+	m.setStatus(m.loc.T("tx_added", args), false)
 }
 
 // selectTx moves the transaction list cursor to id and reports whether it is

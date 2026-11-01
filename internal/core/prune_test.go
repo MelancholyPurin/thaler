@@ -91,11 +91,11 @@ func Test_PlanPrune(t *testing.T) {
 			keep: 1,
 			want: observed{
 				Folders: map[string][]string{
-					"backups":                  {"thaler-20261020-090000.db"},
-					"replaced by a restore":    {"thaler-20261019-100000-replaced.db"},
-					"copies before an upgrade": {"thaler-20261001-110000-before-b.db"},
+					"backups":       {"thaler-20261020-090000.db"},
+					"replaced":      {"thaler-20261019-100000-replaced.db"},
+					"pre_migration": {"thaler-20261001-110000-before-b.db"},
 				},
-				Totals: map[string]int{"backups": 2, "replaced by a restore": 2, "copies before an upgrade": 2}, Count: 3, Size: 15,
+				Totals: map[string]int{"backups": 2, "replaced": 2, "pre_migration": 2}, Count: 3, Size: 15,
 			},
 		},
 		{
@@ -137,9 +137,9 @@ func Test_PlanPrune(t *testing.T) {
 			}
 			got := observed{Folders: map[string][]string{}, Totals: map[string]int{}, Count: plan.Count(), Size: plan.Size()}
 			for _, f := range plan.Folders {
-				got.Totals[f.Label] = f.Total
+				got.Totals[f.Kind] = f.Total
 				for _, file := range f.Remove {
-					got.Folders[f.Label] = append(got.Folders[f.Label], filepath.Base(file.Path))
+					got.Folders[f.Kind] = append(got.Folders[f.Kind], filepath.Base(file.Path))
 				}
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {

@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/melancholypurin/thaler/internal/core"
@@ -10,20 +8,20 @@ import (
 
 // undoOp reverses one change made in this session.
 type undoOp struct {
-	label string
-	run   func() error
+	undone string // the status shown once it is undone, made when the change was
+	run    func() error
 }
 
 // undoLast reverses the most recent change.
 func (m *Model) undoLast() {
 	if len(m.undo) == 0 {
-		m.setStatus("nothing to undo", true)
+		m.setStatus(m.loc.T("nothing_to_undo", nil), true)
 		return
 	}
 	op := m.undo[len(m.undo)-1]
 	m.undo = m.undo[:len(m.undo)-1]
 	if err := op.run(); err != nil {
-		m.setStatus("undo failed: "+m.errText(err), true)
+		m.setStatus(m.loc.T("undo_failed", map[string]any{"Error": m.errText(err)}), true)
 		return
 	}
 	if err := m.reload(); err != nil {
@@ -31,7 +29,7 @@ func (m *Model) undoLast() {
 		return
 	}
 	m.applyFilter(true)
-	m.setStatus("Undid "+op.label, false)
+	m.setStatus(op.undone, false)
 }
 
 // confirmDelete asks before deleting the selected transaction.
@@ -66,13 +64,13 @@ func (m *Model) deleteTx(tx core.TxView) {
 		return
 	}
 	m.undo = append(m.undo, undoOp{
-		label: fmt.Sprintf("deleting #%d", tx.ID),
-		run:   func() error { return m.svc.RestoreTransaction(m.ctx, tx.ID, old) },
+		undone: m.loc.T("undid_delete", map[string]any{"ID": tx.ID}),
+		run:    func() error { return m.svc.RestoreTransaction(m.ctx, tx.ID, old) },
 	})
 	if err := m.reload(); err != nil {
 		m.setStatus(m.errText(err), true)
 		return
 	}
 	m.applyFilter(true)
-	m.setStatus(fmt.Sprintf("Deleted #%d  (z to undo)", tx.ID), false)
+	m.setStatus(m.loc.T("deleted_tx", map[string]any{"ID": tx.ID}), false)
 }

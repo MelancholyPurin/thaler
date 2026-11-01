@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -181,6 +182,61 @@ func Test_View_builtinNames(t *testing.T) {
 
 			// then
 			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
+
+// Every text on every screen and popup comes from the catalog: in the pseudo-language
+// each message is accented and in brackets, so a plain English word left on screen
+// is text that was written into the code.
+func Test_View_pseudoLanguage(t *testing.T) {
+	english := regexp.MustCompile(`(?i)\b(press|cancel|save|next|field|create|review|choose|passphrase|encrypted|restore|undo|undoes|search|quit|categorize|transfer|account|accounts|balance|import|backup|backups|transaction|transactions|payee|description|amount|never|nothing|please|wait|current|folder|database|profile|income|spending|targets|reports|forecast|ledger|budget|home|keys|delete|rule|rules|match|new|today|yesterday)\b`)
+	tcs := []struct {
+		name string
+		keys string
+	}{
+		{name: "home", keys: ""},
+		{name: "the transactions", keys: "tab tab down"},
+		{name: "one transaction", keys: "tab tab down enter"},
+		{name: "add form", keys: "a"},
+		{name: "add form, payee", keys: "a tab"},
+		{name: "add form, category", keys: "a tab tab"},
+		{name: "add form, date", keys: "a tab tab tab"},
+		{name: "add form, description", keys: "a tab tab tab tab"},
+		{name: "transfer", keys: "x"},
+		{name: "transfer, date", keys: "x tab"},
+		{name: "import", keys: "i"},
+		{name: "new account", keys: "n"},
+		{name: "new account, type", keys: "n tab"},
+		{name: "new account, balance", keys: "n tab tab tab"},
+		{name: "set balance", keys: "tab down b"},
+		{name: "backup", keys: "S"},
+		{name: "restore", keys: "ctrl+r"},
+		{name: "remove old backups", keys: "ctrl+p"},
+		{name: "delete", keys: "tab tab down d"},
+		{name: "categorize", keys: "tab tab down c"},
+		{name: "categorize, rule", keys: "tab tab down c tab"},
+		{name: "budget", keys: "B"},
+		{name: "forecast", keys: "F"},
+		{name: "reports", keys: "R"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
+			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
+			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
+			m := inLanguage(t, st, i18n.PseudoTag)
+
+			// when
+			play(m, tc.keys)
+			view := m.View()
+
+			// then
+			if found := english.FindAllString(view, -1); len(found) > 0 {
+				t.Errorf("plain English left on the screen: %q\n%s", found, view)
+			}
 		})
 	}
 }

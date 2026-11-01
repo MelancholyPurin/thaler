@@ -63,7 +63,7 @@ func (m *Model) idle() tea.Cmd {
 // footerBusy is the footer of a popup while it waits.
 func (m *Model) footerBusy() string {
 	if m.quitWhenDone {
-		return "quitting as soon as this is done"
+		return m.loc.T("quitting_when_done", nil)
 	}
-	return "please wait · ctrl+c quits when done"
+	return m.loc.T("please_wait", nil)
 }

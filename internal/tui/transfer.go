@@ -58,7 +58,7 @@ func (m *Model) transferFields(f *transferForm) []transferField {
 // currency if there is one.
 func (m *Model) openTransferForm() tea.Cmd {
 	if len(m.accounts) < 2 {
-		m.setStatus("a transfer needs two accounts: press n to create another", true)
+		m.setStatus(m.loc.T("transfer_needs_two", nil), true)
 		return nil
 	}
 	f := &transferForm{from: m.defaultAccount()}
@@ -73,7 +73,7 @@ func (m *Model) openTransferForm() tea.Cmd {
 	}
 	f.amount, f.received = newInput(""), newInput("")
 	f.date = newInput(m.loc.Date(m.now()))
-	f.received.Placeholder = "what arrives"
+	f.received.Placeholder = m.loc.T("transfer_received_placeholder", nil)
 	for _, in := range []*textinput.Model{&f.amount, &f.received, &f.date} {
 		in.Width = m.transferWidth()
 	}
@@ -177,36 +177,36 @@ func (m *Model) stepTransferAccount(d int) {
 
 func (m *Model) saveTransfer() {
 	f := m.xfer
-	fail := func(format string, args ...any) { f.err = fmt.Sprintf(format, args...) }
+	fail := func(text string) { f.err = text }
 	src, dst := m.accounts[f.from].account, m.accounts[f.to].account
 
 	out, err := ledger.ParseAmount(f.amount.Value(), src.Currency, 0)
 	if err != nil {
-		fail("amount: %s", m.errText(err))
+		fail(m.loc.T("error_amount", map[string]any{"Error": m.errText(err)}))
 		return
 	}
 	var in ledger.Money
 	if m.transferCross(f) {
 		if in, err = ledger.ParseAmount(f.received.Value(), dst.Currency, 0); err != nil {
-			fail("received: %s", m.errText(err))
+			fail(m.loc.T("error_received", map[string]any{"Error": m.errText(err)}))
 			return
 		}
 	}
 	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
-		fail("date: %s", m.errText(err))
+		fail(m.loc.T("error_date", map[string]any{"Error": m.errText(err)}))
 		return
 	}
 	res, err := m.svc.Transfer(m.ctx, core.TransferRequest{From: src.Name, To: dst.Name, Amount: out, ToAmount: in, Date: when})
 	if err != nil {
-		fail("%s", m.errText(err))
+		f.err = m.errText(err)
 		return
 	}
 
 	m.mode, m.xfer = modeList, nil
 	outID, inID := res.ID, res.InID
 	m.undo = append(m.undo, undoOp{
-		label: fmt.Sprintf("the transfer (#%d and #%d)", outID, inID),
+		undone: m.loc.T("undid_transfer", map[string]any{"Out": outID, "In": inID}),
 		run: func() error {
 			if err := m.svc.DeleteTransaction(m.ctx, outID); err != nil {
 				return err
@@ -223,21 +223,23 @@ func (m *Model) saveTransfer() {
 	m.clampAll()
 	m.applyFilter(false)
 
-	msg := fmt.Sprintf("Transferred %s from %s to %s", out, m.loc.ShortName(src.Name), m.loc.ShortName(dst.Name))
+	args := map[string]any{"Amount": m.loc.Money(out), "From": m.loc.ShortName(src.Name), "To": m.loc.ShortName(dst.Name)}
 	if res.CrossCurrency {
-		msg += fmt.Sprintf(" (%s arrived, %s)", res.In, impliedRate(out, res.In))
+		args["Arrived"], args["Rate"] = m.loc.Money(res.In), m.impliedRate(out, res.In)
+		m.setStatus(m.loc.T("transferred_cross", args), false)
+		return
 	}
-	m.setStatus(msg+" · z undoes", false)
+	m.setStatus(m.loc.T("transferred", args), false)
 }
 
 // impliedRate describes the exchange rate a cross-currency transfer got. It is
 // for display only; the stored amounts are exact integers.
-func impliedRate(out, in ledger.Money) string {
+func (m *Model) impliedRate(out, in ledger.Money) string {
 	if out.Minor <= 0 || in.Minor <= 0 {
 		return ""
 	}
 	rate := (float64(in.Minor) / math.Pow10(in.Currency.Exponent())) / (float64(out.Minor) / math.Pow10(out.Currency.Exponent()))
-	return fmt.Sprintf("1 %s = %.4f %s", out.Currency, rate, in.Currency)
+	return m.loc.T("exchange_rate", map[string]any{"From": out.Currency, "Rate": m.loc.Decimal(rate, 4), "To": in.Currency})
 }
 
 func (m *Model) transferPopup() string {
@@ -256,20 +258,20 @@ func (m *Model) transferPopup() string {
 	account := func(a core.Account, field transferField) string {
 		text := fmt.Sprintf("%s · %s", a.Name, a.Currency)
 		if f.field == field {
-			text += dim.Render("   ◂ ▸ change")
+			text += dim.Render("   " + m.loc.T("change_hint", nil))
 		}
 		return text
 	}
 	lines := []string{
-		leftRight(label("Amount", tfAmount)+" "+f.amount.View(), dim.Render(string(src.Currency)), iw),
+		leftRight(label(m.loc.T("label_amount", nil), tfAmount)+" "+f.amount.View(), dim.Render(string(src.Currency)), iw),
 	}
 	if cross {
-		lines = append(lines, leftRight(label("Received", tfReceived)+" "+f.received.View(), dim.Render(string(dst.Currency)), iw))
+		lines = append(lines, leftRight(label(m.loc.T("label_received", nil), tfReceived)+" "+f.received.View(), dim.Render(string(dst.Currency)), iw))
 	}
 	lines = append(lines,
-		label("Date", tfDate)+" "+f.date.View(),
-		label("From", tfFrom)+" "+account(src, tfFrom),
-		label("To", tfTo)+" "+account(dst, tfTo),
+		label(m.loc.T("label_date", nil), tfDate)+" "+f.date.View(),
+		label(m.loc.T("label_from", nil), tfFrom)+" "+account(src, tfFrom),
+		label(m.loc.T("label_to", nil), tfTo)+" "+account(dst, tfTo),
 		dim.Render(strings.Repeat("─", iw)),
 	)
 	lines = append(lines, m.transferHints(iw)...)
@@ -278,7 +280,7 @@ func (m *Model) transferPopup() string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	return box("Transfer between your accounts", lines, w, h, true, "enter next · ctrl+s save · esc cancel")
+	return box(m.loc.T("transfer_title", nil), lines, w, h, true, m.loc.T("footer_form_next", nil))
 }
 
 // transferHints explains the field being edited and, across currencies, shows
@@ -287,20 +289,20 @@ func (m *Model) transferHints(w int) []string {
 	f := m.xfer
 	switch f.field {
 	case tfAmount:
-		return []string{dim.Render(fit("how much leaves "+m.loc.ShortName(m.accounts[f.from].account.Name), w))}
+		return []string{dim.Render(fit(m.loc.T("transfer_hint_amount", map[string]any{"Account": m.loc.ShortName(m.accounts[f.from].account.Name)}), w))}
 	case tfReceived:
-		hint := []string{dim.Render(fit("how much arrives; this fixes the exchange rate", w))}
+		hint := []string{dim.Render(fit(m.loc.T("transfer_hint_received", nil), w))}
 		out, err1 := ledger.ParseAmount(f.amount.Value(), m.accounts[f.from].account.Currency, 0)
 		in, err2 := ledger.ParseAmount(f.received.Value(), m.accounts[f.to].account.Currency, 0)
 		if err1 == nil && err2 == nil {
-			if rate := impliedRate(out, in); rate != "" {
+			if rate := m.impliedRate(out, in); rate != "" {
 				hint = append(hint, accent.Render(rate))
 			}
 		}
 		return hint
 	case tfDate:
-		return []string{dim.Render("empty = today · y yesterday · -2 two days ago · 2026-10-20")}
+		return []string{dim.Render(m.loc.T("date_hint", nil))}
 	default:
-		return []string{dim.Render("↑ ↓ or ◂ ▸ choose; picking the other field's account swaps them")}
+		return []string{dim.Render(m.loc.T("transfer_hint_account", nil))}
 	}
 }

@@ -10,8 +10,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/text/language"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 )
 
 // backupModel is a model whose database is "{dir}/thaler.db" and whose backups
@@ -491,7 +493,7 @@ func Test_ago(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// when
-			got := ago(now, tc.t)
+			got := ago(i18n.New(language.English), now, tc.t)
 
 			// then
 			if diff := cmp.Diff(tc.want, got); diff != "" {

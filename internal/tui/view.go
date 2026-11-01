@@ -60,16 +60,17 @@ func (m *Model) ledgerBody(l layout) string {
 // tabStrip is the top line: the screens on the left, the period on the right.
 func (m *Model) tabStrip() string {
 	var tabs []string
-	for i, name := range screenNames {
+	for i := range numScreens {
+		name := m.screenName(i)
 		label := " " + name + " "
-		if screen(i) == m.screen {
+		if i == m.screen {
 			label = selFocused.Render(label)
 		} else {
 			label = dim.Render(label)
 		}
 		tabs = append(tabs, label)
 	}
-	period := dim.Render("[ ") + bold.Render(periodLabel(m.period)) + dim.Render(" ]")
+	period := dim.Render("[ ") + bold.Render(m.periodLabel(m.period)) + dim.Render(" ]")
 	return leftRight(strings.Join(tabs, " "), period, m.width)
 }
 
@@ -84,44 +85,51 @@ func (m *Model) budgetBody(l layout) string {
 	iw := l.leftW - 2
 	var lines []string
 	for i := ls.offset; i < len(items) && len(lines) < h; i++ {
-		label := periodLabel(items[i])
+		label := m.periodLabel(items[i])
 		if items[i] == m.now().Format(monthLayout) {
-			label += dim.Render("  this month")
+			label += dim.Render("  " + m.loc.T("this_month", nil))
 		}
 		line := fit(label, iw)
 		if i == cursor {
-			line = selFocused.Render(fit(periodLabel(items[i]), iw))
+			line = selFocused.Render(fit(m.periodLabel(items[i]), iw))
 		}
 		lines = append(lines, line)
 	}
-	left := box("[1] Months", lines, l.leftW, l.avail, true, fmt.Sprintf("%d of %d", cursor+1, len(items)))
+	left := box(m.loc.T("panel_months", nil), lines, l.leftW, l.avail, true, m.loc.T("position_of", map[string]any{"N": cursor + 1, "Total": len(items)}))
 	if !l.two {
 		return left
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, m.rightPane(l))
 }
 
-var plannedScreens = map[screen][]string{
-	screenForecast: {
-		"Where the balance is heading.",
-		"",
-		"  • recurring income and bills (rent, salary, subscriptions)",
-		"  • projected balance per account, week by week",
-		"  • the day you would dip below a chosen amount",
-	},
-	screenReports: {
-		"Where the money went, over time.",
-		"",
-		"  • spending by category across months",
-		"  • net worth history",
-		"  • income against expenses",
-	},
+// plannedLines say what a screen that is not built yet will hold.
+func (m *Model) plannedLines(s screen) []string {
+	const bullet = "  • "
+	switch s {
+	case screenForecast:
+		return []string{
+			m.loc.T("planned_forecast_title", nil),
+			"",
+			bullet + m.loc.T("planned_forecast_recurring", nil),
+			bullet + m.loc.T("planned_forecast_projected", nil),
+			bullet + m.loc.T("planned_forecast_dip", nil),
+		}
+	case screenReports:
+		return []string{
+			m.loc.T("planned_reports_title", nil),
+			"",
+			bullet + m.loc.T("planned_reports_categories", nil),
+			bullet + m.loc.T("planned_reports_net_worth", nil),
+			bullet + m.loc.T("planned_reports_income", nil),
+		}
+	}
+	return nil
 }
 
 func (m *Model) placeholderBody(l layout) string {
-	lines := []string{"", dim.Render("Not built yet."), ""}
-	lines = append(lines, plannedScreens[m.screen]...)
-	return box(screenNames[m.screen], lines, m.width, l.avail, true, "")
+	lines := []string{"", dim.Render(m.loc.T("not_built_yet", nil)), ""}
+	lines = append(lines, m.plannedLines(m.screen)...)
+	return box(m.screenName(m.screen), lines, m.width, l.avail, true, "")
 }
 
 func (m *Model) leftBlocks(l layout) []string {
@@ -148,11 +156,11 @@ func (m *Model) rowStyle(p pane) lipgloss.Style {
 // ---- left column ---------------------------------------------------------------
 
 func (m *Model) homePanel(l layout) string {
-	text := appName + "  " + dim.Render("From Purin • https://github.com/MelancholyPurin")
+	text := appName + "  " + dim.Render(m.loc.T("home_credit", nil))
 	if m.focus == paneHome {
-		text = bold.Render(appName) + "  " + dim.Render("From Purin • https://github.com/MelancholyPurin")
+		text = bold.Render(appName) + "  " + dim.Render(m.loc.T("home_credit", nil))
 	}
-	return box("[1] Home", []string{text}, l.leftW, l.hHome, m.focus == paneHome, "")
+	return box(m.loc.T("panel_home", nil), []string{text}, l.leftW, l.hHome, m.focus == paneHome, "")
 }
 
 func (m *Model) accountsPanel(l layout) string {
@@ -160,7 +168,7 @@ func (m *Model) accountsPanel(l layout) string {
 	n := len(m.accounts) + 1
 	lines := make([]string, 0, l.acctLines)
 	for i := m.accts.offset; i < n && len(lines) < l.acctLines; i++ {
-		label, value := "All accounts", m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0)
+		label, value := m.loc.T("all_accounts", nil), m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0)
 		if i > 0 {
 			e := m.accounts[i-1]
 			label, value = m.loc.ShortName(e.account.Name), m.loc.Money(e.balance)
@@ -171,7 +179,7 @@ func (m *Model) accountsPanel(l layout) string {
 		}
 		lines = append(lines, line)
 	}
-	return box("[2] Accounts", lines, l.leftW, l.hAccts, m.focus == paneAccounts, fmt.Sprintf("%d of %d", m.accts.cursor+1, n))
+	return box(m.loc.T("panel_accounts", nil), lines, l.leftW, l.hAccts, m.focus == paneAccounts, m.loc.T("position_of", map[string]any{"N": m.accts.cursor + 1, "Total": n}))
 }
 
 // moneyOrDash formats m, or "—" when it is not meaningful.
@@ -184,12 +192,12 @@ func (m *Model) moneyOrDash(v ledger.Money, ok bool) string {
 
 func (m *Model) transactionsPanel(l layout) string {
 	iw := l.leftW - 2
-	title := "[3] Transactions"
+	title := m.loc.T("panel_transactions", nil)
 	if m.scopeAccount() != "" {
 		title += " · " + m.loc.ShortName(m.scopeAccount())
 	}
 	if m.onlyUncat {
-		title += " · uncategorized"
+		title += " · " + m.loc.T("panel_uncategorized", nil)
 	}
 	if q := strings.TrimSpace(m.filter.Value()); q != "" {
 		title += " · /" + q
@@ -199,13 +207,13 @@ func (m *Model) transactionsPanel(l layout) string {
 	if len(m.view) == 0 {
 		switch {
 		case len(m.rows) == 0:
-			lines = []string{dim.Render("No transactions yet."), dim.Render("n creates an account · i imports a bank export")}
+			lines = []string{dim.Render(m.loc.T("tx_none_yet", nil)), dim.Render(m.loc.T("tx_none_hint", nil))}
 		case m.period != "" && !m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
-			lines = []string{dim.Render("No transactions in " + periodLabel(m.period) + "."), dim.Render("[ ] change month · T all time")}
+			lines = []string{dim.Render(m.loc.T("tx_none_period", map[string]any{"Period": m.periodLabel(m.period)})), dim.Render(m.loc.T("tx_none_period_hint", nil))}
 		case m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
-			lines = []string{dim.Render("Nothing left to categorize."), dim.Render("Press u to see all transactions.")}
+			lines = []string{dim.Render(m.loc.T("tx_nothing_left", nil)), dim.Render(m.loc.T("tx_see_all", nil))}
 		default:
-			lines = []string{dim.Render("No transaction matches.")}
+			lines = []string{dim.Render(m.loc.T("tx_no_match", nil))}
 		}
 	}
 	amtW := 0
@@ -243,7 +251,7 @@ func (m *Model) transactionsPanel(l layout) string {
 	}
 	footer := ""
 	if len(m.view) > 0 {
-		footer = fmt.Sprintf("%d of %d", m.txs.cursor+1, len(m.view))
+		footer = m.loc.T("position_of", map[string]any{"N": m.txs.cursor + 1, "Total": len(m.view)})
 	}
 	return box(title, lines, l.leftW, l.hTxs, m.focus == paneTransactions, footer)
 }
@@ -277,9 +285,9 @@ func (m *Model) bottomBar() string {
 	var hint string
 	switch {
 	case m.screen == screenBudget:
-		hint = "↑/↓ month · [ ] step · t this month · T all time · ? help · q quit"
+		hint = m.loc.T("hint_budget", nil)
 	case m.screen != screenLedger:
-		hint = "L ledger · B budget · [ ] month · ? help · q quit"
+		hint = m.loc.T("hint_other_screens", nil)
 	default:
 		hint = m.ledgerHint()
 	}
@@ -293,11 +301,11 @@ func (m *Model) ledgerHint() string {
 	var hint string
 	switch m.focus {
 	case paneHome:
-		hint = "a add · x transfer · i import · n new account · S backup · enter transactions · ? help · q quit"
+		hint = m.loc.T("hint_home", nil)
 	case paneAccounts:
-		hint = "↑/↓ pick account · a add · x transfer · b balance · n new · enter transactions · ? help · q quit"
+		hint = m.loc.T("hint_accounts", nil)
 	default:
-		hint = "a add · i import · c categorize · e edit · r rename · d delete · z undo · / search · ? help · q quit"
+		hint = m.loc.T("hint_transactions", nil)
 	}
 	return hint
 }
@@ -314,7 +322,7 @@ func (m *Model) pickerPopup() string {
 	r, _ := m.findRow(m.pickTarget)
 	w := min(max(m.width-6, 20), 66)
 	h := min(max(m.height-4, 8), 17, max(8, 6+len(m.pickItems)))
-	title := fmt.Sprintf("Categorize · %s %s", clean(r.tx.Payee), m.loc.Signed(r.source.Amount))
+	title := m.loc.T("categorize_title", map[string]any{"Payee": clean(r.tx.Payee), "Amount": m.loc.Signed(r.source.Amount)})
 
 	lines := []string{m.picker.View()}
 	listH := h - 2 - 1 - 3 // minus the border, the input and the rule section
@@ -335,7 +343,7 @@ func (m *Model) pickerPopup() string {
 		lines = append(lines, line)
 	}
 	if len(m.pickItems) == 0 {
-		lines = append(lines, dim.Render("No match. Type a full name like Expenses:Gifts to create one."))
+		lines = append(lines, dim.Render(m.loc.T("picker_no_match", nil)))
 	}
 	for len(lines) < 1+listH {
 		lines = append(lines, "")
@@ -343,15 +351,15 @@ func (m *Model) pickerPopup() string {
 
 	// The rule section sits at the bottom: tab goes there from the category.
 	lines = append(lines, dim.Render(strings.Repeat("─", iw)))
-	footer := "enter apply · tab make a rule · esc cancel"
+	footer := m.loc.T("footer_pick", nil)
 	switch {
 	case m.pickRuleOn:
-		lines = append(lines, accent.Render("▸ Rule ")+" "+m.pickRule.View())
-		footer = "enter apply + rule · tab back · esc cancel"
+		lines = append(lines, accent.Render(fit("▸ "+m.loc.T("label_rule", nil), 7))+" "+m.pickRule.View())
+		footer = m.loc.T("footer_pick_rule", nil)
 	case clean(m.pickRule.Value()) != "":
-		lines = append(lines, dim.Render("  Rule  ")+m.pickRule.View())
+		lines = append(lines, dim.Render(fit("  "+m.loc.T("label_rule", nil), 8))+m.pickRule.View())
 	default:
-		lines = append(lines, dim.Render(fit("  Rule   tab: always use this category for payees like this one", iw)))
+		lines = append(lines, dim.Render(fit("  "+fit(m.loc.T("label_rule", nil), 6)+" "+m.loc.T("rule_hint", nil), iw)))
 	}
 	note := dim.Render(fit("  "+m.pickNote, iw))
 	if m.pickNoteBad {
@@ -363,36 +371,36 @@ func (m *Model) pickerPopup() string {
 
 func (m *Model) helpPopup() string {
 	rows := [][2]string{
-		{"L B F R", "screens: Ledger, Budget, Forecast, Reports (also F1–F4)"},
-		{"[  ]", "previous / next month"},
-		{"t  T", "this month / all time"},
-		{"1 2 3, tab", "Ledger: focus Home, Accounts, Transactions"},
-		{"↑ ↓  j k", "move in the focused panel"},
-		{"PgUp PgDn  g G", "page, top, bottom"},
-		{"enter", "open the next panel / categorize"},
-		{"a", "add a transaction (to the selected account)"},
-		{"x", "transfer money between two of your accounts"},
-		{"i", "import a bank export (CSV) into an account"},
-		{"n  b", "new account / set the selected account's balance"},
-		{"c, then tab", "categorize, and make a rule so this payee is always categorized this way"},
-		{"c  e  d", "categorize / edit / delete the selected transaction"},
-		{"r", "rename the selected transaction: edit it, starting on its title"},
-		{"z", "undo the last change"},
-		{"/", "fuzzy search the transactions (esc clears)"},
-		{"u", "only uncategorized / all"},
-		{"S", "back up the database (optionally encrypted) and see when the last one was made"},
-		{"ctrl+r", "restore a backup in place of the database (the one it replaces is kept)"},
-		{"ctrl+p", "remove the oldest backups, keeping the newest few (keep_backups in config.toml)"},
-		{"C", "edit config.toml (rules, import folder, bank profiles) in $EDITOR"},
-		{"?", "this help"},
-		{"q  ctrl+c", "quit"},
+		{"L B F R", m.loc.T("help_screens", nil)},
+		{"[  ]", m.loc.T("help_month", nil)},
+		{"t  T", m.loc.T("help_this_month", nil)},
+		{"1 2 3, tab", m.loc.T("help_focus", nil)},
+		{"↑ ↓  j k", m.loc.T("help_move", nil)},
+		{"PgUp PgDn  g G", m.loc.T("help_page", nil)},
+		{"enter", m.loc.T("help_enter", nil)},
+		{"a", m.loc.T("help_add", nil)},
+		{"x", m.loc.T("help_transfer", nil)},
+		{"i", m.loc.T("help_import", nil)},
+		{"n  b", m.loc.T("help_new_account", nil)},
+		{"c, then tab", m.loc.T("help_categorize_rule", nil)},
+		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"r", m.loc.T("help_rename", nil)},
+		{"z", m.loc.T("help_undo", nil)},
+		{"/", m.loc.T("help_search", nil)},
+		{"u", m.loc.T("help_uncategorized", nil)},
+		{"S", m.loc.T("help_backup", nil)},
+		{"ctrl+r", m.loc.T("help_restore", nil)},
+		{"ctrl+p", m.loc.T("help_prune", nil)},
+		{"C", m.loc.T("help_config", nil)},
+		{"?", m.loc.T("help_help", nil)},
+		{"q  ctrl+c", m.loc.T("help_quit", nil)},
 	}
 	lines := make([]string, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, accent.Render(fit(r[0], 16))+" "+r[1])
 	}
 	w := min(max(m.width-6, 20), 64)
-	return box("Keys", lines, w, min(len(lines)+2, max(m.height-2, 3)), true, "any key closes")
+	return box(m.loc.T("help_title", nil), lines, w, min(len(lines)+2, max(m.height-2, 3)), true, m.loc.T("help_footer", nil))
 }
 
 // ---- add / edit form --------------------------------------------------------------
@@ -413,20 +421,20 @@ func (m *Model) formPopup() string {
 	acc := m.accounts[f.account].account
 	accText := fmt.Sprintf("%s · %s", acc.Name, acc.Currency)
 	if f.field == fieldAccount {
-		accText += dim.Render("   ◂ ▸ change")
+		accText += dim.Render("   " + m.loc.T("change_hint", nil))
 	}
-	kind := "Expense"
+	kind := m.loc.T("form_expense", nil)
 	if f.isIncome() {
-		kind = "Income"
+		kind = m.loc.T("form_income", nil)
 	}
 
 	lines := []string{
-		label("Account", fieldAccount) + " " + accText,
-		leftRight(label("Amount", fieldAmount)+" "+f.amount.View(), dim.Render(kind), iw),
-		label("Payee", fieldPayee) + " " + f.payee.View(),
-		label("Category", fieldCategory) + " " + f.category.View(),
-		label("Date", fieldDate) + " " + f.date.View(),
-		label("Description", fieldDescription) + " " + f.description.View(),
+		label(m.loc.T("label_account", nil), fieldAccount) + " " + accText,
+		leftRight(label(m.loc.T("label_amount", nil), fieldAmount)+" "+f.amount.View(), dim.Render(kind), iw),
+		label(m.loc.T("label_payee", nil), fieldPayee) + " " + f.payee.View(),
+		label(m.loc.T("label_category", nil), fieldCategory) + " " + f.category.View(),
+		label(m.loc.T("label_date", nil), fieldDate) + " " + f.date.View(),
+		label(m.loc.T("label_description", nil), fieldDescription) + " " + f.description.View(),
 		dim.Render(strings.Repeat("─", iw)),
 	}
 	lines = append(lines, m.formSuggestions(iw, listH)...)
@@ -439,11 +447,11 @@ func (m *Model) formPopup() string {
 		lines = append(lines, "")
 	}
 
-	title := "Add transaction"
+	title := m.loc.T("add_transaction_title", nil)
 	if f.editing != 0 {
-		title = fmt.Sprintf("Edit transaction #%d", f.editing)
+		title = m.loc.T("edit_transaction_title", map[string]any{"ID": f.editing})
 	}
-	return box(title, lines, w, h, true, f.footer())
+	return box(title, lines, w, h, true, m.formFooter())
 }
 
 // formSuggestions is the list under the fields: payees, categories, or a hint.
@@ -455,7 +463,7 @@ func (m *Model) formSuggestions(w, h int) []string {
 	switch f.field {
 	case fieldPayee:
 		if len(f.payeeItems) == 0 {
-			return []string{dim.Render("a new payee")}
+			return []string{dim.Render(m.loc.T("payee_new", nil))}
 		}
 		var out []string
 		for i, p := range f.payeeItems {
@@ -488,17 +496,17 @@ func (m *Model) formSuggestions(w, h int) []string {
 			out = append(out, line)
 		}
 		if len(f.catItems) == 0 {
-			out = append(out, dim.Render("no match: type a full name like Expenses:Gifts to create it"))
+			out = append(out, dim.Render(m.loc.T("category_no_match", nil)))
 		}
 		return out
 	case fieldAmount:
-		return []string{dim.Render("12.50 is an expense · +2450 is income")}
+		return []string{dim.Render(m.loc.T("amount_hint", nil))}
 	case fieldDate:
-		return []string{dim.Render("empty = today · y yesterday · -2 two days ago · 2026-10-20")}
+		return []string{dim.Render(m.loc.T("date_hint", nil))}
 	case fieldDescription:
-		return []string{dim.Render("optional: a note about what it was for; shown beside the transaction")}
+		return []string{dim.Render(m.loc.T("description_hint", nil))}
 	default:
-		return []string{dim.Render("↑ ↓ or ◂ ▸ pick the account the money moves in or out of")}
+		return []string{dim.Render(m.loc.T("form_account_hint", nil))}
 	}
 }
 
@@ -514,7 +522,7 @@ func (m *Model) confirmPopup() string {
 		fit(fmt.Sprintf("  %s  %s", m.loc.StoredDate(tx.Date), clean(tx.Payee)), w-2),
 		fit("  "+amount, w-2),
 		"",
-		fit("  "+warn.Render("Delete this transaction?")+dim.Render("  (z undoes it)"), w-2),
+		fit("  "+warn.Render(m.loc.T("delete_question", nil))+dim.Render("  "+m.loc.T("delete_undo_hint", nil)), w-2),
 	}
-	return box(fmt.Sprintf("Delete #%d", tx.ID), lines, w, 7, true, "y delete · n cancel")
+	return box(m.loc.T("delete_title", map[string]any{"ID": tx.ID}), lines, w, 7, true, m.loc.T("footer_delete", nil))
 }

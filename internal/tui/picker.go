@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -19,7 +18,7 @@ func (m *Model) openPicker() tea.Cmd {
 		return nil
 	}
 	if !r.simple {
-		m.setStatus("transfers and split transactions cannot be recategorized here", true)
+		m.setStatus(m.loc.T("cannot_recategorize", nil), true)
 		return nil
 	}
 	m.mode = modePick
@@ -83,9 +82,9 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 			lastUsed: name == lastForPayee,
 		}
 		if it.lastUsed {
-			it.hint = "same payee"
+			it.hint = m.loc.T("pick_same_payee", nil)
 		} else if it.sameCnt > 0 {
-			it.hint = fmt.Sprintf("%d×", it.sameCnt)
+			it.hint = m.loc.T("pick_times", map[string]any{"Count": it.sameCnt})
 		}
 		items = append(items, it)
 	}
@@ -112,13 +111,13 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 	// Equity:Transfers is not an income or expense category, so it is offered
 	// separately: last, for money moved between your own accounts.
 	if _, ok := fuzzyScore(q, ledger.TransferAccount); ok {
-		out = append(out, pickItem{name: ledger.TransferAccount, hint: "between my accounts"})
+		out = append(out, pickItem{name: ledger.TransferAccount, hint: m.loc.T("pick_between_accounts", nil)})
 		exact = exact || q == ledger.TransferAccount
 	}
 	if q != "" && !exact {
 		if err := ledger.ValidateAccountName(q); err == nil {
 			if typ, _ := ledger.TypeOf(q); !typ.NeedsCurrency() {
-				out = append(out, pickItem{name: q, hint: "new category", create: true})
+				out = append(out, pickItem{name: q, hint: m.loc.T("pick_new_category", nil), create: true})
 			}
 		}
 	}
@@ -127,7 +126,7 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 		if isIncome {
 			unc = ledger.UncategorizedIncome
 		}
-		out = append(out, pickItem{name: unc, hint: "decide later"})
+		out = append(out, pickItem{name: unc, hint: m.loc.T("pick_decide_later", nil)})
 	}
 	return out
 }
@@ -198,7 +197,7 @@ func (m *Model) toggleRuleField() tea.Cmd {
 		if m.loadConfig != nil {
 			var err error
 			if cfg, err = m.loadConfig(); err != nil {
-				m.pickNote, m.pickNoteBad = "fix the config first (esc, then C): "+m.errText(err), true
+				m.pickNote, m.pickNoteBad = m.loc.T("fix_config_first", map[string]any{"Error": m.errText(err)}), true
 				return nil
 			}
 		}
@@ -230,27 +229,27 @@ func (m *Model) checkRule(match, category string) ruleCheck {
 	row, ok := m.findRow(m.pickTarget)
 	switch {
 	case m.opts.ConfigPath == "" || m.pickCfg == nil:
-		c.problem = "no config file to add the rule to"
+		c.problem = m.loc.T("rule_no_config", nil)
 	case len([]rune(match)) < 2:
-		c.problem = "a rule needs at least two characters to look for"
+		c.problem = m.loc.T("rule_too_short", nil)
 	case category == ledger.UncategorizedExpense || category == ledger.UncategorizedIncome:
-		c.problem = "pick a real category for a rule, not \"decide later\""
+		c.problem = m.loc.T("rule_pick_real", nil)
 	case !ok:
-		c.problem = "that transaction is gone"
+		c.problem = m.loc.T("rule_tx_gone", nil)
 	case !strings.Contains(strings.ToLower(row.tx.Payee+" "+row.tx.Description), strings.ToLower(match)):
-		c.problem = "\"" + match + "\" does not appear in this transaction's payee or description"
+		c.problem = m.loc.T("rule_not_in_tx", map[string]any{"Match": match})
 	}
 	if c.problem != "" {
 		return c
 	}
 	rules, err := importer.NewRuleset(m.pickCfg.Rules)
 	if err != nil {
-		c.problem = "the config's rules are invalid: " + m.errText(err)
+		c.problem = m.loc.T("rule_invalid_rules", map[string]any{"Error": m.errText(err)})
 		return c
 	}
 	if i, existing, found := rules.Find(row.tx.Payee, row.tx.Description); found {
 		if existing != category {
-			c.problem = fmt.Sprintf("rule %d already sends this to %s and is checked first; change it with C", i+1, existing)
+			c.problem = m.loc.T("rule_overruled", map[string]any{"Rule": i + 1, "Category": existing})
 			return c
 		}
 		c.covered = i + 1
@@ -282,20 +281,16 @@ func (m *Model) refreshRuleNote() {
 		category = m.pickItems[m.pickCursor].name
 	}
 	c := m.checkRule(match, category)
-	others := "no other uncategorized match"
-	switch c.others {
-	case 0:
-	case 1:
-		others = "also categorizes 1 other"
-	default:
-		others = fmt.Sprintf("also categorizes %d others", c.others)
+	others := m.loc.T("rule_others_none", nil)
+	if c.others > 0 {
+		others = m.loc.T("rule_others", map[string]any{"Count": c.others})
 	}
 	switch {
 	case c.problem != "":
 		m.pickNote, m.pickNoteBad = c.problem, true
 	case c.covered > 0:
-		m.pickNote, m.pickNoteBad = fmt.Sprintf("rule %d already covers this · %s", c.covered, others), false
+		m.pickNote, m.pickNoteBad = m.loc.T("rule_covered", map[string]any{"Rule": c.covered, "Others": others}), false
 	default:
-		m.pickNote, m.pickNoteBad = "adds a rule to config.toml · "+others, false
+		m.pickNote, m.pickNoteBad = m.loc.T("rule_adds", map[string]any{"Others": others}), false
 	}
 }

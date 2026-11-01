@@ -161,7 +161,7 @@ func Test_prunePopup(t *testing.T) {
 				"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
 			},
 			firstShows: []string{
-				"Remove old backups", "Keeping the newest 1 in each folder", "These 11 would go",
+				"Remove old backups", "Keeping the newest 1 in each folder", "11 backups would go",
 				"replaced by a restore · 11 of 12", "enter remove 11 · ↑/↓ scroll",
 			},
 			firstHides:  []string{"backups · "},

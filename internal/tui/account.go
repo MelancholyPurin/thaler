@@ -2,7 +2,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -77,11 +76,11 @@ func (m *Model) openAccountForm(setting bool) tea.Cmd {
 	f.name.Placeholder = "Sparkasse"
 	f.currency.CharLimit = 3
 	f.currency.SetValue(string(m.netWorth.Base))
-	f.balance.Placeholder = "what your bank shows"
+	f.balance.Placeholder = m.loc.T("acct_balance_placeholder", nil)
 	if setting {
 		i := m.accts.cursor - 1
 		if i < 0 || i >= len(m.accounts) {
-			m.setStatus("select an account first: press 2, then ↑/↓", true)
+			m.setStatus(m.loc.T("select_account_first", nil), true)
 			return nil
 		}
 		f.existing = m.accounts[i].account
@@ -172,27 +171,27 @@ func (m *Model) updateAccount(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // account, and books its balance.
 func (m *Model) saveAccountForm() {
 	f := m.acct
-	fail := func(format string, args ...any) { f.err = fmt.Sprintf(format, args...) }
+	fail := func(text string) { f.err = text }
 
 	var name string
 	cur := f.existing.Currency
 	if !f.setting {
 		if strings.TrimSpace(f.name.Value()) == "" {
-			fail("give the account a name, e.g. Sparkasse")
+			fail(m.loc.T("give_account_name", nil))
 			return
 		}
 		name = f.accountName()
 		if err := ledger.ValidateAccountName(name); err != nil {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 			return
 		}
 		if typ, _ := ledger.TypeOf(name); !typ.NeedsCurrency() {
-			fail("only Assets and Liabilities accounts are created here")
+			fail(m.loc.T("only_assets_liabilities", map[string]any{"Assets": m.loc.AccountName(string(ledger.Assets)), "Liabilities": m.loc.AccountName(string(ledger.Liabilities))}))
 			return
 		}
 		var err error
 		if cur, err = ledger.ParseCurrency(f.currency.Value()); err != nil {
-			fail("%s", m.errText(err))
+			fail(m.errText(err))
 			return
 		}
 	}
@@ -204,12 +203,12 @@ func (m *Model) saveAccountForm() {
 	if text != "" || f.setting {
 		var err error
 		if shown, err = ledger.ParseAmount(text, cur, 0); err != nil {
-			fail("balance: %s", m.errText(err))
+			fail(m.loc.T("error_balance", map[string]any{"Error": m.errText(err)}))
 			return
 		}
 		when, err := parseFormDate(m.loc, f.asOf.Value(), m.now())
 		if err != nil {
-			fail("date: %s", m.errText(err))
+			fail(m.loc.T("error_date", map[string]any{"Error": m.errText(err)}))
 			return
 		}
 		typ := ledger.Assets
@@ -224,34 +223,38 @@ func (m *Model) saveAccountForm() {
 		acc, err := m.svc.AddAccount(m.ctx, name, cur)
 		if err != nil {
 			if errors.Is(err, core.ErrAccountExists) {
-				fail("%s already exists", name)
+				fail(m.loc.T("account_name_exists", map[string]any{"Name": name}))
 			} else {
-				fail("%s", m.errText(err))
+				fail(m.errText(err))
 			}
 			return
 		}
 		f.existing = acc
-		parts = append(parts, fmt.Sprintf("Created %s (%s)", acc.Name, acc.Currency))
+		parts = append(parts, m.loc.T("account_created", map[string]any{"Name": acc.Name, "Currency": acc.Currency}))
 	}
 	if req != nil {
 		req.Account = f.existing.Name
 		res, err := m.svc.SetOpeningBalance(m.ctx, *req)
 		if err != nil {
 			m.closeAccountForm(f.existing.Name)
-			m.setStatus(strings.Join(parts, " · ")+fmt.Sprintf(": the balance was not set: %s (b tries again)", m.errText(err)), true)
+			if len(parts) == 0 {
+				m.setStatus(m.loc.T("balance_not_set", map[string]any{"Error": m.errText(err)}), true)
+			} else {
+				m.setStatus(m.loc.T("account_created_balance_failed", map[string]any{"Done": strings.Join(parts, " · "), "Error": m.errText(err)}), true)
+			}
 			return
 		}
 		m.pushBalanceUndo(res)
 		if res.ID == 0 {
-			parts = append(parts, fmt.Sprintf("nothing to book: the transactions already add up to %s on %s", m.loc.Money(shown), m.loc.Date(req.AsOf)))
+			parts = append(parts, m.loc.T("balance_nothing_to_book", map[string]any{"Balance": m.loc.Money(shown), "Date": m.loc.Date(req.AsOf)}))
 		} else {
-			parts = append(parts, fmt.Sprintf("opening balance of %s booked on %s", m.loc.Money(res.Amount), m.loc.StoredDate(res.Date)))
+			parts = append(parts, m.loc.T("balance_booked", map[string]any{"Amount": m.loc.Money(res.Amount), "Date": m.loc.StoredDate(res.Date)}))
 		}
 	}
 	if f.setting && req != nil {
-		parts = append(parts, "z undoes")
+		parts = append(parts, m.loc.T("hint_z_undoes", nil))
 	} else {
-		parts = append(parts, "i imports a bank export")
+		parts = append(parts, m.loc.T("hint_i_imports", nil))
 	}
 	m.closeAccountForm(f.existing.Name)
 	m.setStatus(strings.Join(parts, " · "), false)
@@ -264,7 +267,7 @@ func (m *Model) pushBalanceUndo(res core.OpeningBalanceResult) {
 		return
 	}
 	id, before := res.ID, res.Before
-	op := undoOp{label: fmt.Sprintf("the opening balance (#%d)", id)}
+	op := undoOp{undone: m.loc.T("undid_opening_balance", map[string]any{"ID": id})}
 	if before == nil {
 		op.run = func() error { return m.svc.DeleteTransaction(m.ctx, id) }
 	} else {
@@ -308,28 +311,28 @@ func (m *Model) accountPopup() string {
 		return dim.Render(fit("  "+name, 11))
 	}
 	var lines []string
-	title := "New account"
+	title := m.loc.T("new_account_title", nil)
 	if f.setting {
-		title = "Set balance · " + f.existing.Name
+		title = m.loc.T("set_balance_title", map[string]any{"Account": f.existing.Name})
 		held := m.accounts[m.accountIndex(f.existing.Name)].balance
-		lines = append(lines, dim.Render(fit("  Thaler currently holds "+m.loc.Money(held), iw)), "")
+		lines = append(lines, dim.Render(fit("  "+m.loc.T("thaler_holds", map[string]any{"Amount": m.loc.Money(held)}), iw)), "")
 	} else {
-		kind := "Assets"
+		kind := m.loc.AccountName(string(ledger.Assets))
 		if f.liab {
-			kind = "Liabilities"
+			kind = m.loc.AccountName(string(ledger.Liabilities))
 		}
 		if f.field == acctKind {
-			kind += dim.Render("   ◂ ▸ change")
+			kind += dim.Render("   " + m.loc.T("change_hint", nil))
 		}
 		lines = append(lines,
-			label("Name", acctName)+" "+f.name.View(),
-			label("Type", acctKind)+" "+kind,
-			label("Currency", acctCurrency)+" "+f.currency.View(),
+			label(m.loc.T("label_name", nil), acctName)+" "+f.name.View(),
+			label(m.loc.T("label_type", nil), acctKind)+" "+kind,
+			label(m.loc.T("label_currency", nil), acctCurrency)+" "+f.currency.View(),
 		)
 	}
 	lines = append(lines,
-		label("Balance", acctBalance)+" "+f.balance.View(),
-		label("As of", acctAsOf)+" "+f.asOf.View(),
+		label(m.loc.T("label_balance", nil), acctBalance)+" "+f.balance.View(),
+		label(m.loc.T("label_as_of", nil), acctAsOf)+" "+f.asOf.View(),
 		dim.Render(strings.Repeat("─", iw)),
 	)
 	lines = append(lines, m.accountHints(iw)...)
@@ -338,7 +341,7 @@ func (m *Model) accountPopup() string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	footer := "enter next · ctrl+s save · esc cancel"
+	footer := m.loc.T("footer_form_next", nil)
 	return box(title, lines, w, h, true, footer)
 }
 
@@ -349,26 +352,26 @@ func (m *Model) accountHints(w int) []string {
 	switch f.field {
 	case acctName:
 		if strings.TrimSpace(f.name.Value()) == "" {
-			return []string{dim.Render("e.g. Sparkasse, Cash, Savings")}
+			return []string{dim.Render(m.loc.T("acct_hint_name_examples", nil))}
 		}
-		return []string{dim.Render("will be called " + f.accountName())}
+		return []string{dim.Render(m.loc.T("acct_hint_will_be_called", map[string]any{"Name": f.accountName()}))}
 	case acctKind:
-		return []string{dim.Render("Assets hold money (bank, cash); Liabilities owe it (credit card, loan)")}
+		return []string{dim.Render(m.loc.T("acct_hint_kind", map[string]any{"Assets": m.loc.AccountName(string(ledger.Assets)), "Liabilities": m.loc.AccountName(string(ledger.Liabilities))}))}
 	case acctCurrency:
-		return []string{dim.Render("the one currency this account holds, e.g. EUR")}
+		return []string{dim.Render(m.loc.T("acct_hint_currency", nil))}
 	case acctBalance:
-		hint := "what the bank shows on that day; empty = start from nothing"
+		hint := m.loc.T("acct_hint_balance_start", nil)
 		if f.setting {
-			hint = "what the bank shows on that day"
+			hint = m.loc.T("acct_hint_balance", nil)
 		}
 		if owes {
-			hint = "the amount you owe, e.g. 500"
+			hint = m.loc.T("acct_hint_owed", nil)
 		}
 		return []string{
 			dim.Render(fit(hint, w)),
-			dim.Render(fit("The difference is booked as an opening balance before the first transaction.", w)),
+			dim.Render(fit(m.loc.T("acct_hint_difference", nil), w)),
 		}
 	default:
-		return []string{dim.Render("empty = today · y yesterday · -2 two days ago · 2026-10-20")}
+		return []string{dim.Render(m.loc.T("date_hint", nil))}
 	}
 }

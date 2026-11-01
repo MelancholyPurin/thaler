@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -75,7 +76,19 @@ const (
 	numScreens
 )
 
-var screenNames = [numScreens]string{"Ledger", "Budget", "Forecast", "Reports"}
+// screenName is the name of a screen, as the tabs and the title show it.
+func (m *Model) screenName(s screen) string {
+	switch s {
+	case screenLedger:
+		return m.loc.T("screen_ledger", nil)
+	case screenBudget:
+		return m.loc.T("screen_budget", nil)
+	case screenForecast:
+		return m.loc.T("screen_forecast", nil)
+	default:
+		return m.loc.T("screen_reports", nil)
+	}
+}
 
 type pane int
 
@@ -185,10 +198,10 @@ func newWithClock(ctx context.Context, svc core.Service, opts Options, now func(
 	m.period = now().Format(monthLayout)
 	m.filter = textinput.New()
 	m.filter.Prompt = "/ "
-	m.filter.Placeholder = "fuzzy search: payee, description, category, amount"
+	m.filter.Placeholder = m.loc.T("filter_placeholder", nil)
 	m.picker = textinput.New()
 	m.picker.Prompt = "> "
-	m.picker.Placeholder = "category, or a new name like Expenses:Gifts"
+	m.picker.Placeholder = m.loc.T("picker_placeholder", nil)
 	m.pickRule = textinput.New()
 	m.pickRule.Prompt = ""
 	m.pickRule.CharLimit = 80
@@ -528,7 +541,7 @@ func (m *Model) applyCategory(category string) {
 	// file cannot be written nothing has happened.
 	if match != "" && check.covered == 0 {
 		if err := config.AppendRule(m.opts.ConfigPath, m.opts.ConfigTemplate, rule); err != nil {
-			m.setStatus("could not add the rule: "+m.errText(err), true)
+			m.setStatus(m.loc.T("rule_add_failed", map[string]any{"Error": m.errText(err)}), true)
 			return
 		}
 	}
@@ -544,7 +557,7 @@ func (m *Model) applyCategory(category string) {
 	if match != "" {
 		res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: []importer.Rule{rule}})
 		if err != nil {
-			m.setStatus("the rule was added, but categorizing the others failed: "+m.errText(err), true)
+			m.setStatus(m.loc.T("rule_added_others_failed", map[string]any{"Error": m.errText(err)}), true)
 		}
 		for _, mv := range res.Moves {
 			was := ledger.UncategorizedExpense
@@ -556,11 +569,11 @@ func (m *Model) applyCategory(category string) {
 		moved = len(res.Moves)
 	}
 	if len(back) > 0 {
-		label := fmt.Sprintf("categorizing #%d", id)
+		undone := m.loc.T("undid_categorize", map[string]any{"ID": id})
 		if moved > 0 {
-			label = fmt.Sprintf("categorizing #%d and %d more", id, moved)
+			undone = m.loc.T("undid_categorize_more", map[string]any{"ID": id, "Count": moved})
 		}
-		m.undo = append(m.undo, undoOp{label: label, run: func() error {
+		m.undo = append(m.undo, undoOp{undone: undone, run: func() error {
 			_, err := m.svc.SetCategories(m.ctx, back)
 			return err
 		}})
@@ -574,14 +587,15 @@ func (m *Model) applyCategory(category string) {
 		m.setStatus(fmt.Sprintf("#%d → %s", id, category), false)
 		return
 	}
-	msg := fmt.Sprintf("#%d → %s · rule added to config.toml", id, category)
+	parts := []string{fmt.Sprintf("#%d → %s", id, category), m.loc.T("rule_added_to_config", nil)}
 	if check.covered > 0 {
-		msg = fmt.Sprintf("#%d → %s · rule %d already covers this", id, category, check.covered)
+		parts[1] = m.loc.T("rule_already_covers", map[string]any{"Rule": check.covered})
 	}
 	if moved > 0 {
-		msg += fmt.Sprintf(" · %d more categorized", moved)
+		parts = append(parts, m.loc.T("more_categorized", map[string]any{"Count": moved}))
 	}
-	m.setStatus(msg+" · z undoes the categories, C edits the rules", false)
+	parts = append(parts, m.loc.T("hint_undo_categories", nil))
+	m.setStatus(strings.Join(parts, " · "), false)
 }
 
 func (m *Model) setStatus(s string, isErr bool) {

@@ -124,3 +124,33 @@ func Test_Localizer_AccountName_everyBuiltin(t *testing.T) {
 		}
 	}
 }
+
+// The folders of backups are named by the kind core gives them.
+func Test_Localizer_BackupFolder(t *testing.T) {
+	tcs := []struct {
+		name string
+		tag  language.Tag
+		kind string
+		want string
+	}{
+		{name: "backups", tag: language.English, kind: "backups", want: "backups"},
+		{name: "replaced", tag: language.English, kind: "replaced", want: "replaced by a restore"},
+		{name: "before an upgrade", tag: language.English, kind: "pre_migration", want: "copies before an upgrade"},
+		{name: "a kind nobody knows", tag: language.English, kind: "elsewhere", want: "elsewhere"},
+		{name: "a language that lacks the text shows English", tag: language.German, kind: "replaced", want: "replaced by a restore"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			loc := New(tc.tag)
+
+			// when
+			got := loc.BackupFolder(tc.kind)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
