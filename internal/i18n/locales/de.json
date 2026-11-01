@@ -1,0 +1,4 @@
+{
+  "upgrade_notice": "Die Datenbank wurde auf diese Version von Thaler aktualisiert. Eine Kopie von vorher liegt unter {{.Copy}} (nicht verschlüsselt)",
+  "no_accounts_yet": "Noch keine Konten. Lege eines an mit: thaler cli account add Assets:Sparkasse --currency EUR"
+}
