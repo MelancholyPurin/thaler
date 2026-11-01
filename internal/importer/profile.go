@@ -4,9 +4,10 @@
 package importer
 
 import (
-	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // Columns lists, per field, the header names that may carry it. The first
@@ -79,7 +80,7 @@ func FindProfile(name string, custom []Profile) (Profile, error) {
 	if p, ok := builtin[key]; ok {
 		return p, nil
 	}
-	return Profile{}, fmt.Errorf("unknown import profile %q (available: %s)", name, strings.Join(ProfileNames(custom), ", "))
+	return Profile{}, coded.New("unknown_profile", map[string]any{"Name": name, "Available": strings.Join(ProfileNames(custom), ", ")})
 }
 
 // ProfileNames lists the built-in and custom profile names, lower-cased and
@@ -112,7 +113,7 @@ func (p Profile) compile() (compiled, error) {
 	if p.Delimiter != "" {
 		rs := []rune(p.Delimiter)
 		if len(rs) != 1 {
-			return c, fmt.Errorf("profile %q: delimiter must be a single character", p.Name)
+			return c, coded.New("profile_delimiter", map[string]any{"Name": p.Name})
 		}
 		c.delim = rs[0]
 	}
@@ -122,7 +123,7 @@ func (p Profile) compile() (compiled, error) {
 	switch c.encoding {
 	case "auto", "utf-8", "utf8", "windows-1252", "cp1252", "latin1", "iso-8859-1":
 	default:
-		return c, fmt.Errorf("profile %q: unsupported encoding %q", p.Name, p.Encoding)
+		return c, coded.New("profile_encoding", map[string]any{"Name": p.Name, "Encoding": p.Encoding})
 	}
 	switch p.DecimalSep {
 	case "":
@@ -131,7 +132,7 @@ func (p Profile) compile() (compiled, error) {
 	case ".":
 		c.sep = '.'
 	default:
-		return c, fmt.Errorf("profile %q: decimal_separator must be \",\" or \".\"", p.Name)
+		return c, coded.New("profile_decimal_separator", map[string]any{"Name": p.Name})
 	}
 	formats := p.DateFormats
 	if len(formats) == 0 {
@@ -141,7 +142,7 @@ func (p Profile) compile() (compiled, error) {
 		c.layouts = append(c.layouts, toLayout(f))
 	}
 	if len(p.Columns.Date) == 0 || len(p.Columns.Amount) == 0 {
-		return c, fmt.Errorf("profile %q: columns.date and columns.amount are required", p.Name)
+		return c, coded.New("profile_columns", map[string]any{"Name": p.Name})
 	}
 	return c, nil
 }

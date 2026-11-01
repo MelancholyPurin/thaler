@@ -8,15 +8,19 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/text/language"
 
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
+// errText is the message of err in English, or "" for nil, so that a failure is
+// compared by what it says.
 func errText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return err.Error()
+	return i18n.New(language.English).Error(err)
 }
 
 func day(s string) time.Time {
