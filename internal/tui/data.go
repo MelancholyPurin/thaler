@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -35,7 +36,7 @@ func shortName(name string) string {
 	return name
 }
 
-func newRow(tx core.TxView) row {
+func newRow(loc *i18n.Localizer, tx core.TxView) row {
 	r := row{tx: tx}
 	if src, cat, ok := tx.Legs(); ok {
 		r.source, r.category, r.simple = src, cat, true
@@ -51,10 +52,14 @@ func newRow(tx core.TxView) row {
 			r.source = tx.Postings[0]
 		}
 	}
-	r.text = strings.Join([]string{tx.Date, tx.Payee, tx.Description, r.category.Account, r.source.Account, signed(r.source.Amount)}, " ")
+	// The search finds a date or an amount written either way: as stored, or as the
+	// language writes it.
+	r.text = strings.Join([]string{tx.Date, loc.StoredDate(tx.Date), tx.Payee, tx.Description, r.category.Account, r.source.Account, signed(r.source.Amount), loc.Signed(r.source.Amount)}, " ")
 	return r
 }
 
+// signed is the amount in the plain form the ledger prints (+12.50 EUR), which the
+// search looks at as well as the language's own. What is shown is m.loc.Signed.
 func signed(m ledger.Money) string {
 	if m.Minor > 0 {
 		return "+" + m.String()
@@ -83,7 +88,7 @@ func (m *Model) reload() error {
 	m.counts = make(map[string]int)
 	currencies := make(map[ledger.Currency]bool)
 	for i := len(txs) - 1; i >= 0; i-- { // newest first
-		r := newRow(txs[i])
+		r := newRow(m.loc, txs[i])
 		if r.simple && !r.uncategorized {
 			m.counts[r.category.Account]++
 		}

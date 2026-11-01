@@ -163,7 +163,7 @@ func (m *Model) accountsPanel(l layout) string {
 		label, value := "All accounts", m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0)
 		if i > 0 {
 			e := m.accounts[i-1]
-			label, value = shortName(e.account.Name), e.balance.String()
+			label, value = shortName(e.account.Name), m.loc.Money(e.balance)
 		}
 		line := leftRight(label, value, iw)
 		if i == m.accts.cursor {
@@ -177,9 +177,9 @@ func (m *Model) accountsPanel(l layout) string {
 // moneyOrDash formats m, or "—" when it is not meaningful.
 func (m *Model) moneyOrDash(v ledger.Money, ok bool) string {
 	if !ok {
-		return "≈ " + v.String()
+		return "≈ " + m.loc.Money(v)
 	}
-	return v.String()
+	return m.loc.Money(v)
 }
 
 func (m *Model) transactionsPanel(l layout) string {
@@ -224,7 +224,7 @@ func (m *Model) transactionsPanel(l layout) string {
 			marker = "⇄"
 		}
 		payeeW := max(4, iw-dateWidth-amtW-4)
-		plain := r.tx.Date + " " + marker + " " + fit(clean(r.tx.Payee), payeeW) + " " + fitRight(m.listAmount(r), amtW)
+		plain := m.loc.StoredDate(r.tx.Date) + " " + marker + " " + fit(clean(r.tx.Payee), payeeW) + " " + fitRight(m.listAmount(r), amtW)
 		if i == m.txs.cursor {
 			lines = append(lines, m.rowStyle(paneTransactions).Render(fit(plain, iw)))
 			continue
@@ -239,7 +239,7 @@ func (m *Model) transactionsPanel(l layout) string {
 		if r.source.Amount.Minor > 0 {
 			amount = accent.Render(amount)
 		}
-		lines = append(lines, r.tx.Date+" "+marker+" "+fit(clean(r.tx.Payee), payeeW)+" "+amount)
+		lines = append(lines, m.loc.StoredDate(r.tx.Date)+" "+marker+" "+fit(clean(r.tx.Payee), payeeW)+" "+amount)
 	}
 	footer := ""
 	if len(m.view) > 0 {
@@ -252,7 +252,7 @@ func (m *Model) transactionsPanel(l layout) string {
 // currency code while everything is in one currency.
 func (m *Model) listAmount(r row) string {
 	a := r.source.Amount
-	s := a.Decimal()
+	s := m.loc.Amount(a)
 	if a.Minor > 0 {
 		s = "+" + s
 	}
@@ -314,7 +314,7 @@ func (m *Model) pickerPopup() string {
 	r, _ := m.findRow(m.pickTarget)
 	w := min(max(m.width-6, 20), 66)
 	h := min(max(m.height-4, 8), 17, max(8, 6+len(m.pickItems)))
-	title := fmt.Sprintf("Categorize · %s %s", clean(r.tx.Payee), signed(r.source.Amount))
+	title := fmt.Sprintf("Categorize · %s %s", clean(r.tx.Payee), m.loc.Signed(r.source.Amount))
 
 	lines := []string{m.picker.View()}
 	listH := h - 2 - 1 - 3 // minus the border, the input and the rule section
@@ -507,11 +507,11 @@ func (m *Model) confirmPopup() string {
 	w := min(max(m.width-6, 30), 60)
 	amount := ""
 	if len(tx.Postings) > 0 {
-		amount = signed(tx.Postings[0].Amount)
+		amount = m.loc.Signed(tx.Postings[0].Amount)
 	}
 	lines := []string{
 		"",
-		fit(fmt.Sprintf("  %s  %s", tx.Date, clean(tx.Payee)), w-2),
+		fit(fmt.Sprintf("  %s  %s", m.loc.StoredDate(tx.Date), clean(tx.Payee)), w-2),
 		fit("  "+amount, w-2),
 		"",
 		fit("  "+warn.Render("Delete this transaction?")+dim.Render("  (z undoes it)"), w-2),

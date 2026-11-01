@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -47,9 +48,9 @@ func (m *Model) budgetDetail(w int) []string {
 	var lines []string
 	net := ledger.Money{Minor: m.budget.IncomeTotal.Minor - m.budget.ExpenseTotal.Minor, Currency: m.netWorth.Base}
 	lines = append(lines, bold.Render(periodLabel(m.period)), "")
-	lines = append(lines, leftRight("Income", accent.Render(m.budget.IncomeTotal.String()), w))
-	lines = append(lines, leftRight("Spent", m.budget.ExpenseTotal.String(), w))
-	netText := net.String()
+	lines = append(lines, leftRight("Income", accent.Render(m.loc.Money(m.budget.IncomeTotal)), w))
+	lines = append(lines, leftRight("Spent", m.loc.Money(m.budget.ExpenseTotal), w))
+	netText := m.loc.Money(net)
 	if net.Minor < 0 {
 		netText = warn.Render(netText)
 	}
@@ -59,24 +60,24 @@ func (m *Model) budgetDetail(w int) []string {
 	}
 
 	lines = append(lines, "", dim.Render("Spending"))
-	lines = append(lines, categoryRows(m.budget.Expenses, m.budget.ExpenseTotal, w, false)...)
+	lines = append(lines, categoryRows(m.loc, m.budget.Expenses, m.budget.ExpenseTotal, w, false)...)
 	if len(m.budget.Expenses) == 0 {
 		lines = append(lines, dim.Render("  nothing spent in this period"))
 	}
 	if len(m.budget.Income) > 0 {
 		lines = append(lines, "", dim.Render("Income"))
-		lines = append(lines, categoryRows(m.budget.Income, m.budget.IncomeTotal, w, true)...)
+		lines = append(lines, categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true)...)
 	}
 	lines = append(lines, "", dim.Render("Targets and envelopes will appear here as columns next to these figures."))
 	return lines
 }
 
 // categoryRows draws one line per category: name, amount, share bar.
-func categoryRows(list []core.BudgetLine, total ledger.Money, w int, isIncome bool) []string {
+func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Money, w int, isIncome bool) []string {
 	const barW = 12
 	amtW := 0
 	for _, l := range list {
-		amtW = max(amtW, len(l.Amount.Decimal()))
+		amtW = max(amtW, len(loc.Amount(l.Amount)))
 	}
 	nameW := max(8, w-amtW-barW-4)
 	var out []string
@@ -98,7 +99,7 @@ func categoryRows(list []core.BudgetLine, total ledger.Money, w int, isIncome bo
 		if isIncome {
 			style = accent
 		}
-		out = append(out, "  "+fit(name, nameW)+" "+fitRight(l.Amount.Decimal(), amtW)+" "+style.Render(bar))
+		out = append(out, "  "+fit(name, nameW)+" "+fitRight(loc.Amount(l.Amount), amtW)+" "+style.Render(bar))
 	}
 	return out
 }
