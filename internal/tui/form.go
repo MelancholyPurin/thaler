@@ -410,7 +410,7 @@ func (m *Model) saveForm() {
 			return
 		}
 		undo = undoOp{
-			undone: m.loc.T("undid_edit", map[string]any{"ID": id}),
+			undone: func() string { return m.loc.T("undid_edit", map[string]any{"ID": id}) },
 			run:    func() error { _, err := m.svc.ReplaceTransaction(m.ctx, id, old); return err },
 		}
 	} else {
@@ -421,7 +421,7 @@ func (m *Model) saveForm() {
 		}
 		id = res.ID
 		undo = undoOp{
-			undone: m.loc.T("undid_add", map[string]any{"ID": id}),
+			undone: func() string { return m.loc.T("undid_add", map[string]any{"ID": id}) },
 			run:    func() error { return m.svc.DeleteTransaction(m.ctx, id) },
 		}
 	}

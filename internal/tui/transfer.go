@@ -206,7 +206,7 @@ func (m *Model) saveTransfer() {
 	m.mode, m.xfer = modeList, nil
 	outID, inID := res.ID, res.InID
 	m.undo = append(m.undo, undoOp{
-		undone: m.loc.T("undid_transfer", map[string]any{"Out": outID, "In": inID}),
+		undone: func() string { return m.loc.T("undid_transfer", map[string]any{"Out": outID, "In": inID}) },
 		run: func() error {
 			if err := m.svc.DeleteTransaction(m.ctx, outID); err != nil {
 				return err

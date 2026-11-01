@@ -45,6 +45,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.restorePopup())
 	case modePrune:
 		screen = m.centerPopup(screen, m.prunePopup())
+	case modeLanguage:
+		screen = m.centerPopup(screen, m.languagePopup())
 	}
 	return screen
 }
@@ -391,6 +393,7 @@ func (m *Model) helpPopup() string {
 		{"S", m.loc.T("help_backup", nil)},
 		{"ctrl+r", m.loc.T("help_restore", nil)},
 		{"ctrl+p", m.loc.T("help_prune", nil)},
+		{"ctrl+l", m.loc.T("help_language", nil)},
 		{"C", m.loc.T("help_config", nil)},
 		{"?", m.loc.T("help_help", nil)},
 		{"q  ctrl+c", m.loc.T("help_quit", nil)},

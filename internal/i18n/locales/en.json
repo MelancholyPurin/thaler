@@ -421,5 +421,12 @@
   "prune_folder_pre_migration": "copies before an upgrade",
   "prune_folder_heading": "{{.Folder}} · {{.Count}} of {{.Total}}",
   "prune_folder_line": "{{.Folder}}: {{.Dir}}, {{.Count}} of {{.Total}}",
-  "help_keys_categorize_rule": "c, then tab"
+  "help_keys_categorize_rule": "c, then tab",
+  "language_title": "Language",
+  "language_footer": "enter choose · ↑/↓ move · esc cancel",
+  "language_hint": "Saved in config.toml, so it stays after you quit.",
+  "language_saved": "Language: {{.Name}} (saved in config.toml)",
+  "language_session": "Language: {{.Name}} (until you quit: there is no config file to save it in)",
+  "language_not_saved": "Language: {{.Name}} (until you quit: could not save it: {{.Error}})",
+  "help_language": "choose the language (saved in config.toml)"
 }

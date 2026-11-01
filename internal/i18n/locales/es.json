@@ -421,5 +421,12 @@
   "prune_folder_pre_migration": "copias previas a una actualización",
   "prune_folder_heading": "{{.Folder}} · {{.Count}} de {{.Total}}",
   "prune_folder_line": "{{.Folder}}: {{.Dir}}, {{.Count}} de {{.Total}}",
-  "help_keys_categorize_rule": "c, luego tab"
+  "help_keys_categorize_rule": "c, luego tab",
+  "language_title": "Idioma",
+  "language_footer": "enter elegir · ↑/↓ mover · esc cancelar",
+  "language_hint": "Se guarda en config.toml y se mantiene al salir.",
+  "language_saved": "Idioma: {{.Name}} (guardado en config.toml)",
+  "language_session": "Idioma: {{.Name}} (hasta que salgas: no hay archivo de configuración donde guardarlo)",
+  "language_not_saved": "Idioma: {{.Name}} (hasta que salgas: no se pudo guardar: {{.Error}})",
+  "help_language": "elegir el idioma (se guarda en config.toml)"
 }

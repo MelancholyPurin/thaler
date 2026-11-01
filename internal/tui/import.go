@@ -413,7 +413,7 @@ func (m *Model) finishImport() {
 			unpair = append(unpair, core.CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
 		}
 		m.undo = append(m.undo, undoOp{
-			undone: m.loc.T("undid_import", map[string]any{"Count": len(ids) + len(adopted)}),
+			undone: func() string { return m.loc.T("undid_import", map[string]any{"Count": len(ids) + len(adopted)}) },
 			run: func() error {
 				var errs []error
 				if len(adopted) > 0 {

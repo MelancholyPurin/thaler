@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -190,7 +193,7 @@ func Test_View_builtinNames(t *testing.T) {
 // each message is accented and in brackets, so a plain English word left on screen
 // is text that was written into the code.
 func Test_View_pseudoLanguage(t *testing.T) {
-	english := regexp.MustCompile(`(?i)\b(press|cancel|save|next|field|create|review|choose|passphrase|encrypted|restore|undo|undoes|search|quit|categorize|transfer|account|accounts|balance|import|backup|backups|transaction|transactions|payee|description|amount|never|nothing|please|wait|current|folder|database|profile|income|spending|targets|reports|forecast|ledger|budget|home|keys|delete|rule|rules|match|new|today|yesterday)\b`)
+	english := regexp.MustCompile(`(?i)\b(press|cancel|save|next|field|create|review|choose|passphrase|encrypted|restore|undo|undoes|search|quit|categorize|transfer|account|accounts|balance|import|backup|backups|transaction|transactions|payee|description|amount|never|nothing|please|wait|current|folder|database|profile|income|spending|targets|reports|forecast|ledger|budget|home|keys|delete|rule|rules|match|new|today|yesterday|language)\b`)
 	tcs := []struct {
 		name string
 		keys string
@@ -219,6 +222,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget", keys: "B"},
 		{name: "forecast", keys: "F"},
 		{name: "reports", keys: "R"},
+		{name: "language", keys: "ctrl+l"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -259,6 +263,8 @@ func Test_View_translated(t *testing.T) {
 		{name: "German, the transfer", tag: language.German, keys: "x", shows: []string{"Umbuchung zwischen deinen Konten", "Erhalten", "Von", "Nach"}, hides: []string{"Transfer between"}},
 		{name: "Spanish, the help", tag: language.Spanish, keys: "?", shows: []string{"Teclas", "c, luego tab", "deshacer el último cambio"}, hides: []string{"then tab", "undo the last change"}},
 		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "c, dann tab", "die letzte Änderung rückgängig machen"}, hides: []string{"then tab", "undo the last change"}},
+		{name: "Spanish, the language popup", tag: language.Spanish, keys: "ctrl+l", shows: []string{"Idioma", "✓ Español", "Se guarda en config.toml"}, hides: []string{"Saved in"}},
+		{name: "German, the language popup", tag: language.German, keys: "ctrl+l", shows: []string{"Sprache", "✓ Deutsch", "In config.toml gespeichert"}, hides: []string{"Saved in"}},
 		{name: "Spanish, the budget", tag: language.Spanish, keys: "B", shows: []string{"Presupuesto · oct 2026", "Ingresos", "Gastado"}, hides: []string{"Income", "Spent"}},
 		{name: "German, the budget", tag: language.German, keys: "B", shows: []string{"Budget · Okt 2026", "Einnahmen", "Ausgegeben"}, hides: []string{"Income", "Spent"}},
 	}
@@ -275,6 +281,166 @@ func Test_View_translated(t *testing.T) {
 
 			// then
 			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
+
+// ctrl+l chooses the language: the screen changes at once, and the choice is written
+// to config.toml so that the next start opens in it.
+func Test_Update_language(t *testing.T) {
+	tcs := []struct {
+		name       string
+		start      language.Tag
+		config     *string // nil: no file yet
+		noPath     bool    // no config file location is known
+		pathIsDir  bool    // what is at the config file location is a folder, which cannot be read as a file
+		keys       string
+		wantCode   string
+		wantStatus string
+		wantErr    bool
+		wantFile   string // "" when there should be no file
+		shows      []string
+	}{
+		{
+			name: "German, written to a new file", start: language.English, keys: "ctrl+l down down enter",
+			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
+			wantFile: "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n# sample\nlanguage = \"de\"\n",
+			shows:    []string{"Buchungen", "Prognose"},
+		},
+		{
+			name: "Spanish, replacing the setting that was there", start: language.German, config: ptr("# mine\nlanguage = \"de\"\nkeep_backups = 3\n"), keys: "ctrl+l up enter",
+			wantCode: "es", wantStatus: "Idioma: Español (guardado en config.toml)",
+			wantFile: "# mine\nlanguage = \"es\"\nkeep_backups = 3\n",
+			shows:    []string{"Libro", "Previsión"},
+		},
+		{
+			name: "back to English", start: language.German, config: ptr("language = \"de\"\n"), keys: "ctrl+l up up enter",
+			wantCode: "en", wantStatus: "Language: English (saved in config.toml)",
+			wantFile: "language = \"en\"\n",
+			shows:    []string{"Ledger", "Forecast"},
+		},
+		{
+			name: "the popup opens on the language in use, so enter alone keeps it", start: language.German, config: ptr(""), keys: "ctrl+l enter",
+			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
+			wantFile: "language = \"de\"\n",
+			shows:    []string{"Buchungen"},
+		},
+		{
+			name: "esc leaves everything as it was", start: language.English, config: ptr("keep_backups = 3\n"), keys: "ctrl+l down esc",
+			wantCode: "en", wantStatus: "",
+			wantFile: "keep_backups = 3\n",
+			shows:    []string{"Ledger"},
+		},
+		{
+			name: "the cursor stops at the ends of the list", start: language.English, config: ptr(""), keys: "ctrl+l up up down down down down enter",
+			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
+			wantFile: "language = \"de\"\n",
+			shows:    []string{"Buchungen"},
+		},
+		{
+			name: "no config file location: the switch stands for the session", start: language.English, noPath: true, keys: "ctrl+l down enter",
+			wantCode: "es", wantStatus: "Idioma: Español (hasta que salgas: no hay archivo de configuración donde guardarlo)",
+			shows: []string{"Libro"},
+		},
+		{
+			name: "a config file that cannot be written: the switch stands, and the status says why", start: language.English, pathIsDir: true, keys: "ctrl+l down enter",
+			wantCode: "es", wantErr: true,
+			wantStatus: "Idioma: Español (hasta que salgas: no se pudo guardar: ",
+			shows:      []string{"Libro"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR")
+			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Groceries", -1000)
+			m := inLanguage(t, st, tc.start)
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.toml")
+			if !tc.noPath {
+				m.opts.ConfigPath, m.opts.ConfigTemplate = path, "# sample\n"
+			}
+			if tc.config != nil {
+				if err := os.WriteFile(path, []byte(*tc.config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.pathIsDir {
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			gotFile := ""
+			if b, err := os.ReadFile(path); err == nil {
+				gotFile = string(b)
+			}
+			status := m.status
+			if tc.wantErr && strings.HasPrefix(status, tc.wantStatus) {
+				status = tc.wantStatus // what follows is the system's words, which differ from machine to machine
+			}
+			got := []string{m.loc.Code(), status, gotFile}
+			want := []string{tc.wantCode, tc.wantStatus, tc.wantFile}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantErr, m.statusIsError); diff != "" {
+				t.Errorf("status error mismatch (-want +got):\n%s", diff)
+			}
+			checkView(t, m.View(), tc.shows, nil)
+		})
+	}
+}
+
+// What was made before the switch speaks the new language afterwards: the undo of a
+// change, the text the search looks through and the hint in the search box.
+func Test_Update_language_followsOn(t *testing.T) {
+	type observed struct {
+		Status      string
+		Placeholder string
+		Found       int // transactions the search for the German date finds
+	}
+	tcs := []struct {
+		name   string
+		script string
+		want   observed
+	}{
+		{
+			name:   "undo after the switch",
+			script: "a text:5.50 tab tab tab ctrl+u text:2026-10-03 ctrl+s ctrl+l down down enter z",
+			want:   observed{Status: "Anlegen von #2 rückgängig gemacht", Placeholder: "unscharfe Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 0},
+		},
+		{
+			name:   "the search finds the date as the new language writes it",
+			script: "ctrl+l down down enter / text:01.10.2026",
+			want:   observed{Status: "", Placeholder: "unscharfe Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 1},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR")
+			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Groceries", -1000)
+			m := inLanguage(t, st, language.English)
+			m.opts.ConfigPath = filepath.Join(t.TempDir(), "config.toml")
+
+			// when
+			play(m, tc.script)
+
+			// then
+			got := observed{Status: m.status, Placeholder: m.filter.Placeholder}
+			if m.mode == modeFilter {
+				got.Found = len(m.view)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

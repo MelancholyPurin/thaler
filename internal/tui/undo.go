@@ -8,7 +8,7 @@ import (
 
 // undoOp reverses one change made in this session.
 type undoOp struct {
-	undone string // the status shown once it is undone, made when the change was
+	undone func() string // the status shown once it is undone, written then so that it follows the language
 	run    func() error
 }
 
@@ -29,7 +29,7 @@ func (m *Model) undoLast() {
 		return
 	}
 	m.applyFilter(true)
-	m.setStatus(op.undone, false)
+	m.setStatus(op.undone(), false)
 }
 
 // confirmDelete asks before deleting the selected transaction.
@@ -64,7 +64,7 @@ func (m *Model) deleteTx(tx core.TxView) {
 		return
 	}
 	m.undo = append(m.undo, undoOp{
-		undone: m.loc.T("undid_delete", map[string]any{"ID": tx.ID}),
+		undone: func() string { return m.loc.T("undid_delete", map[string]any{"ID": tx.ID}) },
 		run:    func() error { return m.svc.RestoreTransaction(m.ctx, tx.ID, old) },
 	})
 	if err := m.reload(); err != nil {

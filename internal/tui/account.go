@@ -267,7 +267,7 @@ func (m *Model) pushBalanceUndo(res core.OpeningBalanceResult) {
 		return
 	}
 	id, before := res.ID, res.Before
-	op := undoOp{undone: m.loc.T("undid_opening_balance", map[string]any{"ID": id})}
+	op := undoOp{undone: func() string { return m.loc.T("undid_opening_balance", map[string]any{"ID": id}) }}
 	if before == nil {
 		op.run = func() error { return m.svc.DeleteTransaction(m.ctx, id) }
 	} else {

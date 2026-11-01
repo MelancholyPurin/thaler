@@ -301,7 +301,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TLC-2` The Spanish and the German translation of the interface
 - ~~`TLC-3` The German translation~~ (folded into `TLC-2`)
 - [ ] `TLC-4` Every screen and popup fits at 80 columns in all three languages, checked by tests
-- [ ] `TLC-5` Change the language from the TUI without restarting
+- [x] `TLC-5` Change the language from the TUI without restarting (`ctrl+l`; saved in `config.toml`)
 - ~~`TLC-6` Key hints and the help popup in the language; the keys themselves stay the same~~ (folded into `TLC-1`)
 - [ ] `TLC-7` A native speaker reads the Spanish and the German before a release
 

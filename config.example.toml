@@ -5,7 +5,7 @@
 # The language of Thaler's messages: "en", "es" or "de". Without this key the
 # environment decides (LC_ALL, LC_MESSAGES, then LANG, as in de_DE.UTF-8), and a
 # language Thaler does not speak is English. A message not yet translated is shown
-# in English.
+# in English. In the TUI, ctrl+l chooses the language and writes this line for you.
 # language = "de"
 
 # The folder the interface lists bank exports from when you press `i` to import
