@@ -143,7 +143,7 @@ func Test_Update_newAccount_validation(t *testing.T) {
 		{name: "a currency that is not one", script: "n text:Bank tab tab ctrl+u text:E1 ctrl+s", want: `invalid currency code "E1": want three letters such as EUR, USD or MXN`},
 		{name: "a balance that is not a number", script: "n text:Bank tab tab tab text:lots ctrl+s", want: `balance: invalid amount "lots"`},
 		{name: "a category", script: "n text:Expenses:Food ctrl+s", want: "only Assets and Liabilities accounts are created here"},
-		{name: "a name with a space", script: "n text:My_Bank ctrl+s", want: `account "Assets:My Bank": invalid character ' ' (use letters, digits, '-' and '_')`},
+		{name: "a name with a space", script: "n text:My_Bank ctrl+s", want: `account "Assets:My Bank": invalid character " " (use letters, digits, '-' and '_')`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

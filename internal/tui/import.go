@@ -340,10 +340,10 @@ func (m *Model) reviewImport() {
 
 	f.problems = f.problems[:0]
 	for _, e := range parsed.Errors {
-		f.problems = append(f.problems, e.Error())
+		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": e.Line, "Reason": m.errText(e.Err)}))
 	}
 	for _, r := range res.Rejected {
-		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": r.Line, "Reason": r.Reason}))
+		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": r.Line, "Reason": m.errText(r.Err)}))
 	}
 	f.newUncat = 0
 	for _, r := range res.Rows {
