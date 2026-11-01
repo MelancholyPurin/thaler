@@ -188,7 +188,7 @@ English is the source language; Spanish and German are translations. This epic i
 - [ ] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code
 - [ ] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages
 - [ ] `LOC-7` Display names for the built-in account types and starting categories, separate from the names stored in the ledger
-- [ ] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
+- [x] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
 - ~~`LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does~~ (folded into `LOC-8`)
 
 ### CLI: Command-line interface
