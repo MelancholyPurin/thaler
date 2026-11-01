@@ -18,11 +18,19 @@ import (
 // the newest few are kept; only files named like a backup are ever listed, so
 // anything else a person put there stays.
 
+// The kinds of folder a plan looks at.
+const (
+	FolderBackups      = "backups"
+	FolderReplaced     = "replaced"
+	FolderPreMigration = "pre_migration"
+)
+
 // PruneFolder is what a plan would remove from one folder.
 type PruneFolder struct {
-	// Label says what the folder holds, for a person to read.
-	Label string
-	Dir   string
+	// Kind says what the folder holds: FolderBackups, FolderReplaced or
+	// FolderPreMigration. A client writes it in the language of the person.
+	Kind string
+	Dir  string
 	// Total is how many backups the folder holds, Remove the oldest of them.
 	Total  int
 	Remove []BackupFile // newest first
@@ -64,9 +72,9 @@ func PlanPrune(dbPath string, keep int) (PrunePlan, error) {
 	}
 	plan := PrunePlan{Keep: keep}
 	for _, f := range []PruneFolder{
-		{Label: "backups", Dir: config.BackupDir(dbPath)},
-		{Label: "replaced by a restore", Dir: config.ReplacedDir(dbPath)},
-		{Label: "copies before an upgrade", Dir: config.PreMigrationDir(dbPath)},
+		{Kind: FolderBackups, Dir: config.BackupDir(dbPath)},
+		{Kind: FolderReplaced, Dir: config.ReplacedDir(dbPath)},
+		{Kind: FolderPreMigration, Dir: config.PreMigrationDir(dbPath)},
 	} {
 		files, err := ListBackups(f.Dir)
 		if err != nil {
