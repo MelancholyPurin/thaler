@@ -73,7 +73,7 @@ func (m *Model) accountSize() (w, h int) { return min(max(m.width-6, 30), 64), 1
 func (m *Model) openAccountForm(setting bool) tea.Cmd {
 	f := &accountForm{setting: setting}
 	f.name, f.currency = newInput(""), newInput("")
-	f.balance, f.asOf = newInput(""), newInput(m.now().Format(ledger.DateLayout))
+	f.balance, f.asOf = newInput(""), newInput(m.loc.Date(m.now()))
 	f.name.Placeholder = "Sparkasse"
 	f.currency.CharLimit = 3
 	f.currency.SetValue(string(m.netWorth.Base))
@@ -207,7 +207,7 @@ func (m *Model) saveAccountForm() {
 			fail("balance: %v", err)
 			return
 		}
-		when, err := parseFormDate(f.asOf.Value(), m.now())
+		when, err := parseFormDate(m.loc, f.asOf.Value(), m.now())
 		if err != nil {
 			fail("date: %v", err)
 			return
@@ -243,9 +243,9 @@ func (m *Model) saveAccountForm() {
 		}
 		m.pushBalanceUndo(res)
 		if res.ID == 0 {
-			parts = append(parts, fmt.Sprintf("nothing to book: the transactions already add up to %s on %s", shown, req.AsOf.Format(ledger.DateLayout)))
+			parts = append(parts, fmt.Sprintf("nothing to book: the transactions already add up to %s on %s", m.loc.Money(shown), m.loc.Date(req.AsOf)))
 		} else {
-			parts = append(parts, fmt.Sprintf("opening balance of %s booked on %s", res.Amount, res.Date))
+			parts = append(parts, fmt.Sprintf("opening balance of %s booked on %s", m.loc.Money(res.Amount), m.loc.StoredDate(res.Date)))
 		}
 	}
 	if f.setting && req != nil {
@@ -312,7 +312,7 @@ func (m *Model) accountPopup() string {
 	if f.setting {
 		title = "Set balance · " + f.existing.Name
 		held := m.accounts[m.accountIndex(f.existing.Name)].balance
-		lines = append(lines, dim.Render(fit("  Thaler currently holds "+held.String(), iw)), "")
+		lines = append(lines, dim.Render(fit("  Thaler currently holds "+m.loc.Money(held), iw)), "")
 	} else {
 		kind := "Assets"
 		if f.liab {

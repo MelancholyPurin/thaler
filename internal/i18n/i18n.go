@@ -39,13 +39,25 @@ type Language struct {
 	Code string // as written in config.toml: en, es or de
 	Tag  language.Tag
 	Name string // in the language itself
+
+	// DateLayout is how a date is written (a Go layout). English keeps ISO, which
+	// is the same everywhere and cannot be read as month first or day first.
+	DateLayout string
+	// DateInput are the layouts typed dates are read in besides ISO and
+	// DD.MM.YYYY, which every language reads. Day and month may have one digit.
+	DateInput []string
+	// DateFormats names what is accepted, for the message about a date that is not.
+	DateFormats string
 }
 
 // Languages are the languages of Thaler, the source language first.
 var Languages = []Language{
-	{Code: "en", Tag: language.English, Name: "English"},
-	{Code: "es", Tag: language.Spanish, Name: "Español"},
-	{Code: "de", Tag: language.German, Name: "Deutsch"},
+	{Code: "en", Tag: language.English, Name: "English",
+		DateLayout: "2006-01-02", DateFormats: "YYYY-MM-DD or DD.MM.YYYY"},
+	{Code: "es", Tag: language.Spanish, Name: "Español",
+		DateLayout: "02/01/2006", DateInput: []string{"2/1/2006"}, DateFormats: "DD/MM/YYYY, YYYY-MM-DD or DD.MM.YYYY"},
+	{Code: "de", Tag: language.German, Name: "Deutsch",
+		DateLayout: "02.01.2006", DateInput: []string{"2.1.2006"}, DateFormats: "DD.MM.YYYY or YYYY-MM-DD"},
 }
 
 // Codes is the codes of Languages, for messages that list them.
@@ -84,6 +96,19 @@ func Detect(setting string, getenv func(string) string) language.Tag {
 	return language.English
 }
 
+// languageOf is the Language that tag belongs to, English if none does.
+func languageOf(tag language.Tag) Language {
+	tags := make([]language.Tag, len(Languages))
+	for i, l := range Languages {
+		tags[i] = l.Tag
+	}
+	_, i, confidence := language.NewMatcher(tags).Match(tag)
+	if confidence == language.No {
+		return Languages[0]
+	}
+	return Languages[i]
+}
+
 // fromLocale reads a POSIX locale name such as de_DE.UTF-8 or es_MX@euro.
 func fromLocale(locale string) language.Tag {
 	if i := strings.IndexAny(locale, ".@"); i >= 0 {
@@ -106,8 +131,10 @@ func fromLocale(locale string) language.Tag {
 
 // Localizer says things in one language.
 type Localizer struct {
-	tag language.Tag
-	loc *goi18n.Localizer
+	tag     language.Tag
+	lang    Language
+	decimal string // the decimal separator of the language: "." or ","
+	loc     *goi18n.Localizer
 }
 
 // New is the Localizer for tag; messages it does not have are in English. It panics
@@ -133,7 +160,13 @@ func newFromCatalogs(tag language.Tag, instead map[string]string) *Localizer {
 			panic(fmt.Sprintf("i18n: %s: %v", name, err))
 		}
 	}
-	return &Localizer{tag: tag, loc: goi18n.NewLocalizer(bundle, tag.String(), language.English.String())}
+	lang := languageOf(tag)
+	return &Localizer{
+		tag:     tag,
+		lang:    lang,
+		decimal: decimalSeparator(lang.Tag),
+		loc:     goi18n.NewLocalizer(bundle, tag.String(), language.English.String()),
+	}
 }
 
 // Tag is the language this Localizer speaks.

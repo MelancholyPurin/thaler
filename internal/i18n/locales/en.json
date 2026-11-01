@@ -1,4 +1,5 @@
 {
   "upgrade_notice": "Upgraded the database to this version of Thaler. A copy of it from before is at {{.Copy}} (not encrypted)",
-  "no_accounts_yet": "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR"
+  "no_accounts_yet": "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR",
+  "invalid_date": "invalid date \"{{.Text}}\": use {{.Formats}}"
 }

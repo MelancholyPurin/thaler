@@ -45,7 +45,7 @@ Write negative amounts with an equals sign so they are not read as flags:
 			if amt.IsZero() {
 				return errors.New("amount must not be zero")
 			}
-			when, err := parseDateFlag(date)
+			when, err := a.parseDateFlag(date)
 			if err != nil {
 				return err
 			}
@@ -151,7 +151,7 @@ on its own and a transfer is neither income nor spending.`,
 					return fmt.Errorf("--to-amount: %w", err)
 				}
 			}
-			when, err := parseDateFlag(date)
+			when, err := a.parseDateFlag(date)
 			if err != nil {
 				return err
 			}

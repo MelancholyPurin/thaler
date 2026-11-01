@@ -100,7 +100,7 @@ correct the same opening balance.`,
 			if err != nil {
 				return err
 			}
-			when, err := parseDateFlag(asOf)
+			when, err := a.parseDateFlag(asOf)
 			if err != nil {
 				return err
 			}

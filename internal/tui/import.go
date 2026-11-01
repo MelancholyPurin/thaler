@@ -15,6 +15,7 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -591,7 +592,7 @@ func (m *Model) importReviewPopup(w, h int) string {
 
 	amtW := 0
 	for _, r := range f.res.Rows {
-		amtW = max(amtW, lipgloss.Width(importAmount(r.Row.Amount)))
+		amtW = max(amtW, lipgloss.Width(importAmount(m.loc, r.Row.Amount)))
 	}
 	total := len(f.problems) + len(f.res.Rows)
 	ls := f.list
@@ -602,7 +603,7 @@ func (m *Model) importReviewPopup(w, h int) string {
 			lines = append(lines, warn.Render(fit("⚠ "+f.problems[i], iw)))
 			continue
 		}
-		lines = append(lines, importRowLine(f.res.Rows[i-len(f.problems)], iw, amtW, i == ls.cursor))
+		lines = append(lines, importRowLine(m.loc, f.res.Rows[i-len(f.problems)], iw, amtW, i == ls.cursor))
 	}
 	for len(lines) < h-2-1 {
 		lines = append(lines, "")
@@ -629,16 +630,16 @@ func (m *Model) importReviewPopup(w, h int) string {
 
 // importAmount is an amount without its currency: every row of an import is in
 // the currency of the account, which the title names.
-func importAmount(a ledger.Money) string {
+func importAmount(loc *i18n.Localizer, a ledger.Money) string {
 	if a.Minor > 0 {
-		return "+" + a.Decimal()
+		return "+" + loc.Amount(a)
 	}
-	return a.Decimal()
+	return loc.Amount(a)
 }
 
 // importRowLine is one row of the review list: whether it is new, its date,
 // the category the rules chose, the payee and the amount.
-func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
+func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selected bool) string {
 	status := "new"
 	if r.Duplicate {
 		status = "dup"
@@ -652,9 +653,9 @@ func importRowLine(r core.ImportedRow, w, amtW int, selected bool) string {
 	if r.Adopts != nil {
 		category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, clean(r.Adopts.Payee))
 	}
-	date := r.Row.Date.Format(ledger.DateLayout)
+	date := loc.Date(r.Row.Date)
 	payee := fit(clean(r.Row.Payee), payeeW)
-	amount := fitRight(importAmount(r.Row.Amount), amtW)
+	amount := fitRight(importAmount(loc, r.Row.Amount), amtW)
 
 	if selected {
 		return selFocused.Render(fit(status+" "+date+" "+fit(category, catW)+" "+payee+" "+amount, w))

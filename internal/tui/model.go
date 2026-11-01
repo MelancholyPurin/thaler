@@ -17,9 +17,11 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/text/language"
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -41,6 +43,8 @@ type Options struct {
 	BackupDir    string
 	// Restore replaces the database with a backup; nil where that is not possible.
 	Restore RestoreFunc
+	// Loc writes the amounts and dates in the language of the person; nil is English.
+	Loc *i18n.Localizer
 }
 
 type mode int
@@ -126,7 +130,8 @@ type Model struct {
 
 	loadConfig    ConfigLoader
 	opts          Options
-	downloads     string // where bank exports usually land; offered when importing unless config.toml says otherwise
+	loc           *i18n.Localizer // never nil: amounts and dates are written through it
+	downloads     string          // where bank exports usually land; offered when importing unless config.toml says otherwise
 	imp           *importFlow
 	acct          *accountForm
 	xfer          *transferForm
@@ -170,7 +175,10 @@ func New(ctx context.Context, svc core.Service, opts Options) (*Model, error) {
 }
 
 func newWithClock(ctx context.Context, svc core.Service, opts Options, now func() time.Time) (*Model, error) {
-	m := &Model{ctx: ctx, svc: svc, loadConfig: opts.LoadConfig, opts: opts, width: 100, height: 30, now: now}
+	m := &Model{ctx: ctx, svc: svc, loadConfig: opts.LoadConfig, opts: opts, loc: opts.Loc, width: 100, height: 30, now: now}
+	if m.loc == nil {
+		m.loc = i18n.New(language.English)
+	}
 	if home, err := os.UserHomeDir(); err == nil {
 		m.downloads = filepath.Join(home, "Downloads")
 	}

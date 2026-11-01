@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -81,7 +82,7 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 	f := &form{payeeCur: -1}
 	f.account = m.defaultAccount()
 	f.amount, f.payee, f.category = newInput(""), newInput(""), newInput("")
-	f.date = newInput(m.now().Format(ledger.DateLayout))
+	f.date = newInput(m.loc.Date(m.now()))
 	f.description = newInput("")
 	f.description.CharLimit = 0 // an imported purpose can be long, and must not be cut when it is edited
 
@@ -101,7 +102,7 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 			}
 		}
 		amount := r.source.Amount
-		text := amount.Decimal()
+		text := m.loc.Amount(amount)
 		if amount.Minor > 0 {
 			text = "+" + text
 		} else {
@@ -109,7 +110,7 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 		}
 		f.amount.SetValue(text)
 		f.payee.SetValue(r.tx.Payee)
-		f.date.SetValue(r.tx.Date)
+		f.date.SetValue(m.loc.StoredDate(r.tx.Date))
 		f.description.SetValue(r.tx.Description)
 		f.keepCat = r.category.Account
 	}
@@ -331,7 +332,7 @@ func (m *Model) moveField(d int) tea.Cmd {
 
 // parseFormDate understands "" and "t" (today), "y" (yesterday), "-3" (three
 // days ago) and the usual date formats.
-func parseFormDate(s string, now time.Time) (time.Time, error) {
+func parseFormDate(loc *i18n.Localizer, s string, now time.Time) (time.Time, error) {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	s = strings.ToLower(strings.TrimSpace(s))
 	switch {
@@ -344,7 +345,7 @@ func parseFormDate(s string, now time.Time) (time.Time, error) {
 			return today.AddDate(0, 0, -n), nil
 		}
 	}
-	return ledger.ParseDate(s)
+	return loc.ParseDate(s)
 }
 
 // saveForm validates the form and stores the transaction. Problems are shown
@@ -371,7 +372,7 @@ func (m *Model) saveForm() {
 		amount.Minor = -amount.Minor
 	}
 
-	when, err := parseFormDate(f.date.Value(), m.now())
+	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
 		fail("date: %v", err)
 		return
@@ -440,7 +441,7 @@ func (m *Model) saveForm() {
 	if f.editing != 0 {
 		verb = "Updated"
 	}
-	msg := fmt.Sprintf("%s #%d  %s  %s → %s", verb, id, nt.Payee, signed(amount), category)
+	msg := fmt.Sprintf("%s #%d  %s  %s → %s", verb, id, nt.Payee, m.loc.Signed(amount), category)
 	if !visible {
 		msg += "  (not shown: " + periodLabel(m.period) + ", filtered)"
 	}

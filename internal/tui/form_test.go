@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/text/language"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -15,6 +17,7 @@ func Test_parseFormDate(t *testing.T) {
 	now := time.Date(2026, 10, 22, 23, 59, 0, 0, time.Local)
 	tcs := []struct {
 		name    string
+		tag     language.Tag
 		in      string
 		want    string // YYYY-MM-DD
 		wantErr bool
@@ -32,13 +35,21 @@ func Test_parseFormDate(t *testing.T) {
 		{name: "a word", in: "someday", wantErr: true},
 		{name: "a date that does not exist", in: "31.02.2026", wantErr: true},
 		{name: "minus a word", in: "-x", wantErr: true},
+		{name: "slashes are ambiguous in English", in: "01/10/2026", wantErr: true},
+		{name: "slashes are day first in Spanish", tag: language.Spanish, in: "01/10/2026", want: "2026-10-01"},
+		{name: "German reads one-digit days", tag: language.German, in: "1.2.2026", want: "2026-02-01"},
+		{name: "the shortcuts work in every language", tag: language.German, in: "y", want: "2026-10-21"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			// given tc.in and the clock
+			// given
+			tag := tc.tag
+			if tag == language.Und {
+				tag = language.English
+			}
 
 			// when
-			got, err := parseFormDate(tc.in, now)
+			got, err := parseFormDate(i18n.New(tag), tc.in, now)
 
 			// then
 			if diff := cmp.Diff(tc.wantErr, err != nil); diff != "" {
@@ -82,7 +93,7 @@ func Test_Update_addForm(t *testing.T) {
 			script: "a text:+2450 enter text:Muster_GmbH enter text:Income:Salary down enter",
 			want: observed{
 				Flow: Flow{
-					Mode: "list", Status: "Added #6  Muster GmbH  +2450.00 EUR → Income:Salary",
+					Mode: "list", Status: "Added #6  Muster GmbH  +2,450.00 EUR → Income:Salary",
 					Added: []string{"2026-10-22 Muster GmbH | Assets:Bank 2450.00 | Income:Salary -2450.00"},
 				},
 				Selected: "Muster GmbH", LastAccount: "Assets:Bank",

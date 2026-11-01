@@ -63,7 +63,7 @@ func Test_Update_newAccount(t *testing.T) {
 			want: observed{
 				Flow: Flow{
 					Mode:   "list",
-					Status: "Created Assets:Sparkasse (EUR) · opening balance of 1234.56 EUR booked on 2026-10-22 · i imports a bank export",
+					Status: "Created Assets:Sparkasse (EUR) · opening balance of 1,234.56 EUR booked on 2026-10-22 · i imports a bank export",
 					Added:  []string{"2026-10-22 Opening balance | Assets:Sparkasse 1234.56 | Equity:Opening -1234.56"},
 				},
 				Accounts: []string{"Assets:Sparkasse", "Equity:Opening"}, Balances: []string{"Assets:Sparkasse 1234.56 EUR"}, Scope: "Assets:Sparkasse",

@@ -183,7 +183,7 @@ English is the source language; Spanish and German are translations. This epic i
 
 - [x] `LOC-1` Message catalogs in Go, one file per language, with a tool that extracts new strings; and the language setting: `config.toml`, then the environment (`LANG`), then English
 - ~~`LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English~~ (folded into `LOC-1`)
-- [ ] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`), and typed amounts and dates read in that format, with the ambiguous cases still refused
+- [x] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`) in the interface, and typed dates read in the language's format, with the ambiguous cases still refused (`thaler cli` prints the plain form; typed amounts already accept both separators)
 - ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)
 - [ ] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code
 - [ ] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages

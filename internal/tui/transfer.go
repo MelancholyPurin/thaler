@@ -72,7 +72,7 @@ func (m *Model) openTransferForm() tea.Cmd {
 		}
 	}
 	f.amount, f.received = newInput(""), newInput("")
-	f.date = newInput(m.now().Format(ledger.DateLayout))
+	f.date = newInput(m.loc.Date(m.now()))
 	f.received.Placeholder = "what arrives"
 	for _, in := range []*textinput.Model{&f.amount, &f.received, &f.date} {
 		in.Width = m.transferWidth()
@@ -192,7 +192,7 @@ func (m *Model) saveTransfer() {
 			return
 		}
 	}
-	when, err := parseFormDate(f.date.Value(), m.now())
+	when, err := parseFormDate(m.loc, f.date.Value(), m.now())
 	if err != nil {
 		fail("date: %v", err)
 		return

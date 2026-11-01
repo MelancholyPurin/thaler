@@ -10,12 +10,13 @@ import (
 
 func todayISO() string { return time.Now().Format(ledger.DateLayout) }
 
-// parseDateFlag parses a --date value; an empty value means today.
-func parseDateFlag(s string) (time.Time, error) {
+// parseDateFlag parses a --date value; an empty value means today. Besides ISO
+// and DD.MM.YYYY it reads the date format of the language (01/10/2026 in Spanish).
+func (a *app) parseDateFlag(s string) (time.Time, error) {
 	if s == "" {
 		s = todayISO()
 	}
-	return ledger.ParseDate(s)
+	return a.localizer().ParseDate(s)
 }
 
 // signed formats an amount with an explicit "+" for positive values.

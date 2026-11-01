@@ -96,7 +96,7 @@ func kv(key, value string, keyW, w int) []string {
 // it has, which decides how large a banner there is room for.
 func (m *Model) homeDetail(w, h int) []string {
 	var facts []string
-	netText := m.netWorth.Total.String()
+	netText := m.loc.Money(m.netWorth.Total)
 	if len(m.netWorth.Missing) > 0 {
 		netText = "≈ " + netText
 	}
@@ -107,7 +107,7 @@ func (m *Model) homeDetail(w, h int) []string {
 	}
 	span := "—"
 	if n := len(m.rows); n > 0 {
-		span = m.rows[n-1].tx.Date + " → " + m.rows[0].tx.Date
+		span = m.loc.StoredDate(m.rows[n-1].tx.Date) + " → " + m.loc.StoredDate(m.rows[0].tx.Date)
 	}
 	const keyW = 15
 	pad := strings.Repeat(" ", max(0, (w-44)/2))
@@ -152,10 +152,10 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	if m.scopeAccount() == "" {
 		lines = append(lines, bold.Render("All accounts"), "")
 		for _, e := range m.accounts {
-			lines = append(lines, leftRight(e.account.Name, e.balance.String(), w))
+			lines = append(lines, leftRight(e.account.Name, m.loc.Money(e.balance), w))
 		}
 		lines = append(lines, "")
-		netText := m.netWorth.Total.String()
+		netText := m.loc.Money(m.netWorth.Total)
 		if len(m.netWorth.Missing) > 0 {
 			netText = "≈ " + netText
 		}
@@ -170,19 +170,19 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	lines = append(lines, bold.Render(e.account.Name), "")
 	lines = append(lines, kv("Type", string(e.account.Type), keyW, w)...)
 	lines = append(lines, kv("Currency", string(e.account.Currency), keyW, w)...)
-	lines = append(lines, kv("Balance", bold.Render(e.balance.String()), keyW, w)...)
+	lines = append(lines, kv("Balance", bold.Render(m.loc.Money(e.balance)), keyW, w)...)
 	lines = append(lines, kv("Transactions", fmt.Sprint(e.txCount), keyW, w)...)
 	if e.uncat > 0 {
 		lines = append(lines, kv("Uncategorized", warn.Render(fmt.Sprint(e.uncat)), keyW, w)...)
 	}
 	if e.last != "" {
-		lines = append(lines, kv("Last activity", e.last, keyW, w)...)
+		lines = append(lines, kv("Last activity", m.loc.StoredDate(e.last), keyW, w)...)
 	}
 
 	in, out := m.periodFlow(e.account.Name)
 	lines = append(lines, "", dim.Render("Money moved · "+periodLabel(m.period)))
-	lines = append(lines, kv("In", accent.Render(in.String()), keyW, w)...)
-	lines = append(lines, kv("Out", out.String(), keyW, w)...)
+	lines = append(lines, kv("In", accent.Render(m.loc.Money(in)), keyW, w)...)
+	lines = append(lines, kv("Out", m.loc.Money(out), keyW, w)...)
 	return e.account.Name, lines
 }
 
@@ -223,7 +223,7 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 	}
 	const keyW = 10
 	var lines []string
-	lines = append(lines, bold.Render(r.tx.Date)+dim.Render(fmt.Sprintf("   #%d", r.tx.ID)), "")
+	lines = append(lines, bold.Render(m.loc.StoredDate(r.tx.Date))+dim.Render(fmt.Sprintf("   #%d", r.tx.ID)), "")
 	if p := clean(r.tx.Payee); p != "" {
 		lines = append(lines, strings.Split(ansi.Wrap(bold.Render(p), w, ""), "\n")...)
 	}
@@ -234,7 +234,7 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 	lines = append(lines, "", dim.Render("Postings"))
 	for _, p := range r.tx.Postings {
 		name := p.Account
-		amount := signed(p.Amount)
+		amount := m.loc.Signed(p.Amount)
 		if p.Account == ledger.UncategorizedExpense || p.Account == ledger.UncategorizedIncome {
 			name, amount = warn.Render(name), warn.Render(amount)
 		}
@@ -252,7 +252,7 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 		if r.transfer {
 			lines = append(lines, "")
 			if partner, ok := m.findRow(r.tx.TransferWith); ok && r.tx.TransferWith != 0 {
-				lines = append(lines, accent.Render("⇄ Transfer")+dim.Render(fmt.Sprintf(" with #%d on %s, %s", partner.tx.ID, partner.source.Account, partner.tx.Date)))
+				lines = append(lines, accent.Render("⇄ Transfer")+dim.Render(fmt.Sprintf(" with #%d on %s, %s", partner.tx.ID, partner.source.Account, m.loc.StoredDate(partner.tx.Date))))
 			} else {
 				lines = append(lines, warn.Render("⇄ Transfer")+dim.Render(" – waiting for its other half: import the other account"))
 			}

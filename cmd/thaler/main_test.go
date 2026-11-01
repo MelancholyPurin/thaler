@@ -548,3 +548,21 @@ func Test_app_localizer(t *testing.T) {
 		})
 	}
 }
+
+func Test_app_dateFlag(t *testing.T) {
+	add := []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "01/10/2026"}
+	tcs := []cliCase{
+		{name: "slashes are ambiguous in English", setup: [][]string{addBank}, args: add, wantErr: `invalid date "01/10/2026": use YYYY-MM-DD or DD.MM.YYYY`},
+		{name: "slashes are day first in Spanish", setup: [][]string{addBank}, args: add, env: map[string]string{"LANG": "es_ES.UTF-8"}, want: "Added #1  2026-10-01  -5.00 EUR  Assets:Bank -> Expenses:Uncategorized\nCreated new account Expenses:Uncategorized\n"},
+		{name: "the message is in the language", setup: [][]string{addBank}, args: []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "1/2/x"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, wantErr: `ungültiges Datum "1/2/x": verwende DD.MM.YYYY or YYYY-MM-DD`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
