@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/melancholypurin/thaler"
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/tui"
@@ -49,9 +50,9 @@ func (a *app) swapDatabase(ctx context.Context, src, passphrase string) (core.Se
 	svc, err := core.Open(ctx, a.dbPath())
 	if err != nil {
 		if restoreErr != nil {
-			return nil, res, fmt.Errorf("%w; the database cannot be opened again either: %w", restoreErr, err)
+			return nil, res, fmt.Errorf("%w; %w: %w", restoreErr, coded.New("restore_reopen_failed", nil), err)
 		}
-		return nil, res, fmt.Errorf("the backup is in place but cannot be opened: %w", err)
+		return nil, res, fmt.Errorf("%w: %w", coded.New("restore_in_place_unopenable", nil), err)
 	}
 	a.svc = svc
 	return svc, res, restoreErr
