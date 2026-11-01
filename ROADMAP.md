@@ -74,7 +74,7 @@ Status: `[x]` delivered, `[ ]` planned. Stories are listed in the order they are
 | `PNO` | Notifications | `M-PWA` |
 | `PUX` | Phone experience | `M-PWA` |
 
-Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; the terminal interface and the server are for **macOS and Linux** only, not Windows (decided again in `PLT`: Windows computers use the web application, in the browser, which needs nothing from the Go code); the languages are **English** (the source language), **Spanish** and **German**, on every surface (the localization foundation is `LOC`); releases leave on a **release train that leaves every second Monday, with the cut-off on the Friday before** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
+Decisions already taken: recurring transactions always **ask before posting**, never post by themselves; budget **rollover** is part of the budget epics; the terminal interface and the server are for **macOS and Linux** only, not Windows (decided again in `PLT`: Windows computers use the web application, in the browser, which needs nothing from the Go code); the languages are **English** (the source language), **Spanish** and **German**, on every surface except `thaler cli`, which is English only (the localization foundation is `LOC`); releases leave on a **release train that leaves every second Monday, with the cut-off on the Friday before** (`REL`), and an epic that is not finished stays behind a feature flag instead of holding the train.
 
 Also decided: versions follow **SemVer**, each train bumping the minor version and a hotfix the patch, with `1.0.0` at the end of `M-TUI` (`REL-1`); the app-gateway is a **module of the single `thaler` binary**, with a boundary clean enough to split later (`GAT-1`, `GAT-14`); the web app's localization library is **next-intl**, with **react-i18next** kept open as the alternative (`WLC-1`). Nothing is left undecided at this level.
 
@@ -185,12 +185,12 @@ English is the source language; Spanish and German are translations. This epic i
 - ~~`LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English~~ (folded into `LOC-1`)
 - [x] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`) in the interface, and typed dates read in the language's format, with the ambiguous cases still refused (`thaler cli` prints the plain form; typed amounts already accept both separators)
 - ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)
-- [x] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code (the mechanism, and the errors of transactions, transfers, accounts, imports and dates; the rest followed with `LOC-10`, and the messages of `thaler cli` itself follow with `CLI-15`)
-- [x] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages (the mechanism, and the counts of backups and rejected rows; the counts in the interface moved over with `TLC-1`, those of `thaler cli` follow with `CLI-15`)
+- [x] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code (the mechanism, and the errors of transactions, transfers, accounts, imports and dates; the rest followed with `LOC-10`)
+- [x] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages (the mechanism, and the counts of backups and rejected rows; the counts in the interface moved over with `TLC-1`)
 - [x] `LOC-7` Display names for the built-in account types and accounts (`Assets`, `Expenses:Uncategorized`, `Equity:Transfers`, …), separate from the names stored in the ledger (there are no starting categories yet; when one is added it gets a name the same way)
 - [x] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
 - ~~`LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does~~ (folded into `LOC-8`)
-- [x] `LOC-10` The errors raised in `core`, `importer`, `config` and `ledger` that were plain English text (about a hundred) carry a code and a message in the catalog, the way `LOC-5` did the first ones; a test fails on a new one (the messages of `thaler cli` itself follow with `CLI-15`)
+- [x] `LOC-10` The errors raised in `core`, `importer`, `config` and `ledger` that were plain English text (about a hundred) carry a code and a message in the catalog, the way `LOC-5` did the first ones; a test fails on a new one
 
 ### CLI: Command-line interface
 
@@ -210,7 +210,7 @@ The scriptable surface (`thaler cli ...`), for cron and one-off jobs.
 - [ ] `CLI-12` Set and show budget targets
 - [ ] `CLI-13` Manage schedules and confirm what is due
 - [ ] `CLI-14` The reports of `RPT` (reports and projections), as commands
-- [ ] `CLI-15` Help and messages in English, Spanish and German, following the language setting
+- ~~`CLI-15` Help and messages in English, Spanish and German, following the language setting~~ (dropped: `thaler cli` is for scripts and for people who read English; everything it prints stays English, whatever the language setting)
 
 ### TLD: Ledger tab
 

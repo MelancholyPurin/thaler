@@ -47,10 +47,10 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			}
 			out := cmd.OutOrStdout()
 			if plan.Count() == 0 {
-				fmt.Fprintln(out, a.localizer().T("nothing_to_remove", map[string]any{"Count": keep}))
+				fmt.Fprintln(out, a.cli().T("nothing_to_remove", map[string]any{"Count": keep}))
 				return nil
 			}
-			describe(out, a.localizer(), plan)
+			describe(out, a.cli(), plan)
 			if !yes {
 				fmt.Fprintln(out, "\nNothing was removed. Run it again with --yes to remove these.")
 				return nil
@@ -59,7 +59,7 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(out, "\n"+a.localizer().T("backups_removed", map[string]any{"Count": removed, "Size": units.HumanSize(plan.Size())}))
+			fmt.Fprintln(out, "\n"+a.cli().T("backups_removed", map[string]any{"Count": removed, "Size": units.HumanSize(plan.Size())}))
 			return nil
 		},
 	}

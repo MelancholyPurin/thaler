@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/language"
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
@@ -19,8 +20,10 @@ import (
 type app struct {
 	// version is what --version prints; empty only in tests that do not ask.
 	version string
-	// loc says the messages in the language of the person; see localizer.
+	// loc is the language of the interface; see localizer. The CLI is English: see cli.
 	loc *i18n.Localizer
+	// en is the English of the CLI, made on first use.
+	en *i18n.Localizer
 	// getenv is os.Getenv, or a stand-in in a test (the language comes from the
 	// environment unless config.toml sets it).
 	getenv  func(string) string
@@ -53,15 +56,25 @@ func (a *app) service(ctx context.Context) (core.Service, error) {
 		return nil, err
 	}
 	if copied := svc.PreMigrationBackup(); copied != "" {
-		fmt.Fprintln(a.noticeOut(), a.localizer().T("upgrade_notice", map[string]any{"Copy": copied}))
+		fmt.Fprintln(a.noticeOut(), a.cli().T("upgrade_notice", map[string]any{"Copy": copied}))
 	}
 	a.svc = svc
 	return svc, nil
 }
 
-// localizer is the language of the messages: config.toml, else the environment,
-// else English. A config file that cannot be read does not stop the messages: the
-// command that needs it reports that itself.
+// cli is the voice of `thaler cli`: English, whatever the language setting. The
+// catalog is still its source, for the messages and errors it shares with the
+// interface. Scripts read the same words on every machine.
+func (a *app) cli() *i18n.Localizer {
+	if a.en == nil {
+		a.en = i18n.New(language.English)
+	}
+	return a.en
+}
+
+// localizer is the language of the interface: config.toml, else the environment,
+// else English. A config file that cannot be read does not stop it: the command
+// that needs the file reports that itself.
 func (a *app) localizer() *i18n.Localizer {
 	if a.loc != nil {
 		return a.loc
@@ -118,10 +131,10 @@ func (a *app) close() {
 	}
 }
 
-// errorLine is what main prints when a command fails: the error in the language of
-// the person, a coded error of the service looked up in the catalog.
+// errorLine is what main prints when a command fails: a coded error of the service
+// looked up in the English catalog.
 func (a *app) errorLine(err error) string {
-	return "error: " + a.localizer().Error(err)
+	return "error: " + a.cli().Error(err)
 }
 
 func main() {

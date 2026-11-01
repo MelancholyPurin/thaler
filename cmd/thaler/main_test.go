@@ -116,7 +116,7 @@ func (e *cliEnv) errText(err error) string {
 	if err == nil {
 		return ""
 	}
-	return strings.ReplaceAll(e.last.localizer().Error(err), e.dir, "{dir}")
+	return strings.ReplaceAll(e.last.cli().Error(err), e.dir, "{dir}")
 }
 
 // cliCase is a command with the state it runs against and what it should say.
@@ -531,19 +531,53 @@ func Test_runTUI(t *testing.T) {
 	}
 }
 
+// The interface follows the language setting; `thaler cli` does not (see Test_app_cliIsEnglish).
 func Test_app_localizer(t *testing.T) {
+	tcs := []struct {
+		name string
+		cfg  *config.Config
+		env  map[string]string
+		want string // the start of "no_accounts_yet", which tells the languages apart
+	}{
+		{name: "English when nothing says otherwise", cfg: &config.Config{}, want: "No accounts yet."},
+		{name: "the language of the environment", cfg: &config.Config{}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: "Noch keine Konten."},
+		{name: "config.toml wins over the environment", cfg: &config.Config{Language: "es"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: "Todavía no hay cuentas."},
+		{name: "config.toml can ask for English", cfg: &config.Config{Language: "en"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: "No accounts yet."},
+		{name: "a language Thaler does not speak is English", cfg: &config.Config{}, env: map[string]string{"LANG": "fr_FR.UTF-8"}, want: "No accounts yet."},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			a := &app{cfg: tc.cfg, getenv: func(name string) string { return tc.env[name] }}
+
+			// when
+			got := a.localizer().T("no_accounts_yet", nil)
+
+			// then
+			if !strings.HasPrefix(got, tc.want) {
+				t.Errorf("got %q, want it to start with %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// `thaler cli` speaks English whatever the language of the machine or of config.toml:
+// its output, its dates and its errors.
+func Test_app_cliIsEnglish(t *testing.T) {
 	const english = "No accounts yet. Create one with: thaler cli account add Assets:Sparkasse --currency EUR\n"
-	const spanish = "Todavía no hay cuentas. Crea una con: thaler cli account add Assets:Sparkasse --currency EUR\n"
-	const german = "Noch keine Konten. Lege eines an mit: thaler cli account add Assets:Sparkasse --currency EUR\n"
 	list := []string{"cli", "account", "list"}
+	add := []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "01/10/2026"}
+	same := []string{"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Bank", "--amount", "5"}
+	missing := []string{"cli", "transfer", "--from", "Assets:Nope", "--to", "Assets:Bank", "--amount", "5"}
+	german := map[string]string{"LANG": "de_DE.UTF-8"}
+	spanish := map[string]string{"LANG": "es_ES.UTF-8"}
 	tcs := []cliCase{
-		{name: "English when nothing says otherwise", args: list, want: english},
-		{name: "the language of the environment", args: list, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
-		{name: "config.toml wins over the environment", args: list, files: map[string]string{"config.toml": "language = \"es\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: spanish},
-		{name: "config.toml can ask for English", args: list, files: map[string]string{"config.toml": "language = \"en\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: english},
-		{name: "the pseudo-language, for finding text that does not fit", args: list, files: map[string]string{"config.toml": "language = \"pseudo\"\n"}, want: "[Ñö áççöúñtš ýét. Çréáté öñé wíth: thálér çlí áççöúñt ádd Åššétš:Špárkáššé --çúrréñçý ÉÚR " + strings.Repeat("~", 36) + "]\n"},
-		{name: "a language Thaler does not speak is English", args: list, env: map[string]string{"LANG": "fr_FR.UTF-8"}, want: english},
-		{name: "a config that cannot be read does not stop the messages", args: list, files: map[string]string{"config.toml": "language = \"fr\"\n"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, want: german},
+		{name: "a German machine", args: list, env: german, want: english},
+		{name: "a language in config.toml", args: list, files: map[string]string{"config.toml": "language = \"es\"\n"}, env: german, want: english},
+		{name: "a slash date is ambiguous even in Spanish", setup: [][]string{addBank}, args: add, env: spanish, wantErr: `invalid date "01/10/2026": use YYYY-MM-DD or DD.MM.YYYY`},
+		{name: "an error, on a Spanish machine", setup: [][]string{addBank}, args: same, env: spanish, wantErr: "source and destination are the same account"},
+		{name: "an error with an argument, on a German machine", setup: [][]string{addBank}, args: missing, env: german, wantErr: "account does not exist: Assets:Nope"},
+		{name: "an error, language set in the config", setup: [][]string{addBank}, args: missing, files: map[string]string{"config.toml": "language = \"de\"\n"}, wantErr: "account does not exist: Assets:Nope"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -560,29 +594,7 @@ func Test_app_dateFlag(t *testing.T) {
 	add := []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "01/10/2026"}
 	tcs := []cliCase{
 		{name: "slashes are ambiguous in English", setup: [][]string{addBank}, args: add, wantErr: `invalid date "01/10/2026": use YYYY-MM-DD or DD.MM.YYYY`},
-		{name: "slashes are day first in Spanish", setup: [][]string{addBank}, args: add, env: map[string]string{"LANG": "es_ES.UTF-8"}, want: "Added #1  2026-10-01  -5.00 EUR  Assets:Bank -> Expenses:Uncategorized\nCreated new account Expenses:Uncategorized\n"},
-		{name: "the message is in the language", setup: [][]string{addBank}, args: []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "1/2/x"}, env: map[string]string{"LANG": "de_DE.UTF-8"}, wantErr: `ungültiges Datum "1/2/x": verwende DD.MM.YYYY oder YYYY-MM-DD`},
-	}
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			// given
-			e := newCLIEnv(t, tc.files, tc.setup...)
-
-			// when, then
-			tc.check(t, e)
-		})
-	}
-}
-
-// A failure of the service has a code, and the message is in the language.
-func Test_app_errors(t *testing.T) {
-	same := []string{"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Bank", "--amount", "5"}
-	missing := []string{"cli", "transfer", "--from", "Assets:Nope", "--to", "Assets:Bank", "--amount", "5"}
-	tcs := []cliCase{
-		{name: "English", setup: [][]string{addBank}, args: same, wantErr: "source and destination are the same account"},
-		{name: "Spanish", setup: [][]string{addBank}, args: same, env: map[string]string{"LANG": "es_ES.UTF-8"}, wantErr: "el origen y el destino son la misma cuenta"},
-		{name: "German, with an argument", setup: [][]string{addBank}, args: missing, env: map[string]string{"LANG": "de_DE.UTF-8"}, wantErr: "Das Konto existiert nicht: Assets:Nope"},
-		{name: "German, set in the config", setup: [][]string{addBank}, args: missing, files: map[string]string{"config.toml": "language = \"de\"\n"}, wantErr: "Das Konto existiert nicht: Assets:Nope"},
+		{name: "a date that is none", setup: [][]string{addBank}, args: []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "--date", "1/2/x"}, wantErr: `invalid date "1/2/x": use YYYY-MM-DD or DD.MM.YYYY`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -604,8 +616,8 @@ func Test_app_errorLine(t *testing.T) {
 	}{
 		{name: "a plain error", err: errors.New("disk full"), want: "error: disk full"},
 		{name: "a coded error in English", err: coded.New("account_not_found", map[string]any{"Name": "Assets:Nope"}), want: "error: account does not exist: Assets:Nope"},
-		{name: "in German", env: map[string]string{"LANG": "de_DE.UTF-8"}, err: coded.New("account_not_found", map[string]any{"Name": "Assets:Nope"}), want: "error: Das Konto existiert nicht: Assets:Nope"},
-		{name: "wrapped", env: map[string]string{"LANG": "es_ES.UTF-8"}, err: fmt.Errorf("importing: %w", coded.New("already_imported", nil)), want: "error: importing: la transacción ya se importó"},
+		{name: "in English on a German machine", env: map[string]string{"LANG": "de_DE.UTF-8"}, err: coded.New("account_not_found", map[string]any{"Name": "Assets:Nope"}), want: "error: account does not exist: Assets:Nope"},
+		{name: "wrapped", env: map[string]string{"LANG": "es_ES.UTF-8"}, err: fmt.Errorf("importing: %w", coded.New("already_imported", nil)), want: "error: importing: transaction already imported"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
