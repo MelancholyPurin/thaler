@@ -114,7 +114,7 @@ func (m *Model) backupNotes() []string {
 		notes = append(notes, r)
 	}
 	if n := m.prunable.Count(); n > 0 {
-		notes = append(notes, fmt.Sprintf("%d old %s can be removed: ctrl+p", n, units.Plural(n, "backup", "backups")))
+		notes = append(notes, m.loc.T("old_backups_removable", map[string]any{"Count": n}))
 	}
 	return notes
 }
