@@ -182,3 +182,69 @@ func contains(c catalog, id string) bool {
 	_, ok := c.entries[id]
 	return ok
 }
+
+// plainErrorDirs are the packages whose errors a person can see: they make coded
+// errors (coded.New), so that the message is in the catalog and follows the language.
+// `thaler cli` is not among them yet (CLI-15).
+var plainErrorDirs = []string{"internal/ledger", "internal/core", "internal/importer", "internal/config"}
+
+// plainErrorOK are the error texts that are no message for a person: a build that
+// is wrong, which the tests of the package catch.
+var plainErrorOK = []string{"bad migration file name", "migrations %s and %s have the same version"}
+
+// plainErrorsIn finds the errors in the non-test Go files of dirs (below root) that
+// are made of English text: errors.New("...") and fmt.Errorf("...") whose format does
+// not start with %w, the wrapper of an error that is coded itself.
+func plainErrorsIn(root string, dirs []string) ([]string, error) {
+	var found []string
+	for _, dir := range dirs {
+		err := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(dir)), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			fset := token.NewFileSet()
+			src, err := os.ReadFile(path) //nolint:gosec // walking the repository's own sources
+			if err != nil {
+				return err
+			}
+			file, err := parser.ParseFile(fset, path, src, 0)
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			ast.Inspect(file, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok || len(call.Args) == 0 {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				pkg, isIdent := sel.X.(*ast.Ident)
+				if !isIdent {
+					return true
+				}
+				plain := (pkg.Name == "errors" && sel.Sel.Name == "New") || (pkg.Name == "fmt" && sel.Sel.Name == "Errorf")
+				lit, isLit := call.Args[0].(*ast.BasicLit)
+				if !plain || !isLit || lit.Kind != token.STRING {
+					return true
+				}
+				text, _ := strconv.Unquote(lit.Value)
+				if strings.HasPrefix(text, "%w") || slices.ContainsFunc(plainErrorOK, func(ok string) bool { return strings.HasPrefix(text, ok) }) {
+					return true
+				}
+				found = append(found, fmt.Sprintf("%s:%d: %s.%s(%s) is an English text: make it coded.New with a message in the catalog", filepath.ToSlash(rel), fset.Position(call.Pos()).Line, pkg.Name, sel.Sel.Name, lit.Value))
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return found, nil
+}
