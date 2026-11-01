@@ -120,7 +120,7 @@ func (m *Model) backupNotes() []string {
 }
 
 func (m *Model) backupWidth() int {
-	return min(max(m.width-6, 30), 76)
+	return min(max(m.width-4, 30), 76)
 }
 
 func (m *Model) backupInputWidth() int {
@@ -333,9 +333,9 @@ func (m *Model) backupPopup() string {
 		"",
 	}
 	for _, h := range m.backupHints() {
-		lines = append(lines, dim.Render(fit(h, iw)))
+		lines = append(lines, wrapped(h, iw, dim)...)
 	}
-	h := 15
+	h := max(15, len(lines)+3) // the hints may wrap; three more for the message line and the border
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}

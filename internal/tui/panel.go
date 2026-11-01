@@ -158,6 +158,75 @@ func leftRight(label, value string, w int) string {
 // clean collapses whitespace and control characters so a value stays on one line.
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// wrapped is text broken into lines of at most w cells at the spaces, each drawn in
+// style. A text that is too wide for one line goes on to the next instead of being
+// cut short.
+func wrapped(text string, w int, style lipgloss.Style) []string {
+	if w <= 0 {
+		return nil
+	}
+	parts := strings.Split(ansi.Wrap(text, w, ""), "\n")
+	for i, p := range parts {
+		parts[i] = style.Render(p)
+	}
+	return parts
+}
+
+// statusLine joins the parts of a status with " · " as far as they fit the line, the
+// most important first: what does not fit is left out, not cut in half. The first
+// part is always there.
+func (m *Model) statusLine(parts []string) string {
+	for n := len(parts); n > 1; n-- {
+		if s := strings.Join(parts[:n], " · "); lipgloss.Width(s) <= m.width {
+			return s
+		}
+	}
+	return parts[0]
+}
+
+// packed puts the parts side by side, separated by a dim " · ", on as few lines of at
+// most w cells as it takes: a part is never split, and a line that is full goes on to
+// the next one.
+func packed(parts []string, w int) []string {
+	sep := dim.Render(" · ")
+	var lines []string
+	cur := ""
+	for _, p := range parts {
+		switch {
+		case cur == "":
+			cur = p
+		case lipgloss.Width(cur)+lipgloss.Width(sep)+lipgloss.Width(p) <= w:
+			cur += sep + p
+		default:
+			lines = append(lines, cur)
+			cur = p
+		}
+	}
+	if cur != "" {
+		lines = append(lines, cur)
+	}
+	return lines
+}
+
+// labelled is a label with a text after it on one line, or, when they do not fit
+// together, the label with the text wrapped under it.
+func labelled(label string, labelStyle lipgloss.Style, text string, textStyle lipgloss.Style, w int) []string {
+	if lipgloss.Width(label)+1+lipgloss.Width(text) <= w {
+		return []string{labelStyle.Render(label) + textStyle.Render(" "+text)}
+	}
+	return append([]string{labelStyle.Render(label)}, wrapped(text, w, textStyle)...)
+}
+
+// leftRightLines is leftRight, except that a label and a value that do not fit side by
+// side go on two lines, the value under the label at the right, instead of the label
+// being cut short.
+func leftRightLines(label, value string, w int) []string {
+	if lipgloss.Width(label)+1+lipgloss.Width(value) <= w {
+		return []string{leftRight(label, value, w)}
+	}
+	return []string{fit(label, w), fitRight(value, w)}
+}
+
 // centered pads s on the left so it sits in the middle of w cells.
 func centered(s string, w int) string {
 	if pad := (w - lipgloss.Width(s)) / 2; pad > 0 {

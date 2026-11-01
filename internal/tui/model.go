@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -153,6 +152,7 @@ type Model struct {
 	rst           *restoreForm
 	prn           *pruneForm
 	lang          *languageForm
+	helpTop       int            // first line of the help that is shown, when it is longer than the screen
 	lastBackup    time.Time      // when the newest backup was made, zero if there is none; see refreshBackups
 	remindDays    int            // days after which that is worth a reminder, 0 for never
 	prunable      core.PrunePlan // the backups that are more than are kept, see refreshBackups
@@ -341,7 +341,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case modePick:
 			return m.updatePick(msg)
 		case modeHelp:
-			m.mode = modeList // any key closes the help
+			switch msg.String() {
+			case "up", "k":
+				m.helpTop = max(m.helpTop-1, 0)
+			case "down", "j":
+				m.helpTop++ // helpPopup holds it at the end
+			case "pgup":
+				m.helpTop = max(m.helpTop-10, 0)
+			case "pgdown":
+				m.helpTop += 10
+			default:
+				m.mode = modeList // any other key closes the help
+			}
 			return m, nil
 		case modeForm:
 			return m.updateForm(msg)
@@ -376,7 +387,7 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q":
 		return m, tea.Quit
 	case "?":
-		m.mode = modeHelp
+		m.mode, m.helpTop = modeHelp, 0
 		return m, nil
 	case "C":
 		return m, m.editConfig()
@@ -602,7 +613,7 @@ func (m *Model) applyCategory(category string) {
 		parts = append(parts, m.loc.T("more_categorized", map[string]any{"Count": moved}))
 	}
 	parts = append(parts, m.loc.T("hint_undo_categories", nil))
-	m.setStatus(strings.Join(parts, " · "), false)
+	m.setStatus(m.statusLine(parts), false)
 }
 
 func (m *Model) setStatus(s string, isErr bool) {

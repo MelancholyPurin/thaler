@@ -95,8 +95,8 @@ func Test_View_homeBanner(t *testing.T) {
 	}{
 		{name: "a roomy terminal", width: 110, height: 32, want: observed{Large: true, HasFacts: true}},
 		{name: "the classic 24 rows: nothing cut off", width: 100, height: 24, want: observed{Large: true, HasFacts: true}},
-		{name: "the smallest height with room, without a blank line above", width: 100, height: 22, want: observed{Large: true, HasFacts: true}},
-		{name: "one row less and the compact banner takes over", width: 100, height: 21, want: observed{Compact: true, HasFacts: true}},
+		{name: "the smallest height with room, without a blank line above", width: 100, height: 23, want: observed{Large: true, HasFacts: true}},
+		{name: "one row less and the compact banner takes over", width: 100, height: 22, want: observed{Compact: true, HasFacts: true}},
 		{name: "a narrow pane wraps the facts, so the compact banner", width: 76, height: 24, want: observed{Compact: true, HasFacts: true}},
 	}
 	for _, tc := range tcs {

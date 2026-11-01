@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
@@ -115,11 +116,10 @@ func (m *Model) prunePopup() string {
 	f := m.prn
 	w := m.backupWidth()
 	iw := w - 2
-	lines := []string{
-		fit(m.loc.T("old_backups_listing", map[string]any{"Keep": f.plan.Keep, "Count": f.plan.Count()}), iw),
-		dim.Render(fit(m.loc.T("old_backups_freed", map[string]any{"Size": m.loc.Size(f.plan.Size())}), iw)),
-		dim.Render(fit("", iw)),
-	}
+	lines := wrapped(m.loc.T("old_backups_listing", map[string]any{"Keep": f.plan.Keep, "Count": f.plan.Count()}), iw, lipgloss.NewStyle())
+	lines = append(lines, wrapped(m.loc.T("old_backups_freed", map[string]any{"Size": m.loc.Size(f.plan.Size())}), iw, dim)...)
+	lines = append(lines, "")
+	header := len(lines)
 	for i := f.top; i < min(f.top+pruneRows, len(f.lines)); i++ {
 		l := f.lines[i]
 		if l.heading {
@@ -128,7 +128,7 @@ func (m *Model) prunePopup() string {
 			lines = append(lines, fit(l.text, iw))
 		}
 	}
-	h := pruneRows + 7
+	h := header + pruneRows + 3 // the header, the list, the message line and the border
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}

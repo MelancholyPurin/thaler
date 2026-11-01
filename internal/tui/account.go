@@ -257,7 +257,7 @@ func (m *Model) saveAccountForm() {
 		parts = append(parts, m.loc.T("hint_i_imports", nil))
 	}
 	m.closeAccountForm(f.existing.Name)
-	m.setStatus(strings.Join(parts, " · "), false)
+	m.setStatus(m.statusLine(parts), false)
 }
 
 // pushBalanceUndo lets z take back a change to an opening balance: it deletes
@@ -352,13 +352,13 @@ func (m *Model) accountHints(w int) []string {
 	switch f.field {
 	case acctName:
 		if strings.TrimSpace(f.name.Value()) == "" {
-			return []string{dim.Render(m.loc.T("acct_hint_name_examples", nil))}
+			return wrapped(m.loc.T("acct_hint_name_examples", nil), w, dim)
 		}
-		return []string{dim.Render(m.loc.T("acct_hint_will_be_called", map[string]any{"Name": f.accountName()}))}
+		return wrapped(m.loc.T("acct_hint_will_be_called", map[string]any{"Name": f.accountName()}), w, dim)
 	case acctKind:
-		return []string{dim.Render(m.loc.T("acct_hint_kind", map[string]any{"Assets": m.loc.AccountName(string(ledger.Assets)), "Liabilities": m.loc.AccountName(string(ledger.Liabilities))}))}
+		return wrapped(m.loc.T("acct_hint_kind", map[string]any{"Assets": m.loc.AccountName(string(ledger.Assets)), "Liabilities": m.loc.AccountName(string(ledger.Liabilities))}), w, dim)
 	case acctCurrency:
-		return []string{dim.Render(m.loc.T("acct_hint_currency", nil))}
+		return wrapped(m.loc.T("acct_hint_currency", nil), w, dim)
 	case acctBalance:
 		hint := m.loc.T("acct_hint_balance_start", nil)
 		if f.setting {
@@ -367,11 +367,8 @@ func (m *Model) accountHints(w int) []string {
 		if owes {
 			hint = m.loc.T("acct_hint_owed", nil)
 		}
-		return []string{
-			dim.Render(fit(hint, w)),
-			dim.Render(fit(m.loc.T("acct_hint_difference", nil), w)),
-		}
+		return append(wrapped(hint, w, dim), wrapped(m.loc.T("acct_hint_difference", nil), w, dim)...)
 	default:
-		return []string{dim.Render(m.loc.T("date_hint", nil))}
+		return wrapped(m.loc.T("date_hint", nil), w, dim)
 	}
 }

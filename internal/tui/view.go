@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -284,32 +285,46 @@ func (m *Model) bottomBar() string {
 		}
 		return fit(accent.Render(m.status), m.width)
 	}
-	var hint string
-	switch {
-	case m.screen == screenBudget:
-		hint = m.loc.T("hint_budget", nil)
-	case m.screen != screenLedger:
-		hint = m.loc.T("hint_other_screens", nil)
-	default:
-		hint = m.ledgerHint()
+	hints, tail := m.hintItems()
+	notes := m.backupNotes()
+	// Everything that fits, most urgent first: the notes, then the hints in their
+	// order, with "? help · q quit" kept as long as there is room for it. What does
+	// not fit is left out, not cut in half.
+	for k := len(notes); k >= min(len(notes), 1); k-- {
+		for n := len(hints); n >= 0; n-- {
+			rest := strings.Join(append(append([]string{}, hints[:n]...), tail...), " · ")
+			line := dim.Render(rest)
+			if k > 0 {
+				line = warn.Render(strings.Join(notes[:k], " · ")) + dim.Render(" · "+rest)
+			}
+			if lipgloss.Width(line) <= m.width {
+				return fit(line, m.width)
+			}
+		}
 	}
-	if notes := m.backupNotes(); len(notes) > 0 {
-		return fit(warn.Render(strings.Join(notes, " · "))+dim.Render(" · "+hint), m.width)
+	if len(notes) > 0 {
+		return fit(warn.Render(notes[0]), m.width)
 	}
-	return fit(dim.Render(hint), m.width)
+	return fit(dim.Render(strings.Join(tail, " · ")), m.width)
 }
 
-func (m *Model) ledgerHint() string {
-	var hint string
+// hintItems are the keys the bottom bar offers on this screen, the most useful first,
+// and the two that stay as long as they fit.
+func (m *Model) hintItems() (hints, tail []string) {
+	tail = []string{m.loc.T("hint_help", nil), m.loc.T("hint_quit", nil)}
+	switch {
+	case m.screen == screenBudget:
+		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
+	case m.screen != screenLedger:
+		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
+	}
 	switch m.focus {
 	case paneHome:
-		hint = m.loc.T("hint_home", nil)
+		return []string{m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_import", nil), m.loc.T("hint_new_account", nil), m.loc.T("hint_backup", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	case paneAccounts:
-		hint = m.loc.T("hint_accounts", nil)
-	default:
-		hint = m.loc.T("hint_transactions", nil)
+		return []string{m.loc.T("hint_pick_account", nil), m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_balance", nil), m.loc.T("hint_new", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	}
-	return hint
+	return []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil)}, tail
 }
 
 func (m *Model) centerPopup(screen, popup string) string {
@@ -326,13 +341,47 @@ func (m *Model) pickerPopup() string {
 	h := min(max(m.height-4, 8), 17, max(8, 6+len(m.pickItems)))
 	title := m.loc.T("categorize_title", map[string]any{"Payee": clean(r.tx.Payee), "Amount": m.loc.Signed(r.source.Amount)})
 
+	iw := w - 2
+
+	// The rule section sits at the bottom: tab goes there from the category. It is
+	// worked out first, because the list gets the lines it leaves.
+	footer := m.loc.T("footer_pick", nil)
+	var rule []string
+	switch {
+	case m.pickRuleOn:
+		rule = []string{accent.Render(fit("▸ "+m.loc.T("label_rule", nil), 7)) + " " + m.pickRule.View()}
+		footer = m.loc.T("footer_pick_rule", nil)
+	case clean(m.pickRule.Value()) != "":
+		rule = []string{dim.Render(fit("  "+m.loc.T("label_rule", nil), 8)) + m.pickRule.View()}
+	default:
+		const indent = 9
+		for i, l := range wrapped(m.loc.T("rule_hint", nil), iw-indent, dim) {
+			head := strings.Repeat(" ", indent)
+			if i == 0 {
+				head = dim.Render(fit("  "+fit(m.loc.T("label_rule", nil), 6)+" ", indent))
+			}
+			rule = append(rule, head+l)
+		}
+	}
+	noteStyle := dim
+	if m.pickNoteBad {
+		noteStyle = errStyle
+	}
+	var note []string
+	for _, l := range wrapped(m.pickNote, iw-2, noteStyle) {
+		note = append(note, "  "+l)
+	}
+	if m.pickNote == "" {
+		note = []string{""}
+	}
+	section := slices.Concat(rule, note)
+
 	lines := []string{m.picker.View()}
-	listH := h - 2 - 1 - 3 // minus the border, the input and the rule section
+	listH := max(h-2-1-1-len(section), 0) // minus the border, the input, the rule above the section and the section
 	start := 0
 	if m.pickCursor >= listH {
 		start = m.pickCursor - listH + 1
 	}
-	iw := w - 2
 	for i := start; i < len(m.pickItems) && len(lines)-1 < listH; i++ {
 		it := m.pickItems[i]
 		line := leftRight(it.name, dim.Render(it.hint), iw)
@@ -345,29 +394,13 @@ func (m *Model) pickerPopup() string {
 		lines = append(lines, line)
 	}
 	if len(m.pickItems) == 0 {
-		lines = append(lines, dim.Render(m.loc.T("picker_no_match", nil)))
+		lines = append(lines, wrapped(m.loc.T("picker_no_match", nil), iw, dim)...)
 	}
 	for len(lines) < 1+listH {
 		lines = append(lines, "")
 	}
-
-	// The rule section sits at the bottom: tab goes there from the category.
 	lines = append(lines, dim.Render(strings.Repeat("─", iw)))
-	footer := m.loc.T("footer_pick", nil)
-	switch {
-	case m.pickRuleOn:
-		lines = append(lines, accent.Render(fit("▸ "+m.loc.T("label_rule", nil), 7))+" "+m.pickRule.View())
-		footer = m.loc.T("footer_pick_rule", nil)
-	case clean(m.pickRule.Value()) != "":
-		lines = append(lines, dim.Render(fit("  "+m.loc.T("label_rule", nil), 8))+m.pickRule.View())
-	default:
-		lines = append(lines, dim.Render(fit("  "+fit(m.loc.T("label_rule", nil), 6)+" "+m.loc.T("rule_hint", nil), iw)))
-	}
-	note := dim.Render(fit("  "+m.pickNote, iw))
-	if m.pickNoteBad {
-		note = errStyle.Render(fit("  "+m.pickNote, iw))
-	}
-	lines = append(lines, note)
+	lines = append(lines, section...)
 	return box(title, lines, w, h, true, footer)
 }
 
@@ -398,19 +431,33 @@ func (m *Model) helpPopup() string {
 		{"?", m.loc.T("help_help", nil)},
 		{"q  ctrl+c", m.loc.T("help_quit", nil)},
 	}
+	w := min(max(m.width-4, 20), 76)
+	const keyW = 16
 	lines := make([]string, 0, len(rows))
 	for _, r := range rows {
-		lines = append(lines, accent.Render(fit(r[0], 16))+" "+r[1])
+		for i, desc := range wrapped(r[1], w-2-keyW-1, lipgloss.NewStyle()) {
+			key := strings.Repeat(" ", keyW)
+			if i == 0 {
+				key = accent.Render(fit(r[0], keyW))
+			}
+			lines = append(lines, key+" "+desc)
+		}
 	}
-	w := min(max(m.width-6, 20), 64)
-	return box(m.loc.T("help_title", nil), lines, w, min(len(lines)+2, max(m.height-2, 3)), true, m.loc.T("help_footer", nil))
+	h := min(len(lines)+2, max(m.height-2, 3))
+	footer := m.loc.T("help_footer", nil)
+	if len(lines) > h-2 {
+		footer = m.loc.T("help_footer_scroll", nil)
+		m.helpTop = max(0, min(m.helpTop, len(lines)-(h-2)))
+		lines = lines[m.helpTop : m.helpTop+h-2]
+	}
+	return box(m.loc.T("help_title", nil), lines, w, h, true, footer)
 }
 
 // ---- add / edit form --------------------------------------------------------------
 
 func (m *Model) formPopup() string {
 	f := m.form
-	w := min(max(m.width-6, 30), 72)
+	w := min(max(m.width-4, 30), 76)
 	iw := w - 2
 	h := min(16, max(m.height-2, 10))
 	listH := max(h-10, 0)
@@ -466,7 +513,7 @@ func (m *Model) formSuggestions(w, h int) []string {
 	switch f.field {
 	case fieldPayee:
 		if len(f.payeeItems) == 0 {
-			return []string{dim.Render(m.loc.T("payee_new", nil))}
+			return wrapped(m.loc.T("payee_new", nil), w, dim)
 		}
 		var out []string
 		for i, p := range f.payeeItems {
@@ -499,17 +546,17 @@ func (m *Model) formSuggestions(w, h int) []string {
 			out = append(out, line)
 		}
 		if len(f.catItems) == 0 {
-			out = append(out, dim.Render(m.loc.T("category_no_match", nil)))
+			out = append(out, wrapped(m.loc.T("category_no_match", nil), w, dim)...)
 		}
 		return out
 	case fieldAmount:
-		return []string{dim.Render(m.loc.T("amount_hint", nil))}
+		return wrapped(m.loc.T("amount_hint", nil), w, dim)
 	case fieldDate:
-		return []string{dim.Render(m.loc.T("date_hint", nil))}
+		return wrapped(m.loc.T("date_hint", nil), w, dim)
 	case fieldDescription:
-		return []string{dim.Render(m.loc.T("description_hint", nil))}
+		return wrapped(m.loc.T("description_hint", nil), w, dim)
 	default:
-		return []string{dim.Render(m.loc.T("form_account_hint", nil))}
+		return wrapped(m.loc.T("form_account_hint", nil), w, dim)
 	}
 }
 
