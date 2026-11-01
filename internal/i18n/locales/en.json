@@ -5,7 +5,10 @@
   "account_not_found": "account does not exist: {{.Name}}",
   "account_exists": "account already exists: {{.Name}}",
   "already_imported": "transaction already imported",
-  "rows_rejected": "some rows do not fit the account: {{.Count}} row(s)",
+  "rows_rejected": {
+    "one": "{{.Count}} row does not fit the account",
+    "other": "{{.Count}} rows do not fit the account"
+  },
   "currency_mismatch": "currency mismatch: {{.First}} vs {{.Second}}",
   "posting_no_currency": "posting to {{.Account}} has no currency",
   "too_few_postings": "a transaction needs at least two postings",
@@ -19,5 +22,25 @@
   "amount_not_positive": "amount must be greater than zero",
   "received_wrong_currency": "amount received is in {{.Currency}}, but {{.Account}} holds {{.Holds}}",
   "received_not_positive": "amount received must be greater than zero",
-  "balance_wrong_currency": "{{.Account}} holds {{.Holds}}, but the balance is in {{.Currency}}"
+  "balance_wrong_currency": "{{.Account}} holds {{.Holds}}, but the balance is in {{.Currency}}",
+  "backups_removed": {
+    "one": "Removed {{.Count}} backup ({{.Size}}).",
+    "other": "Removed {{.Count}} backups ({{.Size}})."
+  },
+  "prune_listing": {
+    "one": "Keeping the newest {{.Keep}} in each folder; {{.Count}} backup ({{.Size}}) would go:",
+    "other": "Keeping the newest {{.Keep}} in each folder; {{.Count}} backups ({{.Size}}) would go:"
+  },
+  "nothing_to_remove": {
+    "one": "Nothing to remove: no folder has more than {{.Count}} backup.",
+    "other": "Nothing to remove: no folder has more than {{.Count}} backups."
+  },
+  "old_backups_removable": {
+    "one": "{{.Count}} old backup can be removed: ctrl+p",
+    "other": "{{.Count}} old backups can be removed: ctrl+p"
+  },
+  "old_backups_removed": {
+    "one": "Removed {{.Count}} old backup ({{.Size}})",
+    "other": "Removed {{.Count}} old backups ({{.Size}})"
+  }
 }

@@ -32,15 +32,17 @@ func Test_catalogProblems(t *testing.T) {
 		want     []string
 	}{
 		{name: "a whole translation", other: `{"hello": "Hallo {{.Name}}", "files": {"one": "{{.Count}} Datei", "other": "{{.Count}} Dateien"}, "bye": "Tschüss"}`, complete: true},
-		{name: "arguments in another order", other: `{"hello": "{{.Name}}, hallo", "files": {"other": "{{.Count}} Dateien"}, "bye": "Tschüss"}`, complete: true},
-		{name: "a missing message when the language is complete", other: `{"hello": "Hallo {{.Name}}", "files": {"other": "{{.Count}} Dateien"}}`, complete: true, want: []string{`de: "bye" is not translated, but the language is marked Complete`}},
+		{name: "arguments in another order", other: `{"hello": "{{.Name}}, hallo", "files": {"one": "{{.Count}} Datei", "other": "{{.Count}} Dateien"}, "bye": "Tschüss"}`, complete: true},
+		{name: "a language with more plural forms than English", other: `{"hello": "Hola {{.Name}}", "files": {"one": "{{.Count}} archivo", "many": "{{.Count}} de archivos", "other": "{{.Count}} archivos"}, "bye": "Adiós"}`, complete: true},
+		{name: "a counting message that lost its singular", other: `{"files": {"other": "{{.Count}} Dateien"}}`, want: []string{`de: "files" counts in English and has a "one" text there, but not here`}},
+		{name: "a missing message when the language is complete", other: `{"hello": "Hallo {{.Name}}", "files": {"one": "{{.Count}} Datei", "other": "{{.Count}} Dateien"}}`, complete: true, want: []string{`de: "bye" is not translated, but the language is marked Complete`}},
 		{name: "a missing message while it is still being translated", other: `{"hello": "Hallo {{.Name}}"}`},
-		{name: "an empty text counts as missing", other: `{"hello": "Hallo {{.Name}}", "files": {"other": "{{.Count}} Dateien"}, "bye": ""}`, complete: true, want: []string{`de: "bye" is not translated, but the language is marked Complete`}},
+		{name: "an empty text counts as missing", other: `{"hello": "Hallo {{.Name}}", "files": {"one": "{{.Count}} Datei", "other": "{{.Count}} Dateien"}, "bye": ""}`, complete: true, want: []string{`de: "bye" is not translated, but the language is marked Complete`}},
 		{name: "a message English no longer has", other: `{"hello": "Hallo {{.Name}}", "old": "Alt"}`, want: []string{`de: "old" is not a message of English: it was removed or renamed there`}},
 		{name: "a translated argument", other: `{"hello": "Hallo {{.Nombre}}"}`, want: []string{`de: "hello" takes the arguments [Nombre] but English has [Name]: arguments are not translated or dropped`}},
 		{name: "a dropped argument", other: `{"hello": "Hallo"}`, want: []string{`de: "hello" takes the arguments [] but English has [Name]: arguments are not translated or dropped`}},
 		{name: "a plural form without other", other: `{"files": {"one": "{{.Count}} Datei"}}`, want: []string{`de: "files" has no "other" text, which every message needs`}},
-		{name: "one form of a plural left empty", other: `{"files": {"one": "", "other": "{{.Count}} Dateien"}}`, want: []string{`de: "files" has an empty "one" text`}},
+		{name: "one form of a plural left empty", other: `{"files": {"one": "", "other": "{{.Count}} Dateien"}}`, want: []string{`de: "files" has an empty "one" text`, `de: "files" counts in English and has a "one" text there, but not here`}},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

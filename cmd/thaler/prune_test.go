@@ -24,6 +24,7 @@ func Test_prune(t *testing.T) {
 		name    string
 		config  string
 		args    []string
+		env     map[string]string
 		want    string // the output, the folder of the database as {db} and times as {when}
 		wantErr string
 		left    []string // below the folder, afterwards
@@ -80,6 +81,32 @@ func Test_prune(t *testing.T) {
 			left:    []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261015-090000.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
 		{
+			name: "German, in the plural",
+			args: []string{"cli", "prune", "--keep", "2", "--yes"},
+			env:  map[string]string{"LANG": "de_DE.UTF-8"},
+			want: "Aufbewahrt pro Ordner: 2. 2 Sicherungen (10 B) würden entfernt:\n\n" +
+				"backups: {db}/backups, 2 of 4\n  {when}  thaler-20261020-090000.db.age  5 B\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"\n2 Sicherungen entfernt (10 B).\n",
+			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
+		},
+		{
+			name:   "Spanish, in the singular",
+			config: "keep_backups = 3\n",
+			args:   []string{"cli", "prune", "--yes"},
+			env:    map[string]string{"LANG": "es_ES.UTF-8"},
+			want: "Copias que se conservan por carpeta: 3. 1 copia de seguridad (5 B) se eliminaría:\n\n" +
+				"backups: {db}/backups, 1 of 4\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"\nSe eliminó 1 copia de seguridad (5 B).\n",
+			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
+		},
+		{
+			name: "German, nothing to remove",
+			args: []string{"cli", "prune", "--keep", "5"},
+			env:  map[string]string{"LANG": "de_DE.UTF-8"},
+			want: "Nichts zu entfernen: Kein Ordner hat mehr als 5 Sicherungen.\n",
+			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261015-090000.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
+		},
+		{
 			name: "a folder of its own is counted on its own",
 			args: []string{"cli", "prune", "--keep", "1", "--yes"},
 			want: "Keeping the newest 1 in each folder; 3 backups (15 B) would go:\n\n" +
@@ -92,6 +119,7 @@ func Test_prune(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
 			e := newCLIEnv(t, nil)
+			e.env = tc.env
 			if err := os.WriteFile(e.cfg, []byte(tc.config), 0o600); err != nil {
 				t.Fatal(err)
 			}

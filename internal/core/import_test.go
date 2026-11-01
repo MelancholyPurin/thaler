@@ -157,7 +157,7 @@ func Test_Import(t *testing.T) {
 			name: "a row in another currency is refused, and nothing at all is written", setup: []given{bank},
 			req:     ImportRequest{Rows: []importer.Row{row(2, "2026-10-01", "Shop", "", eur(-100)), row(3, "2026-10-01", "US Shop", "", usd(-100))}},
 			want:    ImportResult{Rejected: []RejectedRow{{Line: 3, Reason: "currency USD does not match Assets:Bank (EUR)"}}},
-			wantErr: "some rows do not fit the account: 1 row(s)", wantIs: ErrRowsRejected,
+			wantErr: "1 row does not fit the account", wantIs: ErrRowsRejected,
 		},
 		{
 			name: "with IgnoreRejected the rows that fit are imported", setup: []given{bank},

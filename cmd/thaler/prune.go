@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/units"
 )
 
@@ -46,10 +47,10 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			}
 			out := cmd.OutOrStdout()
 			if plan.Count() == 0 {
-				fmt.Fprintf(out, "Nothing to remove: no folder has more than %d backups.\n", keep)
+				fmt.Fprintln(out, a.localizer().T("nothing_to_remove", map[string]any{"Count": keep}))
 				return nil
 			}
-			describe(out, plan)
+			describe(out, a.localizer(), plan)
 			if !yes {
 				fmt.Fprintln(out, "\nNothing was removed. Run it again with --yes to remove these.")
 				return nil
@@ -58,7 +59,7 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "\nRemoved %d %s (%s).\n", removed, units.Plural(removed, "backup", "backups"), units.HumanSize(plan.Size()))
+			fmt.Fprintln(out, "\n"+a.localizer().T("backups_removed", map[string]any{"Count": removed, "Size": units.HumanSize(plan.Size())}))
 			return nil
 		},
 	}
@@ -68,9 +69,8 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 }
 
 // describe lists what a plan removes, folder by folder.
-func describe(w io.Writer, plan core.PrunePlan) {
-	fmt.Fprintf(w, "Keeping the newest %d in each folder; %d %s (%s) would go:\n",
-		plan.Keep, plan.Count(), units.Plural(plan.Count(), "backup", "backups"), units.HumanSize(plan.Size()))
+func describe(w io.Writer, loc *i18n.Localizer, plan core.PrunePlan) {
+	fmt.Fprintln(w, loc.T("prune_listing", map[string]any{"Keep": plan.Keep, "Count": plan.Count(), "Size": units.HumanSize(plan.Size())}))
 	for _, f := range plan.Folders {
 		fmt.Fprintf(w, "\n%s: %s, %d of %d\n", f.Label, f.Dir, len(f.Remove), f.Total)
 		for _, file := range f.Remove {

@@ -109,7 +109,7 @@ func (m *Model) prune() {
 		return
 	}
 	m.mode, m.prn = modeList, nil
-	m.setStatus(fmt.Sprintf("Removed %d old %s (%s)", removed, units.Plural(removed, "backup", "backups"), units.HumanSize(f.plan.Size())), false)
+	m.setStatus(m.loc.T("old_backups_removed", map[string]any{"Count": removed, "Size": units.HumanSize(f.plan.Size())}), false)
 }
 
 func (m *Model) prunePopup() string {

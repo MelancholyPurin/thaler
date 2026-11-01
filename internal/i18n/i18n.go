@@ -25,6 +25,8 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
 
 	goi18n "github.com/nicksnyder/go-i18n/v2/i18n"
@@ -192,16 +194,41 @@ func newFromCatalogs(tag language.Tag, instead map[string]string) *Localizer {
 	}
 }
 
+// wholeNumber is n as an int64 if it is an integer of any type, which is what a
+// count is (go-i18n takes signed integers, and floats and strings it reads as
+// numbers with decimals, which a count is not).
+func wholeNumber(n any) (int64, bool) {
+	if n == nil {
+		return 0, false
+	}
+	v := reflect.ValueOf(n)
+	switch v.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int(), true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if u := v.Uint(); u <= math.MaxInt64 {
+			return int64(u), true
+		}
+	}
+	return 0, false
+}
+
 // Tag is the language this Localizer speaks.
 func (l *Localizer) Tag() language.Tag { return l.tag }
 
 // T is the message id with its arguments filled in, such as {"Copy": path} for
-// {{.Copy}}. A message the language lacks is shown in English. An id nobody defined
+// {{.Copy}}. A message that counts has a text per plural form, and the argument
+// Count (a whole number) chooses the form: "1 backup", "2 backups", in the way each
+// language counts. A message the language lacks is shown in English. An id nobody defined
 // comes out as the id itself, so that the mistake is visible instead of a blank.
 func (l *Localizer) T(id string, args map[string]any) string {
+	cfg := &goi18n.LocalizeConfig{MessageID: id, TemplateData: args}
+	if n, ok := wholeNumber(args["Count"]); ok {
+		cfg.PluralCount = n // "Count" chooses the plural form: {"one": "...", "other": "..."}
+	}
 	// An error with a text is a message that came from English because the language
 	// lacks it, which is what is wanted; an error without one is a message nobody has.
-	text, _ := l.loc.Localize(&goi18n.LocalizeConfig{MessageID: id, TemplateData: args})
+	text, _ := l.loc.Localize(cfg)
 	if text == "" {
 		return id
 	}

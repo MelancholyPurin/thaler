@@ -5,7 +5,10 @@
   "account_not_found": "Das Konto existiert nicht: {{.Name}}",
   "account_exists": "Das Konto existiert bereits: {{.Name}}",
   "already_imported": "Die Buchung wurde bereits importiert",
-  "rows_rejected": "Einige Zeilen passen nicht zum Konto: {{.Count}} Zeile(n)",
+  "rows_rejected": {
+    "one": "{{.Count}} Zeile passt nicht zum Konto",
+    "other": "{{.Count}} Zeilen passen nicht zum Konto"
+  },
   "currency_mismatch": "Währungen passen nicht zusammen: {{.First}} und {{.Second}}",
   "posting_no_currency": "Die Buchungszeile für {{.Account}} hat keine Währung",
   "too_few_postings": "Eine Buchung braucht mindestens zwei Buchungszeilen",
@@ -19,5 +22,25 @@
   "amount_not_positive": "Der Betrag muss größer als null sein",
   "received_wrong_currency": "Der erhaltene Betrag ist in {{.Currency}}, aber {{.Account}} führt {{.Holds}}",
   "received_not_positive": "Der erhaltene Betrag muss größer als null sein",
-  "balance_wrong_currency": "{{.Account}} führt {{.Holds}}, aber der Kontostand ist in {{.Currency}}"
+  "balance_wrong_currency": "{{.Account}} führt {{.Holds}}, aber der Kontostand ist in {{.Currency}}",
+  "backups_removed": {
+    "one": "{{.Count}} Sicherung entfernt ({{.Size}}).",
+    "other": "{{.Count}} Sicherungen entfernt ({{.Size}})."
+  },
+  "prune_listing": {
+    "one": "Aufbewahrt pro Ordner: {{.Keep}}. {{.Count}} Sicherung ({{.Size}}) würde entfernt:",
+    "other": "Aufbewahrt pro Ordner: {{.Keep}}. {{.Count}} Sicherungen ({{.Size}}) würden entfernt:"
+  },
+  "nothing_to_remove": {
+    "one": "Nichts zu entfernen: Kein Ordner hat mehr als {{.Count}} Sicherung.",
+    "other": "Nichts zu entfernen: Kein Ordner hat mehr als {{.Count}} Sicherungen."
+  },
+  "old_backups_removable": {
+    "one": "{{.Count}} alte Sicherung kann entfernt werden: ctrl+p",
+    "other": "{{.Count}} alte Sicherungen können entfernt werden: ctrl+p"
+  },
+  "old_backups_removed": {
+    "one": "{{.Count}} alte Sicherung entfernt ({{.Size}})",
+    "other": "{{.Count}} alte Sicherungen entfernt ({{.Size}})"
+  }
 }
