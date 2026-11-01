@@ -1,4 +1,5 @@
 {
   "upgrade_notice": "Se actualizó la base de datos a esta versión de Thaler. Una copia de antes está en {{.Copy}} (sin cifrar)",
-  "no_accounts_yet": "Todavía no hay cuentas. Crea una con: thaler cli account add Assets:Sparkasse --currency EUR"
+  "no_accounts_yet": "Todavía no hay cuentas. Crea una con: thaler cli account add Assets:Sparkasse --currency EUR",
+  "invalid_date": "fecha no válida \"{{.Text}}\": usa {{.Formats}}"
 }
