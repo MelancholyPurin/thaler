@@ -78,7 +78,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 
 			var problems []string
 			for _, e := range parsed.Errors {
-				problems = append(problems, a.localizer().T("import_line_problem", map[string]any{"Line": e.Line, "Reason": a.localizer().Error(e.Err)}))
+				problems = append(problems, a.cli().T("import_line_problem", map[string]any{"Line": e.Line, "Reason": a.cli().Error(e.Err)}))
 			}
 			if len(problems) > 0 && !ignoreErrors {
 				printProblems(out, problems)
@@ -92,7 +92,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 				IgnoreRejected: ignoreErrors,
 			})
 			for _, r := range res.Rejected {
-				problems = append(problems, a.localizer().T("import_line_problem", map[string]any{"Line": r.Line, "Reason": a.localizer().Error(r.Err)}))
+				problems = append(problems, a.cli().T("import_line_problem", map[string]any{"Line": r.Line, "Reason": a.cli().Error(r.Err)}))
 			}
 			if errors.Is(err, core.ErrRowsRejected) {
 				printProblems(out, problems)

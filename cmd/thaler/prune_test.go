@@ -81,29 +81,29 @@ func Test_prune(t *testing.T) {
 			left:    []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261015-090000.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
 		{
-			name: "German, in the plural",
+			name: "English on a German machine, in the plural",
 			args: []string{"cli", "prune", "--keep", "2", "--yes"},
 			env:  map[string]string{"LANG": "de_DE.UTF-8"},
-			want: "Aufbewahrt pro Ordner: 2. 2 Sicherungen (10 B) würden entfernt:\n\n" +
-				"Sicherungen: {db}/backups, 2 von 4\n  {when}  thaler-20261020-090000.db.age  5 B\n  {when}  thaler-20261015-090000.db  5 B\n" +
-				"\n2 Sicherungen entfernt (10 B).\n",
+			want: "Keeping the newest 2 in each folder; 2 backups (10 B) would go:\n\n" +
+				"backups: {db}/backups, 2 of 4\n  {when}  thaler-20261020-090000.db.age  5 B\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"\nRemoved 2 backups (10 B).\n",
 			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
 		{
-			name:   "Spanish, in the singular",
+			name:   "English on a Spanish machine, in the singular",
 			config: "keep_backups = 3\n",
 			args:   []string{"cli", "prune", "--yes"},
 			env:    map[string]string{"LANG": "es_ES.UTF-8"},
-			want: "Copias que se conservan por carpeta: 3. 1 copia de seguridad (5 B) se eliminaría:\n\n" +
-				"copias de seguridad: {db}/backups, 1 de 4\n  {when}  thaler-20261015-090000.db  5 B\n" +
-				"\nSe eliminó 1 copia de seguridad (5 B).\n",
+			want: "Keeping the newest 3 in each folder; 1 backup (5 B) would go:\n\n" +
+				"backups: {db}/backups, 1 of 4\n  {when}  thaler-20261015-090000.db  5 B\n" +
+				"\nRemoved 1 backup (5 B).\n",
 			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
 		{
-			name: "German, nothing to remove",
+			name: "English on a German machine, nothing to remove",
 			args: []string{"cli", "prune", "--keep", "5"},
 			env:  map[string]string{"LANG": "de_DE.UTF-8"},
-			want: "Nichts zu entfernen: Kein Ordner hat mehr als 5 Sicherungen.\n",
+			want: "Nothing to remove: no folder has more than 5 backups.\n",
 			left: []string{"backups/notes.txt", "backups/replaced/thaler-20261001-100000-replaced.db", "backups/thaler-20261015-090000.db", "backups/thaler-20261020-090000.db.age", "backups/thaler-20261021-090000.db", "backups/thaler-20261022-090000.db"},
 		},
 		{
