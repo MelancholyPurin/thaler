@@ -91,7 +91,7 @@ func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Mone
 			filled = 1
 		}
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
-		name := shortName(l.Name)
+		name := loc.ShortName(l.Name)
 		if l.Name == ledger.UncategorizedExpense || l.Name == ledger.UncategorizedIncome {
 			name = warn.Render(name)
 		}

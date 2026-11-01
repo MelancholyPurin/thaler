@@ -152,7 +152,7 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	if m.scopeAccount() == "" {
 		lines = append(lines, bold.Render("All accounts"), "")
 		for _, e := range m.accounts {
-			lines = append(lines, leftRight(e.account.Name, m.loc.Money(e.balance), w))
+			lines = append(lines, leftRight(m.loc.AccountName(e.account.Name), m.loc.Money(e.balance), w))
 		}
 		lines = append(lines, "")
 		netText := m.loc.Money(m.netWorth.Total)
@@ -167,8 +167,8 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	}
 
 	e := m.accounts[m.accts.cursor-1]
-	lines = append(lines, bold.Render(e.account.Name), "")
-	lines = append(lines, kv("Type", string(e.account.Type), keyW, w)...)
+	lines = append(lines, bold.Render(m.loc.AccountName(e.account.Name)), "")
+	lines = append(lines, kv("Type", m.loc.AccountName(string(e.account.Type)), keyW, w)...)
 	lines = append(lines, kv("Currency", string(e.account.Currency), keyW, w)...)
 	lines = append(lines, kv("Balance", bold.Render(m.loc.Money(e.balance)), keyW, w)...)
 	lines = append(lines, kv("Transactions", fmt.Sprint(e.txCount), keyW, w)...)
@@ -183,7 +183,7 @@ func (m *Model) accountDetail(w int) (string, []string) {
 	lines = append(lines, "", dim.Render("Money moved · "+periodLabel(m.period)))
 	lines = append(lines, kv("In", accent.Render(m.loc.Money(in)), keyW, w)...)
 	lines = append(lines, kv("Out", m.loc.Money(out), keyW, w)...)
-	return e.account.Name, lines
+	return m.loc.AccountName(e.account.Name), lines
 }
 
 // periodFlow sums the money that moved into and out of an account in the
@@ -233,7 +233,7 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 
 	lines = append(lines, "", dim.Render("Postings"))
 	for _, p := range r.tx.Postings {
-		name := p.Account
+		name := m.loc.AccountName(p.Account)
 		amount := m.loc.Signed(p.Amount)
 		if p.Account == ledger.UncategorizedExpense || p.Account == ledger.UncategorizedIncome {
 			name, amount = warn.Render(name), warn.Render(amount)
@@ -244,8 +244,8 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 	lines = append(lines, "")
 	switch {
 	case r.simple:
-		lines = append(lines, kv("Account", r.source.Account, keyW, w)...)
-		lines = append(lines, kv("Category", r.category.Account, keyW, w)...)
+		lines = append(lines, kv("Account", m.loc.AccountName(r.source.Account), keyW, w)...)
+		lines = append(lines, kv("Category", m.loc.AccountName(r.category.Account), keyW, w)...)
 		if r.uncategorized {
 			lines = append(lines, "", warn.Render("● Uncategorized")+dim.Render(" – press c to choose a category"))
 		}

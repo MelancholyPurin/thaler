@@ -28,14 +28,6 @@ type acctEntry struct {
 	last    string // date of the newest transaction, empty if none
 }
 
-// shortName drops the type segment: "Assets:Sparkasse" becomes "Sparkasse".
-func shortName(name string) string {
-	if _, rest, ok := strings.Cut(name, ":"); ok {
-		return rest
-	}
-	return name
-}
-
 func newRow(loc *i18n.Localizer, tx core.TxView) row {
 	r := row{tx: tx}
 	if src, cat, ok := tx.Legs(); ok {

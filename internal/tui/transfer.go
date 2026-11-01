@@ -223,7 +223,7 @@ func (m *Model) saveTransfer() {
 	m.clampAll()
 	m.applyFilter(false)
 
-	msg := fmt.Sprintf("Transferred %s from %s to %s", out, shortName(src.Name), shortName(dst.Name))
+	msg := fmt.Sprintf("Transferred %s from %s to %s", out, m.loc.ShortName(src.Name), m.loc.ShortName(dst.Name))
 	if res.CrossCurrency {
 		msg += fmt.Sprintf(" (%s arrived, %s)", res.In, impliedRate(out, res.In))
 	}
@@ -287,7 +287,7 @@ func (m *Model) transferHints(w int) []string {
 	f := m.xfer
 	switch f.field {
 	case tfAmount:
-		return []string{dim.Render(fit("how much leaves "+shortName(m.accounts[f.from].account.Name), w))}
+		return []string{dim.Render(fit("how much leaves "+m.loc.ShortName(m.accounts[f.from].account.Name), w))}
 	case tfReceived:
 		hint := []string{dim.Render(fit("how much arrives; this fixes the exchange rate", w))}
 		out, err1 := ledger.ParseAmount(f.amount.Value(), m.accounts[f.from].account.Currency, 0)

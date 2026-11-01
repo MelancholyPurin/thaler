@@ -187,7 +187,7 @@ English is the source language; Spanish and German are translations. This epic i
 - ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)
 - [x] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code (the mechanism, and the errors of transactions, transfers, accounts, imports and dates; the rest follow with `TLC-1` and `CLI-15`)
 - [x] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages (the mechanism, and the counts of backups and rejected rows; the other `(s)` texts follow with `TLC-1` and `CLI-15`)
-- [ ] `LOC-7` Display names for the built-in account types and starting categories, separate from the names stored in the ledger
+- [x] `LOC-7` Display names for the built-in account types and accounts (`Assets`, `Expenses:Uncategorized`, `Equity:Transfers`, …), separate from the names stored in the ledger (there are no starting categories yet; when one is added it gets a name the same way)
 - [x] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
 - ~~`LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does~~ (folded into `LOC-8`)
 

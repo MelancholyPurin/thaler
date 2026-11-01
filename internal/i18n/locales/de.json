@@ -42,5 +42,14 @@
   "old_backups_removed": {
     "one": "{{.Count}} alte Sicherung entfernt ({{.Size}})",
     "other": "{{.Count}} alte Sicherungen entfernt ({{.Size}})"
-  }
+  },
+  "account_type_assets": "Vermögen",
+  "account_type_liabilities": "Verbindlichkeiten",
+  "account_type_income": "Einnahmen",
+  "account_type_expenses": "Ausgaben",
+  "account_type_equity": "Eigenkapital",
+  "account_uncategorized": "Ohne Kategorie",
+  "account_transfers": "Umbuchungen",
+  "account_conversions": "Währungsumrechnung",
+  "account_opening": "Eröffnungssaldo"
 }

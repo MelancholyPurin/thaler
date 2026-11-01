@@ -42,5 +42,14 @@
   "old_backups_removed": {
     "one": "Se eliminó {{.Count}} copia de seguridad antigua ({{.Size}})",
     "other": "Se eliminaron {{.Count}} copias de seguridad antiguas ({{.Size}})"
-  }
+  },
+  "account_type_assets": "Activos",
+  "account_type_liabilities": "Pasivos",
+  "account_type_income": "Ingresos",
+  "account_type_expenses": "Gastos",
+  "account_type_equity": "Patrimonio",
+  "account_uncategorized": "Sin categoría",
+  "account_transfers": "Transferencias",
+  "account_conversions": "Conversiones",
+  "account_opening": "Saldo inicial"
 }
