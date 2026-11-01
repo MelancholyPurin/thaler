@@ -42,5 +42,14 @@
   "old_backups_removed": {
     "one": "Removed {{.Count}} old backup ({{.Size}})",
     "other": "Removed {{.Count}} old backups ({{.Size}})"
-  }
+  },
+  "account_type_assets": "Assets",
+  "account_type_liabilities": "Liabilities",
+  "account_type_income": "Income",
+  "account_type_expenses": "Expenses",
+  "account_type_equity": "Equity",
+  "account_uncategorized": "Uncategorized",
+  "account_transfers": "Transfers",
+  "account_conversions": "Conversions",
+  "account_opening": "Opening balance"
 }
