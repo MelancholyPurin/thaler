@@ -21,11 +21,11 @@ func Test_Localizer_T_plural(t *testing.T) {
 		{name: "Spanish, one", tag: language.Spanish, count: 1, want: "Se eliminó 1 copia de seguridad (5 B)."},
 		{name: "Spanish, many", tag: language.Spanish, count: 3, want: "Se eliminaron 3 copias de seguridad (5 B)."},
 		{name: "Spanish, zero", tag: language.Spanish, count: 0, want: "Se eliminaron 0 copias de seguridad (5 B)."},
-		{name: "German, one", tag: language.German, count: 1, want: "1 Sicherung entfernt (5 B)."},
-		{name: "German, many", tag: language.German, count: 12, want: "12 Sicherungen entfernt (5 B)."},
+		{name: "German, one", tag: language.German, count: 1, want: "1 Backup entfernt (5 B)."},
+		{name: "German, many", tag: language.German, count: 12, want: "12 Backups entfernt (5 B)."},
 		{name: "a count of another integer type", tag: language.English, count: int64(1), want: "Removed 1 backup (5 B)."},
 		{name: "an unsigned count", tag: language.English, count: uint8(1), want: "Removed 1 backup (5 B)."},
-		{name: "a region of German", tag: language.MustParse("de-AT"), count: 1, want: "1 Sicherung entfernt (5 B)."},
+		{name: "a region of German", tag: language.MustParse("de-AT"), count: 1, want: "1 Backup entfernt (5 B)."},
 		{name: "the pseudo-language keeps the forms", tag: PseudoTag, count: 1, want: "[Rémövéd 1 báçkúp (5 B). ~~~~~~~~]"},
 	}
 	for _, tc := range tcs {

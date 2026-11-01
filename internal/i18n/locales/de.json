@@ -354,7 +354,7 @@
   "panel_months": "[1] Monate",
   "panel_accounts": "[2] Konten",
   "panel_transactions": "[3] Transaktionen",
-  "panel_uncategorized": "unkategorisiert",
+  "panel_uncategorized": "ohne Kat.",
   "position_of": "{{.N}} von {{.Total}}",
   "this_month": "dieser Monat",
   "not_built_yet": "Noch nicht gebaut.",

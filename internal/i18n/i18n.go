@@ -14,8 +14,8 @@
 // "other" is the general one, and see go-i18n for the rest). {{.Name}} is an argument:
 // arguments are never translated, and a message may move them around. There is no
 // "description" for the translator: an id that says what the message is for does
-// that better, and go-i18n reads one if a message ever needs it. JSON has no comments, so the notes live here. The Spanish and German
-// texts wait for a native speaker to read them (TLC-7 in the roadmap).
+// that better, and go-i18n reads one if a message ever needs it. JSON has no comments, so the notes live here. The Spanish was
+// checked in full (TLC-7 in the roadmap); the German is good enough to use and may still be reworded.
 //
 // A message a language lacks is shown in English; `make i18n-todo LOCALE=es` lists
 // what a language still lacks.

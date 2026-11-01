@@ -25,7 +25,7 @@ func Test_Localizer_Error(t *testing.T) {
 		{name: "a coded error in English", tag: language.English, err: notFound, want: "account does not exist: Assets:Nope"},
 		{name: "in Spanish", tag: language.Spanish, err: notFound, want: "la cuenta no existe: Assets:Nope"},
 		{name: "in German", tag: language.German, err: notFound, want: "Das Konto existiert nicht: Assets:Nope"},
-		{name: "without arguments", tag: language.German, err: coded.New("already_imported", nil), want: "Die Buchung wurde bereits importiert"},
+		{name: "without arguments", tag: language.German, err: coded.New("already_imported", nil), want: "Die Transaktion wurde bereits importiert"},
 		{name: "wrapped in more text", tag: language.German, err: fmt.Errorf("importing x.csv: %w", notFound), want: "importing x.csv: Das Konto existiert nicht: Assets:Nope"},
 		{name: "wrapped twice", tag: language.English, err: fmt.Errorf("a: %w", fmt.Errorf("b: %w", notFound)), want: "a: b: account does not exist: Assets:Nope"},
 		{name: "joined", tag: language.English, err: errors.Join(notFound, coded.New("already_imported", nil)), want: "account does not exist: Assets:Nope\ntransaction already imported"},

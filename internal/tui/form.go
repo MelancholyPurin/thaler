@@ -59,7 +59,7 @@ func newInput(value string) textinput.Model {
 func (m *Model) inputWidth() int { return max(8, min(max(m.width-6, 30), 72)-2-formLabelWidth-1-1) } // minus the border, the label, a space and the cursor cell
 
 // formLabelWidth is the width of the field names down the left of the form.
-const formLabelWidth = 13
+const formLabelWidth = 14
 
 // sizeForm sets the width of the form's inputs for the terminal. The amount
 // leaves room for the Expense or Income tag beside it.

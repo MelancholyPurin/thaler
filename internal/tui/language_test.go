@@ -135,7 +135,7 @@ func Test_Update_addForm_language_error(t *testing.T) {
 		shows string
 	}{
 		{name: "English", tag: language.English, date: "2026-02-31", shows: `invalid date "2026-02-31"`},
-		{name: "Spanish", tag: language.Spanish, date: "31/02/2026", shows: `fecha no válida "31/02/2026"`},
+		{name: "Spanish", tag: language.Spanish, date: "31/02/2026", shows: `fecha inválida "31/02/2026"`},
 		{name: "German", tag: language.German, date: "31.02.2026", shows: `ungültiges Datum "31.02.2026"`},
 	}
 	for _, tc := range tcs {
@@ -256,14 +256,14 @@ func Test_View_translated(t *testing.T) {
 		hides []string
 	}{
 		{name: "Spanish, the tabs and panels", tag: language.Spanish, keys: "", shows: []string{"Libro", "Presupuesto", "Previsión", "Informes", "[2] Cuentas", "Todas las cuentas"}, hides: []string{"Ledger", "Accounts"}},
-		{name: "German, the tabs and panels", tag: language.German, keys: "", shows: []string{"Buchungen", "Prognose", "Berichte", "[2] Konten", "Alle Konten"}, hides: []string{"Forecast", "Accounts"}},
-		{name: "Spanish, the add form", tag: language.Spanish, keys: "a", shows: []string{"Añadir transacción", "Importe", "Comercio", "Categoría", "enter sig."}, hides: []string{"Add transaction", "Payee"}},
-		{name: "German, the add form", tag: language.German, keys: "a", shows: []string{"Buchung hinzufügen", "Betrag", "Empfänger", "Kategorie", "enter weiter"}, hides: []string{"Add transaction", "Payee"}},
+		{name: "German, the tabs and panels", tag: language.German, keys: "", shows: []string{"Transaktionen", "Prognose", "Berichte", "[2] Konten", "Alle Konten"}, hides: []string{"Forecast", "Accounts"}},
+		{name: "Spanish, the add form", tag: language.Spanish, keys: "a", shows: []string{"Añadir transacción", "Importe", "Destinatario", "Categoría", "enter sig."}, hides: []string{"Add transaction", "Payee"}},
+		{name: "German, the add form", tag: language.German, keys: "a", shows: []string{"Transaktion hinzufügen", "Betrag", "Empfänger", "Kategorie", "enter weiter"}, hides: []string{"Add transaction", "Payee"}},
 		{name: "Spanish, the transfer", tag: language.Spanish, keys: "x", shows: []string{"Transferencia entre tus cuentas", "Recibido", "Desde", "Hacia"}, hides: []string{"Transfer between"}},
-		{name: "German, the transfer", tag: language.German, keys: "x", shows: []string{"Umbuchung zwischen deinen Konten", "Erhalten", "Von", "Nach"}, hides: []string{"Transfer between"}},
+		{name: "German, the transfer", tag: language.German, keys: "x", shows: []string{"Überweisungen zwischen deinen Konten", "Erhalten", "Von", "Nach"}, hides: []string{"Transfer between"}},
 		{name: "Spanish, the help", tag: language.Spanish, keys: "?", shows: []string{"Teclas", "pantallas: Libro, Presupuesto"}, hides: []string{"screens:"}},
 		{name: "Spanish, the help, further down", tag: language.Spanish, keys: "? pgdown", shows: []string{"c, luego tab", "deshacer el último cambio"}, hides: []string{"then tab", "undo the last change"}},
-		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "Ansichten: Buchungen, Budget"}, hides: []string{"screens:"}},
+		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "Ansichten: Transaktionen, Budget"}, hides: []string{"screens:"}},
 		{name: "German, the help, further down", tag: language.German, keys: "? pgdown", shows: []string{"c, dann tab", "die letzte Änderung rückgängig machen"}, hides: []string{"then tab", "undo the last change"}},
 		{name: "Spanish, the language popup", tag: language.Spanish, keys: "ctrl+l", shows: []string{"Idioma", "✓ Español", "Se guarda en config.toml"}, hides: []string{"Saved in"}},
 		{name: "German, the language popup", tag: language.German, keys: "ctrl+l", shows: []string{"Sprache", "✓ Deutsch", "In config.toml gespeichert"}, hides: []string{"Saved in"}},
@@ -307,7 +307,7 @@ func Test_Update_language(t *testing.T) {
 			name: "German, written to a new file", start: language.English, keys: "ctrl+l down down enter",
 			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
 			wantFile: "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n# sample\nlanguage = \"de\"\n",
-			shows:    []string{"Buchungen", "Prognose"},
+			shows:    []string{"Transaktionen", "Prognose"},
 		},
 		{
 			name: "Spanish, replacing the setting that was there", start: language.German, config: ptr("# mine\nlanguage = \"de\"\nkeep_backups = 3\n"), keys: "ctrl+l up enter",
@@ -325,7 +325,7 @@ func Test_Update_language(t *testing.T) {
 			name: "the popup opens on the language in use, so enter alone keeps it", start: language.German, config: ptr(""), keys: "ctrl+l enter",
 			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
 			wantFile: "language = \"de\"\n",
-			shows:    []string{"Buchungen"},
+			shows:    []string{"Transaktionen"},
 		},
 		{
 			name: "esc leaves everything as it was", start: language.English, config: ptr("keep_backups = 3\n"), keys: "ctrl+l down esc",
@@ -337,7 +337,7 @@ func Test_Update_language(t *testing.T) {
 			name: "the cursor stops at the ends of the list", start: language.English, config: ptr(""), keys: "ctrl+l up up down down down down enter",
 			wantCode: "de", wantStatus: "Sprache: Deutsch (in config.toml gespeichert)",
 			wantFile: "language = \"de\"\n",
-			shows:    []string{"Buchungen"},
+			shows:    []string{"Transaktionen"},
 		},
 		{
 			name: "no config file location: the switch stands for the session", start: language.English, noPath: true, keys: "ctrl+l down enter",
@@ -415,12 +415,12 @@ func Test_Update_language_followsOn(t *testing.T) {
 		{
 			name:   "undo after the switch",
 			script: "a text:5.50 tab tab tab ctrl+u text:2026-10-03 ctrl+s ctrl+l down down enter z",
-			want:   observed{Status: "Anlegen von #2 rückgängig gemacht", Placeholder: "unscharfe Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 0},
+			want:   observed{Status: "Anlegen von #2 rückgängig gemacht", Placeholder: "Fuzzy-Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 0},
 		},
 		{
 			name:   "the search finds the date as the new language writes it",
 			script: "ctrl+l down down enter / text:01.10.2026",
-			want:   observed{Status: "", Placeholder: "unscharfe Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 1},
+			want:   observed{Status: "", Placeholder: "Fuzzy-Suche: Empfänger, Notiz, Kategorie, Betrag", Found: 1},
 		},
 	}
 	for _, tc := range tcs {
