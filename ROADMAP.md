@@ -300,7 +300,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TLC-1` Every piece of text in the interface comes from the catalog (labels, hints, titles, footers, status lines, the key hints and the `?` help included; the errors raised below the interface follow with `LOC-10`)
 - [x] `TLC-2` The Spanish and the German translation of the interface
 - ~~`TLC-3` The German translation~~ (folded into `TLC-2`)
-- [ ] `TLC-4` Every screen and popup fits at 80 columns in all three languages, checked by tests
+- [x] `TLC-4` Every screen and popup fits at 80 columns in all three languages, checked by tests (`Test_View_fits`: nothing is cut short, wider or taller than 80 by 24)
 - [x] `TLC-5` Change the language from the TUI without restarting (`ctrl+l`; saved in `config.toml`)
 - ~~`TLC-6` Key hints and the help popup in the language; the keys themselves stay the same~~ (folded into `TLC-1`)
 - [ ] `TLC-7` A native speaker reads the Spanish and the German before a release
