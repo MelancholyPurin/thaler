@@ -22,6 +22,7 @@ import (
 	msqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 )
 
@@ -95,7 +96,7 @@ func (r *repository) migrateFrom(ctx context.Context, fsys fs.FS, dir string) er
 		return err
 	}
 	if latest := files[len(files)-1].version; state.version > latest {
-		return fmt.Errorf("database has migration %d that this build does not know; update thaler", state.version)
+		return coded.New("database_newer", map[string]any{"Version": state.version})
 	}
 	if state.dirty {
 		return r.interruptedUpgrade(state)
@@ -177,9 +178,9 @@ func (r *repository) recoverFailedMigration(fsys fs.FS, dir string, files []migr
 			previous = int(files[i-1].version)
 		}
 		if err := m.Force(previous); err != nil {
-			return fmt.Errorf("migration %s: %w (and the version could not be reset: %w)", f.name, dbErr.OrigErr, err)
+			return fmt.Errorf("%w: %w (%w: %w)", coded.New("migration_failed", map[string]any{"Name": f.name}), dbErr.OrigErr, coded.New("version_not_reset", nil), err)
 		}
-		return fmt.Errorf("migration %s: %w", f.name, dbErr.OrigErr)
+		return fmt.Errorf("%w: %w", coded.New("migration_failed", map[string]any{"Name": f.name}), dbErr.OrigErr)
 	}
 	return upErr
 }
@@ -187,13 +188,13 @@ func (r *repository) recoverFailedMigration(fsys fs.FS, dir string, files []migr
 // interruptedUpgrade is the error for a database whose last upgrade did not
 // finish. It says where the copy made before it is.
 func (r *repository) interruptedUpgrade(state migrationState) error {
-	msg := fmt.Sprintf("the last upgrade of the database stopped halfway, at migration %d, and it is not safe to go on", state.version)
+	msg := coded.New("upgrade_halfway", map[string]any{"Version": state.version})
 	if r.path != ":memory:" {
 		if copies, _ := ListBackups(config.PreMigrationDir(r.path)); len(copies) > 0 {
-			return fmt.Errorf("%s; restore the copy made before it: thaler cli restore %s", msg, copies[0].Path)
+			return fmt.Errorf("%w; %w", msg, coded.New("restore_copy_before", map[string]any{"Path": copies[0].Path}))
 		}
 	}
-	return errors.New(msg)
+	return msg
 }
 
 // migrationState is what a database says about its own schema.
@@ -263,7 +264,7 @@ func readLegacyMigrationState(ctx context.Context, db dbtx) (migrationState, err
 		prefix, _, _ := strings.Cut(name, "_")
 		version, err := strconv.ParseUint(prefix, 10, 64)
 		if err != nil {
-			return st, fmt.Errorf("schema_migrations has %q, which is not a migration file name", name)
+			return st, coded.New("migration_state_corrupt", map[string]any{"Name": name})
 		}
 		st.version = max(st.version, uint(version))
 	}
@@ -304,7 +305,7 @@ func (r *repository) backupBeforeMigrating(ctx context.Context, first string) er
 	name := fmt.Sprintf("thaler-%s-before-%s.db", time.Now().Format("20060102-150405"), strings.TrimSuffix(first, ".up.sql"))
 	dest := freePath(filepath.Join(config.PreMigrationDir(r.path), name))
 	if err := snapshot(ctx, queries{r.db}, dest); err != nil {
-		return fmt.Errorf("cannot upgrade the database without a copy of it first, and nothing was changed: %w", err)
+		return fmt.Errorf("%w: %w", coded.New("upgrade_needs_copy", nil), err)
 	}
 	r.migrationBackup = dest
 	return nil

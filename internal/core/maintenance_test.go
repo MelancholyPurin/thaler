@@ -103,7 +103,7 @@ func errWithDir(err error, dir string) error {
 	if err == nil {
 		return nil
 	}
-	return &dirError{strings.ReplaceAll(err.Error(), dir, "{dir}")}
+	return &dirError{strings.ReplaceAll(errText(err), dir, "{dir}")}
 }
 
 type dirError struct{ msg string }
@@ -226,7 +226,7 @@ func Test_verifySnapshot(t *testing.T) {
 			switch {
 			case tc.wantErr == "" && err != nil:
 				t.Errorf("unexpected error: %v", err)
-			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			case tc.wantErr != "" && (err == nil || !strings.Contains(errText(err), tc.wantErr)):
 				t.Errorf("error = %v, want one containing %q", err, tc.wantErr)
 			}
 		})
@@ -749,7 +749,7 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 			// then
 			var got observed
 			if err != nil {
-				got.Err = strings.ReplaceAll(err.Error(), dir, "{dir}")
+				got.Err = strings.ReplaceAll(errText(err), dir, "{dir}")
 			} else {
 				defer st.Close()
 				got.Reported = timestamped.ReplaceAllString(strings.TrimPrefix(st.PreMigrationBackup(), backups+string(filepath.Separator)), "thaler-{time}-before-")

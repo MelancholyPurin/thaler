@@ -353,7 +353,7 @@ func Test_Update_backup_encryptedContents(t *testing.T) {
 			// then
 			var got observed
 			if err != nil {
-				got.Err = strings.ReplaceAll(err.Error(), src, "{src}")
+				got.Err = strings.ReplaceAll(i18n.New(language.English).Error(err), src, "{src}")
 			} else {
 				got.Ledger = storedLines(t, openFile(t, dest))
 			}

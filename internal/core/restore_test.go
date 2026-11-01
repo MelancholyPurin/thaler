@@ -260,7 +260,7 @@ func Test_RestoreBackup(t *testing.T) {
 			// then
 			got := observed{Upgrade: res.Upgrade, Accounts: accountNames(t, dbPath)}
 			if err != nil {
-				got.Err = strings.NewReplacer(src, "{src}", dbPath, "{db}").Replace(err.Error())
+				got.Err = strings.NewReplacer(src, "{src}", dbPath, "{db}").Replace(errText(err))
 			}
 			if res.Replaced != "" {
 				rel, _ := filepath.Rel(dir, res.Replaced)

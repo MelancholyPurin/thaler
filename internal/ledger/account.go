@@ -1,9 +1,10 @@
 package ledger
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // AccountType is the top-level class of an account. It is derived from the
@@ -48,7 +49,7 @@ func TypeOf(name string) (AccountType, error) {
 			return t, nil
 		}
 	}
-	return "", fmt.Errorf("account %q must start with one of Assets, Liabilities, Income, Expenses, Equity", name)
+	return "", coded.New("invalid_account_type", map[string]any{"Name": name})
 }
 
 // ValidateAccountName checks that name is a colon-separated path whose first
@@ -60,12 +61,12 @@ func ValidateAccountName(name string) error {
 	}
 	for _, seg := range strings.Split(name, ":") {
 		if seg == "" {
-			return fmt.Errorf("account %q has an empty segment", name)
+			return coded.New("account_empty_segment", map[string]any{"Name": name})
 		}
 		for i, r := range seg {
 			ok := unicode.IsLetter(r) || unicode.IsDigit(r) || (i > 0 && (r == '-' || r == '_'))
 			if !ok {
-				return fmt.Errorf("account %q: invalid character %q (use letters, digits, '-' and '_')", name, r)
+				return coded.New("account_invalid_char", map[string]any{"Name": name, "Char": string(r)})
 			}
 		}
 	}

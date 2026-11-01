@@ -127,7 +127,7 @@ func Test_PlanPrune(t *testing.T) {
 			// then
 			gotErr := ""
 			if err != nil {
-				gotErr = err.Error()
+				gotErr = errText(err)
 			}
 			if diff := cmp.Diff(tc.wantErr, gotErr); diff != "" {
 				t.Fatalf("error mismatch (-want +got):\n%s", diff)
@@ -219,7 +219,7 @@ func Test_Prune(t *testing.T) {
 			// then
 			got := observed{Removed: removed}
 			if err != nil {
-				got.Err = err.Error()
+				got.Err = errText(err)
 			}
 			got.Left = everythingBelow(t, dir)
 			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {

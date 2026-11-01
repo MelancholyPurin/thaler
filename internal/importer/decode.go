@@ -2,9 +2,10 @@ package importer
 
 import (
 	"bytes"
-	"errors"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // cp1252High maps bytes 0x80..0x9F of Windows-1252 to Unicode. Bytes 0xA0..0xFF
@@ -24,7 +25,7 @@ func decodeToUTF8(b []byte, encoding string) (string, error) {
 	switch encoding {
 	case "utf-8", "utf8":
 		if !utf8.Valid(b) {
-			return "", errors.New("file is not valid UTF-8 (try encoding = \"windows-1252\")")
+			return "", coded.New("file_not_utf8", nil)
 		}
 		return string(b), nil
 	case "auto", "":

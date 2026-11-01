@@ -50,18 +50,18 @@ func Test_ParseAmount(t *testing.T) {
 		{name: "negative zero", in: "-0", cur: "USD", want: Money{0, "USD"}},
 		{name: "three decimals", in: "1.5", cur: "KWD", want: Money{1500, "KWD"}},
 
-		{name: "empty", in: "", cur: "EUR", wantErr: `invalid amount ""`},
-		{name: "letters", in: "abc", cur: "EUR", wantErr: `invalid amount "abc"`},
-		{name: "only a sign", in: "-", cur: "EUR", wantErr: `invalid amount "-"`},
-		{name: "two signs", in: "--5", cur: "EUR", wantErr: `invalid amount "--5"`},
-		{name: "ambiguous comma", in: "1,234", cur: "EUR", wantErr: `invalid amount "1,234": EUR has at most 2 decimal places`},
-		{name: "too many decimals", in: "12.345", cur: "EUR", wantErr: `invalid amount "12.345": EUR has at most 2 decimal places`},
-		{name: "two decimal separators", in: "1,2,3", cur: "EUR", sep: ',', wantErr: `invalid amount "1,2,3": more than one decimal separator`},
-		{name: "inconsistent grouping", in: "12.5.5", cur: "EUR", wantErr: `invalid amount "12.5.5": inconsistent thousands separators`},
-		{name: "dot as thousands must group in threes", in: "12.5", cur: "EUR", sep: ',', wantErr: `invalid amount "12.5": inconsistent thousands separators`},
-		{name: "four digits after a thousands separator", in: "1.2345,00", cur: "EUR", sep: ',', wantErr: `invalid amount "1.2345,00": inconsistent thousands separators`},
-		{name: "decimals in a currency without any", in: "1.50", cur: "JPY", wantErr: `invalid amount "1.50": JPY has at most 0 decimal places`},
-		{name: "overflow", in: "99999999999999999999", cur: "EUR", wantErr: `amount "99999999999999999999" is too large`},
+		{name: "empty", in: "", cur: "EUR", wantErr: `invalid_amount(Text=)`},
+		{name: "letters", in: "abc", cur: "EUR", wantErr: `invalid_amount(Text=abc)`},
+		{name: "only a sign", in: "-", cur: "EUR", wantErr: `invalid_amount(Text=-)`},
+		{name: "two signs", in: "--5", cur: "EUR", wantErr: `invalid_amount(Text=--5)`},
+		{name: "ambiguous comma", in: "1,234", cur: "EUR", wantErr: `invalid_amount_places(Currency=EUR, Max=2, Text=1,234)`},
+		{name: "too many decimals", in: "12.345", cur: "EUR", wantErr: `invalid_amount_places(Currency=EUR, Max=2, Text=12.345)`},
+		{name: "two decimal separators", in: "1,2,3", cur: "EUR", sep: ',', wantErr: `invalid_amount_decimal_separators(Text=1,2,3)`},
+		{name: "inconsistent grouping", in: "12.5.5", cur: "EUR", wantErr: `invalid_amount_thousands_mixed(Text=12.5.5)`},
+		{name: "dot as thousands must group in threes", in: "12.5", cur: "EUR", sep: ',', wantErr: `invalid_amount_thousands_mixed(Text=12.5)`},
+		{name: "four digits after a thousands separator", in: "1.2345,00", cur: "EUR", sep: ',', wantErr: `invalid_amount_thousands_mixed(Text=1.2345,00)`},
+		{name: "decimals in a currency without any", in: "1.50", cur: "JPY", wantErr: `invalid_amount_places(Currency=JPY, Max=0, Text=1.50)`},
+		{name: "overflow", in: "99999999999999999999", cur: "EUR", wantErr: `amount_too_large(Text=99999999999999999999)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -207,13 +207,13 @@ func Test_ParseRate(t *testing.T) {
 		{name: "comma and spaces", in: " 1,0850 ", want: parsed{"217/200", "1.0850"}},
 		{name: "plain", in: "0.92", want: parsed{"23/25", "0.92"}},
 		{name: "integer", in: "160", want: parsed{"160", "160"}},
-		{name: "empty", in: "", wantErr: `invalid rate "": use a positive decimal number such as 0.92`},
-		{name: "zero", in: "0", wantErr: `invalid rate "0": must be greater than zero`},
-		{name: "negative", in: "-1", wantErr: `invalid rate "-1": use a positive decimal number such as 0.92`},
-		{name: "letters", in: "abc", wantErr: `invalid rate "abc": use a positive decimal number such as 0.92`},
-		{name: "two dots", in: "1.2.3", wantErr: `invalid rate "1.2.3": use a positive decimal number such as 0.92`},
-		{name: "exponent", in: "1e3", wantErr: `invalid rate "1e3": use a positive decimal number such as 0.92`},
-		{name: "only a dot", in: ".", wantErr: `invalid rate ".": use a positive decimal number such as 0.92`},
+		{name: "empty", in: "", wantErr: `invalid_rate(Text=)`},
+		{name: "zero", in: "0", wantErr: `rate_not_positive(Text=0)`},
+		{name: "negative", in: "-1", wantErr: `invalid_rate(Text=-1)`},
+		{name: "letters", in: "abc", wantErr: `invalid_rate(Text=abc)`},
+		{name: "two dots", in: "1.2.3", wantErr: `invalid_rate(Text=1.2.3)`},
+		{name: "exponent", in: "1e3", wantErr: `invalid_rate(Text=1e3)`},
+		{name: "only a dot", in: ".", wantErr: `invalid_rate(Text=.)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -351,12 +351,12 @@ func Test_CheckBalanced(t *testing.T) {
 		{
 			name:     "unbalanced",
 			postings: []Posting{{"Assets:Bank", Money{-1250, "EUR"}}, {"Expenses:Food", Money{1200, "EUR"}}},
-			wantErr:  "postings do not balance: EUR is off by -0.50",
+			wantErr:  "postings_unbalanced(Off=EUR -0.50)",
 		},
 		{
 			name:     "mixed currencies without a conversion",
 			postings: []Posting{{"Assets:Bank", Money{-1000, "EUR"}}, {"Assets:Cash", Money{1000, "USD"}}},
-			wantErr:  "postings do not balance: EUR is off by -10.00, USD is off by 10.00",
+			wantErr:  "postings_unbalanced(Off=EUR -10.00, USD 10.00)",
 		},
 		{
 			name:     "no currency",
@@ -385,7 +385,6 @@ func Test_CheckBalanced(t *testing.T) {
 }
 
 func Test_ValidateAccountName(t *testing.T) {
-	const noType = ` must start with one of Assets, Liabilities, Income, Expenses, Equity`
 	tcs := []struct {
 		name    string
 		in      string
@@ -398,14 +397,14 @@ func Test_ValidateAccountName(t *testing.T) {
 		{name: "income", in: "Income:Gehalt"},
 		{name: "umlauts", in: "Expenses:Bäckerei"},
 
-		{name: "empty", in: "", wantErr: `account ""` + noType},
-		{name: "no type", in: "Sparkasse", wantErr: `account "Sparkasse"` + noType},
-		{name: "lower case type", in: "assets:bank", wantErr: `account "assets:bank"` + noType},
-		{name: "empty last segment", in: "Assets:", wantErr: `account "Assets:" has an empty segment`},
-		{name: "empty middle segment", in: "Assets::Bank", wantErr: `account "Assets::Bank" has an empty segment`},
-		{name: "a space", in: "Assets:Bank Account", wantErr: `account "Assets:Bank Account": invalid character ' ' (use letters, digits, '-' and '_')`},
-		{name: "an ampersand", in: "Expenses:Food&Drink", wantErr: `account "Expenses:Food&Drink": invalid character '&' (use letters, digits, '-' and '_')`},
-		{name: "a leading dash", in: "Assets:-Bank", wantErr: `account "Assets:-Bank": invalid character '-' (use letters, digits, '-' and '_')`},
+		{name: "empty", in: "", wantErr: "invalid_account_type(Name=)"},
+		{name: "no type", in: "Sparkasse", wantErr: "invalid_account_type(Name=Sparkasse)"},
+		{name: "lower case type", in: "assets:bank", wantErr: "invalid_account_type(Name=assets:bank)"},
+		{name: "empty last segment", in: "Assets:", wantErr: `account_empty_segment(Name=Assets:)`},
+		{name: "empty middle segment", in: "Assets::Bank", wantErr: `account_empty_segment(Name=Assets::Bank)`},
+		{name: "a space", in: "Assets:Bank Account", wantErr: `account_invalid_char(Char= , Name=Assets:Bank Account)`},
+		{name: "an ampersand", in: "Expenses:Food&Drink", wantErr: `account_invalid_char(Char=&, Name=Expenses:Food&Drink)`},
+		{name: "a leading dash", in: "Assets:-Bank", wantErr: `account_invalid_char(Char=-, Name=Assets:-Bank)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -432,7 +431,7 @@ func Test_TypeOf(t *testing.T) {
 		{name: "liabilities", in: "Liabilities:Visa", want: Liabilities},
 		{name: "assets", in: "Assets:Bank", want: Assets},
 		{name: "a bare type", in: "Expenses", want: Expenses},
-		{name: "unknown type", in: "Visa:x", wantErr: `account "Visa:x" must start with one of Assets, Liabilities, Income, Expenses, Equity`},
+		{name: "unknown type", in: "Visa:x", wantErr: `invalid_account_type(Name=Visa:x)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

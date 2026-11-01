@@ -359,7 +359,7 @@ func Test_swapDatabase(t *testing.T) {
 			var o observed
 			o.Accounts = accountNames(t, got)
 			if swapErr != nil {
-				o.Err = strings.ReplaceAll(swapErr.Error(), dir, "{dir}")
+				o.Err = strings.ReplaceAll(a.localizer().Error(swapErr), dir, "{dir}")
 			}
 			replaced, _ := filepath.Glob(filepath.Join(dir, "backups", "replaced", "thaler-*-replaced.db"))
 			o.Replaced = len(replaced) == 1

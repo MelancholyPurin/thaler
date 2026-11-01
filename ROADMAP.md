@@ -185,12 +185,12 @@ English is the source language; Spanish and German are translations. This epic i
 - ~~`LOC-2` The language setting: `config.toml`, then the environment (`LANG`), then English~~ (folded into `LOC-1`)
 - [x] `LOC-3` Amounts, dates and numbers written the way the language writes them (`1,234.56` / `1.234,56`) in the interface, and typed dates read in the language's format, with the ambiguous cases still refused (`thaler cli` prints the plain form; typed amounts already accept both separators)
 - ~~`LOC-4` Typed amounts and dates read in the language's format, with the ambiguous cases still refused~~ (folded into `LOC-3`)
-- [x] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code (the mechanism, and the errors of transactions, transfers, accounts, imports and dates; the rest follow with `LOC-10` and `CLI-15`)
+- [x] `LOC-5` Service errors carry a stable code, and the text is looked up in the catalog instead of being fixed in the code (the mechanism, and the errors of transactions, transfers, accounts, imports and dates; the rest followed with `LOC-10`, and the messages of `thaler cli` itself follow with `CLI-15`)
 - [x] `LOC-6` "1 transaction" / "2 transactions" correct in all three languages (the mechanism, and the counts of backups and rejected rows; the counts in the interface moved over with `TLC-1`, those of `thaler cli` follow with `CLI-15`)
 - [x] `LOC-7` Display names for the built-in account types and accounts (`Assets`, `Expenses:Uncategorized`, `Equity:Transfers`, …), separate from the names stored in the ledger (there are no starting categories yet; when one is added it gets a name the same way)
 - [x] `LOC-8` Checks that catch bad strings: a test and a CI step that fail when a key is missing from a language or no longer used, and a pseudo-language that lengthens every string, to find text that does not fit before a translator does
 - ~~`LOC-9` A pseudo-language that lengthens every string, to find text that does not fit before a translator does~~ (folded into `LOC-8`)
-- [ ] `LOC-10` The errors raised in `core`, `importer`, `config` and `ledger` that are still plain English text (about a hundred) carry a code and a message in the catalog, the way `LOC-5` did the first ones
+- [x] `LOC-10` The errors raised in `core`, `importer`, `config` and `ledger` that were plain English text (about a hundred) carry a code and a message in the catalog, the way `LOC-5` did the first ones; a test fails on a new one (the messages of `thaler cli` itself follow with `CLI-15`)
 
 ### CLI: Command-line interface
 
@@ -297,7 +297,7 @@ Getting every transaction into the right category with as little typing as possi
 
 ### TLC: TUI in three languages
 
-- [x] `TLC-1` Every piece of text in the interface comes from the catalog (labels, hints, titles, footers, status lines, the key hints and the `?` help included; the errors raised below the interface follow with `LOC-10`)
+- [x] `TLC-1` Every piece of text in the interface comes from the catalog (labels, hints, titles, footers, status lines, the key hints and the `?` help included; the errors raised below the interface came with `LOC-10`)
 - [x] `TLC-2` The Spanish and the German translation of the interface
 - ~~`TLC-3` The German translation~~ (folded into `TLC-2`)
 - [x] `TLC-4` Every screen and popup fits at 80 columns in all three languages, checked by tests (`Test_View_fits`: nothing is cut short, wider or taller than 80 by 24)

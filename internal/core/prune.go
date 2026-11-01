@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
 )
 
@@ -68,7 +69,7 @@ func (p PrunePlan) Size() int64 {
 // every backup.
 func PlanPrune(dbPath string, keep int) (PrunePlan, error) {
 	if keep < 1 {
-		return PrunePlan{}, fmt.Errorf("keep %d backups: it must be at least 1", keep)
+		return PrunePlan{}, coded.New("prune_keep_min", map[string]any{"Keep": keep})
 	}
 	plan := PrunePlan{Keep: keep}
 	for _, f := range []PruneFolder{
@@ -99,7 +100,7 @@ func Prune(plan PrunePlan) (int, error) {
 	for _, f := range plan.Folders {
 		for _, file := range f.Remove {
 			if !isBackupName(file.Path) {
-				return 0, fmt.Errorf("%s is not named like a backup: nothing was removed", file.Path)
+				return 0, coded.New("prune_not_a_backup", map[string]any{"Path": file.Path})
 			}
 		}
 	}
@@ -107,11 +108,11 @@ func Prune(plan PrunePlan) (int, error) {
 	for _, f := range plan.Folders {
 		for _, file := range f.Remove {
 			if err := os.Remove(file.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return removed, fmt.Errorf("removed %d of %d: %w", removed, plan.Count(), err)
+				return removed, fmt.Errorf("%w: %w", coded.New("prune_partial", map[string]any{"Removed": removed, "Total": plan.Count()}), err)
 			}
 			for _, side := range []string{"-wal", "-shm"} {
 				if err := os.Remove(file.Path + side); err != nil && !errors.Is(err, fs.ErrNotExist) {
-					return removed, fmt.Errorf("removed %d of %d: %w", removed, plan.Count(), err)
+					return removed, fmt.Errorf("%w: %w", coded.New("prune_partial", map[string]any{"Removed": removed, "Total": plan.Count()}), err)
 				}
 			}
 			removed++

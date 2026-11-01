@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -62,10 +63,10 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 	for header == nil {
 		rec, err := cr.Read()
 		if errors.Is(err, io.EOF) {
-			return nil, errors.New("file is empty: no header row found")
+			return nil, coded.New("file_empty", nil)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("reading header: %w", err)
+			return nil, fmt.Errorf("%w: %w", coded.New("reading_header", nil), err)
 		}
 		if !blank(rec) {
 			header = rec
@@ -100,8 +101,9 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 		cols.skip = find([]string{p.SkipColumn})
 	}
 	if cols.date < 0 || cols.amount < 0 {
-		return nil, fmt.Errorf("profile %q does not match this file: need a date column (%s) and an amount column (%s), but the header is: %s",
-			p.Name, strings.Join(p.Columns.Date, " / "), strings.Join(p.Columns.Amount, " / "), strings.Join(header, "; "))
+		return nil, coded.New("profile_mismatch", map[string]any{
+			"Name": p.Name, "Date": strings.Join(p.Columns.Date, " / "), "Amount": strings.Join(p.Columns.Amount, " / "), "Header": strings.Join(header, "; "),
+		})
 	}
 	skipNeedle := strings.ToLower(strings.TrimSpace(p.SkipContains))
 
@@ -170,7 +172,7 @@ func parseDate(s string, layouts []string) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("unrecognised date %q", s)
+	return time.Time{}, coded.New("unrecognised_date", map[string]any{"Text": s})
 }
 
 func normHeader(s string) string {

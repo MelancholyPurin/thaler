@@ -223,3 +223,73 @@ func Test_Catalogs_usage(t *testing.T) {
 		})
 	}
 }
+
+func Test_plainErrorsIn(t *testing.T) {
+	files := map[string]string{
+		"p/a.go":      "package p\n\nimport (\n\t\"errors\"\n\t\"fmt\"\n)\n\nfunc a(err error) error {\n\t_ = errors.New(\"an English text\")\n\t_ = fmt.Errorf(\"also English: %d\", 1)\n\t_ = fmt.Errorf(\"%w: %w\", err, err)\n\t_ = fmt.Errorf(\"%w\", err)\n\t_ = errors.New(dynamic())\n\treturn fmt.Errorf(\"bad migration file name %q\", \"x\")\n}\n\nfunc dynamic() string { return \"\" }\n",
+		"p/a_test.go": "package p\n\nimport \"errors\"\n\nvar _ = errors.New(\"in a test\")\n",
+		"q/b.go":      "package q\n\nimport \"errors\"\n\nvar _ = errors.New(\"outside the packages that are checked\")\n",
+	}
+	root := t.TempDir()
+	for name, text := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tcs := []struct {
+		name string
+		dirs []string
+		want []string
+	}{
+		{name: "English texts, but not wrappers, programming errors, tests or other packages", dirs: []string{"p"}, want: []string{
+			`p/a.go:9: errors.New("an English text") is an English text: make it coded.New with a message in the catalog`,
+			`p/a.go:10: fmt.Errorf("also English: %d") is an English text: make it coded.New with a message in the catalog`,
+		}},
+		{name: "the other package", dirs: []string{"q"}, want: []string{`q/b.go:5: errors.New("outside the packages that are checked") is an English text: make it coded.New with a message in the catalog`}},
+		{name: "no package", dirs: nil, want: nil},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given root and tc.dirs
+
+			// when
+			got, err := plainErrorsIn(root, tc.dirs)
+
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The packages whose errors a person can see make coded errors, not English texts.
+func Test_plainErrors_repository(t *testing.T) {
+	tcs := []struct {
+		name string
+		root string
+	}{{name: "the sources of the repository", root: "../.."}}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.root
+
+			// when
+			got, err := plainErrorsIn(tc.root, plainErrorDirs)
+
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff([]string(nil), got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("errors that are English text (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

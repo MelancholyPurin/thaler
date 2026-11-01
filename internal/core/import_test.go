@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -156,7 +157,7 @@ func Test_Import(t *testing.T) {
 		{
 			name: "a row in another currency is refused, and nothing at all is written", setup: []given{bank},
 			req:     ImportRequest{Rows: []importer.Row{row(2, "2026-10-01", "Shop", "", eur(-100)), row(3, "2026-10-01", "US Shop", "", usd(-100))}},
-			want:    ImportResult{Rejected: []RejectedRow{{Line: 3, Reason: "currency USD does not match Assets:Bank (EUR)"}}},
+			want:    ImportResult{Rejected: []RejectedRow{{Line: 3, Err: coded.New("row_currency_mismatch", map[string]any{"Currency": ledger.Currency("USD"), "Account": "Assets:Bank", "Holds": ledger.Currency("EUR")})}}},
 			wantErr: "1 row does not fit the account", wantIs: ErrRowsRejected,
 		},
 		{
@@ -164,7 +165,7 @@ func Test_Import(t *testing.T) {
 			req: ImportRequest{Rows: []importer.Row{row(2, "2026-10-01", "Shop", "", eur(-100)), row(3, "2026-10-01", "US Shop", "", usd(-100))}, IgnoreRejected: true},
 			want: ImportResult{
 				Inserted: 1, IDs: []int64{1}, Uncategorized: 1, Created: []string{ledger.UncategorizedExpense},
-				Rejected: []RejectedRow{{Line: 3, Reason: "currency USD does not match Assets:Bank (EUR)"}},
+				Rejected: []RejectedRow{{Line: 3, Err: coded.New("row_currency_mismatch", map[string]any{"Currency": ledger.Currency("USD"), "Account": "Assets:Bank", "Holds": ledger.Currency("EUR")})}},
 			},
 			wantTxs: []TxView{tv(1, "2026-10-01", "Shop", "", pe("Assets:Bank", -100), pe(ledger.UncategorizedExpense, 100))},
 		},

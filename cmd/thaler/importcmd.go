@@ -78,7 +78,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 
 			var problems []string
 			for _, e := range parsed.Errors {
-				problems = append(problems, e.Error())
+				problems = append(problems, a.localizer().T("import_line_problem", map[string]any{"Line": e.Line, "Reason": a.localizer().Error(e.Err)}))
 			}
 			if len(problems) > 0 && !ignoreErrors {
 				printProblems(out, problems)
@@ -92,7 +92,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 				IgnoreRejected: ignoreErrors,
 			})
 			for _, r := range res.Rejected {
-				problems = append(problems, fmt.Sprintf("line %d: %s", r.Line, r.Reason))
+				problems = append(problems, a.localizer().T("import_line_problem", map[string]any{"Line": r.Line, "Reason": a.localizer().Error(r.Err)}))
 			}
 			if errors.Is(err, core.ErrRowsRejected) {
 				printProblems(out, problems)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/importer"
 )
@@ -74,27 +75,37 @@ func Load(path string, mustExist bool) (*Config, error) {
 		if errors.Is(err, os.ErrNotExist) && !mustExist {
 			return &c, nil
 		}
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		return nil, fmt.Errorf("%w: %w", coded.New("reading_file", map[string]any{"Path": path}), err)
 	}
 	if unknown := md.Undecoded(); len(unknown) > 0 {
-		return nil, fmt.Errorf("%s: unknown key(s): %v", path, unknown)
+		return nil, coded.New("config_unknown_keys", map[string]any{"Path": path, "Count": len(unknown), "Keys": joinKeys(unknown)})
 	}
 	if _, ok := i18n.Parse(c.Language); c.Language != "" && !ok {
-		return nil, fmt.Errorf("%s: language is %q: use one of %s", path, c.Language, strings.Join(i18n.Codes(), ", "))
+		return nil, coded.New("config_language", map[string]any{"Path": path, "Value": c.Language, "Languages": strings.Join(i18n.Codes(), ", ")})
 	}
 	if d := c.BackupReminderDays; d != nil && *d < 0 {
-		return nil, fmt.Errorf("%s: backup_reminder_days is %d: use a number of days, or 0 for no reminder", path, *d)
+		return nil, coded.New("config_reminder_days", map[string]any{"Path": path, "Value": *d})
 	}
 	if n := c.KeepBackups; n != nil && *n < 0 {
-		return nil, fmt.Errorf("%s: keep_backups is %d: use a number of backups to keep, or 0 to keep them all", path, *n)
+		return nil, coded.New("config_keep_backups", map[string]any{"Path": path, "Value": *n})
 	}
 	if err := checkFeatures(c.Features, knownFeatures); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("%w: %w", coded.New("error_in_file", map[string]any{"Path": path}), err)
 	}
 	return &c, nil
 }
 
 const newFileHeader = "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n"
+
+// joinKeys writes the keys of the file that Thaler does not know the way the file
+// does, a.b, separated by commas.
+func joinKeys(keys []toml.Key) string {
+	names := make([]string, len(keys))
+	for i, k := range keys {
+		names[i] = k.String()
+	}
+	return strings.Join(names, ", ")
+}
 
 // Ensure creates the config file from the example text if it does not exist,
 // with every active line commented out so that it changes nothing until the
@@ -125,7 +136,7 @@ func Ensure(path, example string) error {
 // the first matching rule wins, a rule added here is the last resort.
 func AppendRule(path, example string, r importer.Rule) error {
 	if strings.TrimSpace(r.Contains) == "" || r.Regex != "" || r.Category == "" {
-		return errors.New("a rule needs text to look for and a category")
+		return coded.New("rule_needs_text", nil)
 	}
 	if err := Ensure(path, example); err != nil {
 		return err

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/melancholypurin/thaler/internal/coded"
 )
 
 // A Feature is a story that is merged before it is finished. It stays off until
@@ -43,13 +45,13 @@ func checkFeatures(set map[string]bool, known []Feature) error {
 	}
 	slices.Sort(unknown)
 	if len(known) == 0 {
-		return fmt.Errorf("unknown feature %q under [features]: nothing is behind a feature flag in this version", unknown[0])
+		return coded.New("unknown_feature_none", map[string]any{"Name": unknown[0]})
 	}
 	names := make([]string, len(known))
 	for i, f := range known {
 		names[i] = fmt.Sprintf("%s (%s: %s)", f.Name, f.Story, f.About)
 	}
-	return fmt.Errorf("unknown feature %q under [features]: the features are %s", unknown[0], strings.Join(names, ", "))
+	return coded.New("unknown_feature_list", map[string]any{"Name": unknown[0], "Features": strings.Join(names, ", ")})
 }
 
 var (

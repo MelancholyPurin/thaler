@@ -60,7 +60,7 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 		dsn = "file::memory:?_pragma=foreign_keys(1)"
 	} else {
 		if strings.ContainsAny(path, "?#") {
-			return nil, fmt.Errorf("database path %q must not contain '?' or '#'", path)
+			return nil, coded.New("database_path_invalid", map[string]any{"Path": path})
 		}
 		// The directory is private: it holds financial data.
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -75,7 +75,7 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("opening %s: %w", path, err)
+		return nil, fmt.Errorf("%w: %w", coded.New("opening", map[string]any{"Path": path}), err)
 	}
 	r := &repository{db: db, path: path}
 	if err := r.migrate(ctx); err != nil {
@@ -462,7 +462,7 @@ func (q queries) rates(ctx context.Context) ([]ledger.RateEntry, error) {
 		}
 		r, ok := new(big.Rat).SetString(rate)
 		if !ok {
-			return nil, fmt.Errorf("corrupt exchange rate %q for %s/%s on %s", rate, base, quote, date)
+			return nil, coded.New("corrupt_rate", map[string]any{"Rate": rate, "Base": base, "Quote": quote, "Date": date})
 		}
 		out = append(out, ledger.RateEntry{Date: date, Base: ledger.Currency(base), Quote: ledger.Currency(quote), Rate: r})
 	}
@@ -569,7 +569,7 @@ func (q queries) setImportHash(ctx context.Context, id int64, hash string) error
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("transaction #%d does not exist or is already an imported one", id)
+		return coded.New("transaction_not_found_or_imported", map[string]any{"ID": id})
 	}
 	return nil
 }

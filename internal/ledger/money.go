@@ -4,7 +4,6 @@
 package ledger
 
 import (
-	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -40,7 +39,7 @@ func ParseCurrency(s string) (Currency, error) {
 		}
 	}
 	if !ok {
-		return "", fmt.Errorf("invalid currency code %q: want three letters such as EUR, USD or MXN", s)
+		return "", coded.New("invalid_currency", map[string]any{"Text": s})
 	}
 	return Currency(up), nil
 }
@@ -114,7 +113,7 @@ func ParseAmount(s string, c Currency, decimalSep byte) (Money, error) {
 		}
 	}
 	if clean == "" {
-		return Money{}, fmt.Errorf("invalid amount %q", s)
+		return Money{}, coded.New("invalid_amount", map[string]any{"Text": s})
 	}
 
 	sep := decimalSep
@@ -133,14 +132,14 @@ func ParseAmount(s string, c Currency, decimalSep byte) (Money, error) {
 	} else {
 		left, right, _ = strings.Cut(clean, string(sep))
 		if strings.IndexByte(right, sep) >= 0 {
-			return Money{}, fmt.Errorf("invalid amount %q: more than one decimal separator", s)
+			return Money{}, coded.New("invalid_amount_decimal_separators", map[string]any{"Text": s})
 		}
 		other := byte('.')
 		if sep == '.' {
 			other = ','
 		}
 		if strings.IndexByte(right, other) >= 0 {
-			return Money{}, fmt.Errorf("invalid amount %q: thousands separator after the decimal separator", s)
+			return Money{}, coded.New("invalid_amount_thousands_after", map[string]any{"Text": s})
 		}
 		if strings.IndexByte(left, other) >= 0 {
 			thousands = other
@@ -149,12 +148,12 @@ func ParseAmount(s string, c Currency, decimalSep byte) (Money, error) {
 	if thousands != 0 {
 		parts := strings.Split(left, string(thousands))
 		if !validGroups(parts) {
-			return Money{}, fmt.Errorf("invalid amount %q: inconsistent thousands separators", s)
+			return Money{}, coded.New("invalid_amount_thousands_mixed", map[string]any{"Text": s})
 		}
 		left = strings.Join(parts, "")
 	}
 	if !allDigits(left) || !allDigits(right) || (left == "" && right == "") {
-		return Money{}, fmt.Errorf("invalid amount %q", s)
+		return Money{}, coded.New("invalid_amount", map[string]any{"Text": s})
 	}
 
 	exp := c.Exponent()
@@ -162,7 +161,7 @@ func ParseAmount(s string, c Currency, decimalSep byte) (Money, error) {
 		right = right[:len(right)-1]
 	}
 	if len(right) > exp {
-		return Money{}, fmt.Errorf("invalid amount %q: %s has at most %d decimal places", s, c, exp)
+		return Money{}, coded.New("invalid_amount_places", map[string]any{"Text": s, "Currency": c, "Max": exp})
 	}
 	right += strings.Repeat("0", exp-len(right))
 
@@ -171,11 +170,11 @@ func ParseAmount(s string, c Currency, decimalSep byte) (Money, error) {
 		digits = "0"
 	}
 	if len(digits) > 18 {
-		return Money{}, fmt.Errorf("amount %q is too large", s)
+		return Money{}, coded.New("amount_too_large", map[string]any{"Text": s})
 	}
 	v, err := strconv.ParseInt(digits, 10, 64)
 	if err != nil {
-		return Money{}, fmt.Errorf("invalid amount %q", s)
+		return Money{}, coded.New("invalid_amount", map[string]any{"Text": s})
 	}
 	if neg {
 		v = -v

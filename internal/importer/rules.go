@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -34,16 +35,16 @@ func NewRuleset(rules []Rule) (*Ruleset, error) {
 	for i, r := range rules {
 		n := i + 1
 		if (strings.TrimSpace(r.Contains) == "") == (strings.TrimSpace(r.Regex) == "") {
-			return nil, fmt.Errorf("rule %d: set exactly one of contains and regex", n)
+			return nil, coded.New("rule_set_one", map[string]any{"Rule": n})
 		}
 		if err := ledger.ValidateAccountName(r.Category); err != nil {
-			return nil, fmt.Errorf("rule %d: category: %w", n, err)
+			return nil, fmt.Errorf("%w: %w", coded.New("rule_category", map[string]any{"Rule": n}), err)
 		}
 		cr := compiledRule{category: r.Category}
 		if r.Regex != "" {
 			re, err := regexp.Compile("(?i)" + r.Regex)
 			if err != nil {
-				return nil, fmt.Errorf("rule %d: regex: %w", n, err)
+				return nil, fmt.Errorf("%w: %w", coded.New("rule_regex", map[string]any{"Rule": n}), err)
 			}
 			cr.re = re
 		} else {
