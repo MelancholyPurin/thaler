@@ -382,7 +382,7 @@ func (m *Model) helpPopup() string {
 		{"x", m.loc.T("help_transfer", nil)},
 		{"i", m.loc.T("help_import", nil)},
 		{"n  b", m.loc.T("help_new_account", nil)},
-		{"c, then tab", m.loc.T("help_categorize_rule", nil)},
+		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
 		{"r", m.loc.T("help_rename", nil)},
 		{"z", m.loc.T("help_undo", nil)},
