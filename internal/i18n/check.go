@@ -61,6 +61,11 @@ func catalogProblems(code string, english, other catalog, complete bool) []strin
 				problems = append(problems, fmt.Sprintf("%s: %q has an empty %q text", code, id, f.Name))
 			}
 		}
+		for _, f := range english.entries[id].Forms {
+			if f.Name != "other" && !slices.ContainsFunc(have.Forms, func(h Form) bool { return h.Name == f.Name && strings.TrimSpace(h.Text) != "" }) {
+				problems = append(problems, fmt.Sprintf("%s: %q counts in English and has a %q text there, but not here", code, id, f.Name))
+			}
+		}
 		if want, got := arguments(english.entries[id]), arguments(have); !slices.Equal(want, got) {
 			problems = append(problems, fmt.Sprintf("%s: %q takes the arguments %v but English has %v: arguments are not translated or dropped", code, id, got, want))
 		}

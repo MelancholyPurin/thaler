@@ -29,7 +29,7 @@ func Test_Localizer_Error(t *testing.T) {
 		{name: "wrapped in more text", tag: language.German, err: fmt.Errorf("importing x.csv: %w", notFound), want: "importing x.csv: Das Konto existiert nicht: Assets:Nope"},
 		{name: "wrapped twice", tag: language.English, err: fmt.Errorf("a: %w", fmt.Errorf("b: %w", notFound)), want: "a: b: account does not exist: Assets:Nope"},
 		{name: "joined", tag: language.English, err: errors.Join(notFound, coded.New("already_imported", nil)), want: "account does not exist: Assets:Nope\ntransaction already imported"},
-		{name: "a number as an argument", tag: language.English, err: coded.New("rows_rejected", map[string]any{"Count": 3}), want: "some rows do not fit the account: 3 row(s)"},
+		{name: "a number as an argument", tag: language.English, err: coded.New("rows_rejected", map[string]any{"Count": 3}), want: "3 rows do not fit the account"},
 		{name: "a code nobody defined shows as the code", tag: language.English, err: coded.New("no_such_code", nil), want: "no_such_code"},
 		{name: "the pseudo-language", tag: PseudoTag, err: coded.New("already_imported", nil), want: "[tráñšáçtíöñ álréádý ímpörtéd " + strings.Repeat("~", 12) + "]"},
 	}

@@ -5,7 +5,10 @@
   "account_not_found": "la cuenta no existe: {{.Name}}",
   "account_exists": "la cuenta ya existe: {{.Name}}",
   "already_imported": "la transacción ya se importó",
-  "rows_rejected": "algunas filas no encajan con la cuenta: {{.Count}} fila(s)",
+  "rows_rejected": {
+    "one": "{{.Count}} fila no encaja con la cuenta",
+    "other": "{{.Count}} filas no encajan con la cuenta"
+  },
   "currency_mismatch": "monedas distintas: {{.First}} y {{.Second}}",
   "posting_no_currency": "el apunte en {{.Account}} no tiene moneda",
   "too_few_postings": "una transacción necesita al menos dos apuntes",
@@ -19,5 +22,25 @@
   "amount_not_positive": "el importe debe ser mayor que cero",
   "received_wrong_currency": "el importe recibido está en {{.Currency}}, pero {{.Account}} tiene {{.Holds}}",
   "received_not_positive": "el importe recibido debe ser mayor que cero",
-  "balance_wrong_currency": "{{.Account}} tiene {{.Holds}}, pero el saldo está en {{.Currency}}"
+  "balance_wrong_currency": "{{.Account}} tiene {{.Holds}}, pero el saldo está en {{.Currency}}",
+  "backups_removed": {
+    "one": "Se eliminó {{.Count}} copia de seguridad ({{.Size}}).",
+    "other": "Se eliminaron {{.Count}} copias de seguridad ({{.Size}})."
+  },
+  "prune_listing": {
+    "one": "Copias que se conservan por carpeta: {{.Keep}}. {{.Count}} copia de seguridad ({{.Size}}) se eliminaría:",
+    "other": "Copias que se conservan por carpeta: {{.Keep}}. {{.Count}} copias de seguridad ({{.Size}}) se eliminarían:"
+  },
+  "nothing_to_remove": {
+    "one": "Nada que eliminar: ninguna carpeta tiene más de {{.Count}} copia de seguridad.",
+    "other": "Nada que eliminar: ninguna carpeta tiene más de {{.Count}} copias de seguridad."
+  },
+  "old_backups_removable": {
+    "one": "Se puede eliminar {{.Count}} copia de seguridad antigua: ctrl+p",
+    "other": "Se pueden eliminar {{.Count}} copias de seguridad antiguas: ctrl+p"
+  },
+  "old_backups_removed": {
+    "one": "Se eliminó {{.Count}} copia de seguridad antigua ({{.Size}})",
+    "other": "Se eliminaron {{.Count}} copias de seguridad antiguas ({{.Size}})"
+  }
 }
