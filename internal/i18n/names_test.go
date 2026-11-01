@@ -26,7 +26,7 @@ func Test_Localizer_AccountName(t *testing.T) {
 		{name: "a deeper name keeps every segment", tag: language.German, account: "Expenses:Food:Groceries", want: "Ausgaben:Food:Groceries"},
 		{name: "uncategorized spending", tag: language.German, account: ledger.UncategorizedExpense, want: "Ausgaben:Ohne Kategorie"},
 		{name: "uncategorized income", tag: language.Spanish, account: ledger.UncategorizedIncome, want: "Ingresos:Sin categoría"},
-		{name: "transfers", tag: language.German, account: ledger.TransferAccount, want: "Eigenkapital:Umbuchungen"},
+		{name: "transfers", tag: language.German, account: ledger.TransferAccount, want: "Eigenkapital:Überweisungen"},
 		{name: "conversions", tag: language.Spanish, account: ledger.ConversionAccount, want: "Patrimonio:Conversiones"}, //nolint:misspell // Spanish
 		{name: "opening balances", tag: language.Spanish, account: ledger.OpeningBalanceAccount, want: "Patrimonio:Saldo inicial"},
 		{name: "a category of the same name elsewhere is the person's", tag: language.German, account: "Expenses:Opening", want: "Ausgaben:Opening"},
@@ -64,7 +64,7 @@ func Test_Localizer_ShortName(t *testing.T) {
 		{name: "a deeper name", tag: language.Spanish, account: "Expenses:Food:Groceries", want: "Food:Groceries"},
 		{name: "uncategorized spending", tag: language.German, account: ledger.UncategorizedExpense, want: "Ohne Kategorie"},
 		{name: "uncategorized income", tag: language.Spanish, account: ledger.UncategorizedIncome, want: "Sin categoría"},
-		{name: "transfers", tag: language.German, account: ledger.TransferAccount, want: "Umbuchungen"},
+		{name: "transfers", tag: language.German, account: ledger.TransferAccount, want: "Überweisungen"},
 		{name: "transfers in English", tag: language.English, account: ledger.TransferAccount, want: "Transfers"},
 		{name: "opening balances in English", tag: language.English, account: ledger.OpeningBalanceAccount, want: "Opening balance"},
 		{name: "a name without a type", tag: language.German, account: "Sparkasse", want: "Sparkasse"},

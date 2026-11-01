@@ -106,7 +106,7 @@ func Test_Update_configKey(t *testing.T) {
 		},
 		{
 			name: "with no editor it says what to set and creates nothing", noPath: true, script: "L",
-			want: observed{Status: "no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=nano", StatusIsError: true},
+			want: observed{Status: "no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=code", StatusIsError: true},
 		},
 		{
 			name: "VISUAL is tried first", visual: "true", editor: "false", script: "L",

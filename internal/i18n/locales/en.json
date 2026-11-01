@@ -82,7 +82,7 @@
   },
   "undid_transfer": "Undid the transfer (#{{.Out}} and #{{.In}})",
   "no_config_location": "no config file location is known",
-  "no_editor": "no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=nano",
+  "no_editor": "no editor found: set $VISUAL or $EDITOR, e.g. export EDITOR=code",
   "editor_failed": "the editor failed: {{.Error}}",
   "config_closed": "Config closed",
   "config_problem": "The config has a problem, imports will refuse it until it is fixed (press C): {{.Error}}",

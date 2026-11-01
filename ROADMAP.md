@@ -303,7 +303,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TLC-4` Every screen and popup fits at 80 columns in all three languages, checked by tests (`Test_View_fits`: nothing is cut short, wider or taller than 80 by 24)
 - [x] `TLC-5` Change the language from the TUI without restarting (`ctrl+l`; saved in `config.toml`)
 - ~~`TLC-6` Key hints and the help popup in the language; the keys themselves stay the same~~ (folded into `TLC-1`)
-- [ ] `TLC-7` A native speaker reads the Spanish and the German before a release
+- [x] `TLC-7` A native speaker reads the Spanish and the German before a release (English and Spanish are checked in full; the German is acceptable and may be reworded in a later release, so `WLC-10` still applies to the web app)
 
 ### PLT: Installing and running on macOS and Linux
 
