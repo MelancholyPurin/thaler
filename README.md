@@ -128,7 +128,7 @@ The strip along the top switches between **screens**, and the period on its righ
 
 | Panel | Left column | Right pane while focused |
 | --- | --- | --- |
-| `1` Home | a small tile | title screen: net worth, counts, period, uncategorized count |
+| `1` Home | a small tile | title screen: net worth, what is left of this month's targets (once the current month has a target or something carried in; red below zero), counts, period, uncategorized count |
 | `2` Accounts | "All accounts" and each asset/liability with its balance | account summary: balance, activity, this month's money in and out |
 | `3` Transactions | the history, newest first (`●` uncategorized, `»` transfer) | the selected transaction: postings, account, category |
 

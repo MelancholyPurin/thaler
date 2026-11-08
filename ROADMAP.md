@@ -275,7 +275,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TBU-5` Copy last month's targets into this one: the service adds the targets a month lacks and keeps those it has, and the interface does it on a key and takes it back with `z`
 - [x] `TBU-6` Open a category to see the transactions behind its number
 - [ ] `TBU-7` Collapse and expand category groups
-- [ ] `TBU-8` A "left this month" figure on the Home panel
+- [x] `TBU-8` A "left this month" figure on the Home panel
 
 ### TRP: Reports tab
 
