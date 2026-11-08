@@ -48,6 +48,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.prunePopup())
 	case modeLanguage:
 		screen = m.centerPopup(screen, m.languagePopup())
+	case modeTarget:
+		screen = m.centerPopup(screen, m.targetPopup())
 	}
 	return screen
 }
@@ -314,7 +316,7 @@ func (m *Model) hintItems() (hints, tail []string) {
 	tail = []string{m.loc.T("hint_help", nil), m.loc.T("hint_quit", nil)}
 	switch {
 	case m.screen == screenBudget:
-		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
+		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_target", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
 	case m.screen != screenLedger:
 		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
 	}
@@ -419,6 +421,7 @@ func (m *Model) helpPopup() string {
 		{"n  b", m.loc.T("help_new_account", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"e", m.loc.T("help_target", nil)},
 		{"r", m.loc.T("help_rename", nil)},
 		{"z", m.loc.T("help_undo", nil)},
 		{"/", m.loc.T("help_search", nil)},

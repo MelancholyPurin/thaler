@@ -63,6 +63,7 @@ const (
 	modeRestore              // putting a backup in place of the database
 	modePrune                // removing the oldest backups
 	modeLanguage             // choosing the language
+	modeTarget               // setting a category's target for the month
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -123,7 +124,8 @@ type Model struct {
 	period    string   // "2026-10", or "" for all time; scopes every screen
 	months    []string // months that have transactions, plus the current one, newest first
 	budget    core.BudgetReport
-	budgetTop listState // scroll position of the months list on the Budget screen
+	monthly   core.MonthBudget // the month's spending against its targets; empty for all time
+	budgetTop listState        // scroll position of the months list on the Budget screen
 	now       func() time.Time
 	focus     pane
 	accts     listState // index 0 is "All accounts", then m.accounts
@@ -152,6 +154,7 @@ type Model struct {
 	rst           *restoreForm
 	prn           *pruneForm
 	lang          *languageForm
+	tgt           *targetForm
 	helpTop       int            // first line of the help that is shown, when it is longer than the screen
 	lastBackup    time.Time      // when the newest backup was made, zero if there is none; see refreshBackups
 	remindDays    int            // days after which that is worth a reminder, 0 for never
@@ -372,6 +375,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePrune(msg)
 		case modeLanguage:
 			return m.updateLanguage(msg)
+		case modeTarget:
+			return m.updateTarget(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -430,7 +435,7 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case screenLedger:
 		return m.updateLedger(key)
 	case screenBudget:
-		m.updateBudget(key)
+		return m, m.updateBudget(key)
 	}
 	return m, nil
 }
