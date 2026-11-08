@@ -300,6 +300,8 @@ func Test_View_translated(t *testing.T) {
 		{name: "Spanish, the bar on the categories", tag: language.Spanish, keys: "B tab", shows: []string{"↑/↓ categoría", "enter transacciones"}, hides: []string{"category"}},
 		{name: "German, a category's transactions", tag: language.German, keys: "B tab enter", shows: []string{"1 Transaktion in Groceries · esc zeigt alle"}, hides: []string{"transaction in"}},
 		{name: "German, the bar on the categories", tag: language.German, keys: "B tab", shows: []string{"↑/↓ Kategorie", "enter Transaktionen"}, hides: []string{"category"}},
+		{name: "Spanish, left this month", tag: language.Spanish, keys: "", shows: []string{"Queda este mes", "90,00 EUR"}, hides: []string{"Left this month"}},
+		{name: "German, left this month", tag: language.German, keys: "", shows: []string{"Übrig im Monat", "90,00 EUR"}, hides: []string{"Left this month"}},
 		{name: "Spanish, targets copied", tag: language.Spanish, keys: "B c", shows: []string{"Se copió 1 objetivo de sep 2026 a oct 2026", "z deshace"}, hides: []string{"copied"}},
 		{name: "Spanish, nothing to copy", tag: language.Spanish, keys: "B c c", shows: []string{"nada que copiar: cada objetivo de sep 2026 ya está fijado en oct 2026"}, hides: []string{"nothing to copy"}},
 		{name: "German, targets copied", tag: language.German, keys: "B c", shows: []string{"1 Ziel von Sep 2026 nach Okt 2026 kopiert"}, hides: []string{"copied"}},

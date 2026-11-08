@@ -132,7 +132,11 @@ func (m *Model) reload() error {
 			}
 		}
 	}
-	return m.refreshBudget()
+	if err := m.refreshBudget(); err != nil {
+		return err
+	}
+	m.thisMonth, err = m.svc.MonthBudget(m.ctx, core.MonthBudgetRequest{Month: m.now().Format(monthLayout), RateDate: m.now().Format(ledger.DateLayout)})
+	return err
 }
 
 func (m *Model) uncategorizedCount() int {

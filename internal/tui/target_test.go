@@ -750,3 +750,108 @@ func Test_budgetCategories_scroll(t *testing.T) {
 		})
 	}
 }
+
+// The Home says what is left of this month's plan, whichever month the Budget shows.
+func Test_homeLeftThisMonth(t *testing.T) {
+	food := "Expenses:Groceries"
+	tcs := []struct {
+		name      string
+		targets   []testTarget
+		rollovers []core.BudgetRollover
+		keys      string
+		shows     []string
+		hides     []string
+	}{
+		{
+			name:    "a target not reached: what is left",
+			targets: []testTarget{{"2026-10", food, 5000}},
+			keys:    "L",
+			shows:   []string{"Left this month", "40.00 EUR"},
+		},
+		{
+			name:    "a target passed: a negative amount",
+			targets: []testTarget{{"2026-10", food, 500}},
+			keys:    "L",
+			shows:   []string{"Left this month", "-5.00 EUR"},
+		},
+		{
+			name:    "it adds up the targets of all the categories",
+			targets: []testTarget{{"2026-10", food, 5000}, {"2026-10", "Expenses:Rent", 90000}},
+			keys:    "L",
+			shows:   []string{"Left this month", "940.00 EUR"},
+		},
+		{
+			name:      "what was carried in counts",
+			targets:   []testTarget{{"2026-09", food, 10000}},
+			rollovers: []core.BudgetRollover{{Category: food, From: "2026-09"}},
+			keys:      "L",
+			shows:     []string{"Left this month", "60.00 EUR"},
+		},
+		{
+			name:    "the current month, not the one the Budget shows",
+			targets: []testTarget{{"2026-10", food, 5000}, {"2026-09", food, 100}},
+			keys:    "B down L",
+			shows:   []string{"Left this month", "40.00 EUR"},
+		},
+		{
+			name:    "still the current month after the data is loaded again",
+			targets: []testTarget{{"2026-10", food, 5000}, {"2026-09", food, 100}},
+			keys:    "B down ctrl+l enter L",
+			shows:   []string{"Left this month", "40.00 EUR"},
+		},
+		{
+			name:    "no plan for this month: nothing is said",
+			targets: []testTarget{{"2026-09", food, 5000}},
+			keys:    "L",
+			hides:   []string{"Left this month"},
+		},
+		{
+			name:  "no targets at all: nothing is said",
+			keys:  "L",
+			hides: []string{"Left this month"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := rolloverModel(t, tc.targets, tc.rollovers...)
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
+
+// What is left is in red when it is below zero.
+func Test_homeLeftThisMonth_red(t *testing.T) {
+	tcs := []struct {
+		name   string
+		target int64
+		want   bool
+	}{
+		{name: "below zero", target: 500, want: true},
+		{name: "exactly nothing", target: 1000, want: false},
+		{name: "some left", target: 5000, want: false},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			withColor(t)
+			m, _ := rolloverModel(t, []testTarget{{"2026-10", "Expenses:Groceries", tc.target}})
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+			// when
+			press(m, "L")
+			view := m.View()
+
+			// then
+			if got := strings.Contains(view, bold.Render(warn.Render(m.loc.Money(m.thisMonth.LeftTotal)))); got != tc.want {
+				t.Errorf("the amount in red: got %v, want %v\n%s", got, tc.want, view)
+			}
+		})
+	}
+}
