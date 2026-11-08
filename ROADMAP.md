@@ -132,7 +132,7 @@ Targets per category, and what is left of them.
 - [x] `BUD-2` A monthly target per category (kept per month, in the base currency, on expense categories; set, clear and list in the service; the popup is `TBU-2` and the command `CLI-12`)
 - [x] `BUD-3` Spent, target and left per category, and the total (`MonthBudget` in the service: overspending is a negative amount left, spending in categories with no target is counted apart, and the tab that shows it is `TBU-3`)
 - [ ] `BUD-4` Unspent money (or overspending) carries into the next month, switched on per category
-- [ ] `BUD-5` Start a month from the previous month's targets
+- ~~`BUD-5` Start a month from the previous month's targets~~ (folded into `TBU-5`)
 - [ ] `BUD-6` Planned income against targets, and what is still unassigned
 - [ ] `BUD-7` Group categories (Housing, Food) with a target and totals for the group
 - [ ] `BUD-8` Spending in other currencies counted against base-currency targets
@@ -272,7 +272,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TBU-2` Set and clear a category's monthly target in a popup, and see spent against target with what is left, overspending in red
 - ~~`TBU-3` Spent against target with what is left, and overspending in red~~ (folded into `TBU-2`)
 - [ ] `TBU-4` Switch rollover on or off per category and see the carried amount
-- [ ] `TBU-5` Copy last month's targets into this one
+- [x] `TBU-5` Copy last month's targets into this one: the service adds the targets a month lacks and keeps those it has, and the interface does it on a key and takes it back with `z`
 - [ ] `TBU-6` Open a category to see the transactions behind its number
 - [ ] `TBU-7` Collapse and expand category groups
 - [ ] `TBU-8` A "left this month" figure on the Home panel
