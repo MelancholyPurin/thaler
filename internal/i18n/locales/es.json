@@ -603,5 +603,6 @@
   "hint_tab_months": "tab meses",
   "hint_category": "↑/↓ categoría",
   "hint_esc_all": "esc mostrar todo",
-  "help_budget_tab": "Presupuesto: pasar de los meses a las categorías; enter en una categoría muestra sus transacciones"
+  "help_budget_tab": "Presupuesto: pasar de los meses a las categorías; enter en una categoría muestra sus transacciones",
+  "label_left_month": "Queda este mes"
 }

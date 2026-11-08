@@ -603,5 +603,6 @@
   "hint_tab_months": "tab Monate",
   "hint_category": "↑/↓ Kategorie",
   "hint_esc_all": "esc alle zeigen",
-  "help_budget_tab": "Budget: zwischen Monaten und Kategorien wechseln; enter auf einer Kategorie zeigt ihre Transaktionen"
+  "help_budget_tab": "Budget: zwischen Monaten und Kategorien wechseln; enter auf einer Kategorie zeigt ihre Transaktionen",
+  "label_left_month": "Übrig im Monat"
 }
