@@ -399,3 +399,92 @@ func Test_MonthBudget(t *testing.T) {
 		})
 	}
 }
+
+func Test_CopyBudgetTargets(t *testing.T) {
+	food9, rent9 := BudgetTarget{"Expenses:Food", eur(40000)}, BudgetTarget{"Expenses:Rent", eur(90000)}
+	september := []given{target("2026-09", "Expenses:Food", eur(40000)), target("2026-09", "Expenses:Rent", eur(90000))}
+	tcs := []struct {
+		name     string
+		setup    []given
+		from, to string
+		want     CopiedTargets
+		wantTo   []BudgetTarget
+		wantFrom []BudgetTarget // the source month afterwards
+		wantErr  string
+	}{
+		{
+			name: "every target into an empty month", setup: september, from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Copied: []BudgetTarget{food9, rent9}},
+			wantTo: []BudgetTarget{food9, rent9}, wantFrom: []BudgetTarget{food9, rent9},
+		},
+		{
+			name:  "a category that has a target keeps it",
+			setup: append(september, target("2026-10", "Expenses:Food", eur(50000))), from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Copied: []BudgetTarget{rent9}, Kept: 1},
+			wantTo: []BudgetTarget{{"Expenses:Food", eur(50000)}, rent9}, wantFrom: []BudgetTarget{food9, rent9},
+		},
+		{
+			name:  "copying again adds nothing",
+			setup: append(september, target("2026-10", "Expenses:Food", eur(40000)), target("2026-10", "Expenses:Rent", eur(90000))), from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Kept: 2},
+			wantTo: []BudgetTarget{food9, rent9}, wantFrom: []BudgetTarget{food9, rent9},
+		},
+		{
+			name:  "a month with no targets has none to copy",
+			setup: []given{target("2026-10", "Expenses:Food", eur(50000))}, from: "2026-09", to: "2026-10",
+			wantTo: []BudgetTarget{{"Expenses:Food", eur(50000)}},
+		},
+		{
+			name:  "the targets of other months are not copied",
+			setup: append(september, target("2026-08", "Expenses:Food", eur(10000)), target("2026-11", "Expenses:Food", eur(20000))), from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Copied: []BudgetTarget{food9, rent9}},
+			wantTo: []BudgetTarget{food9, rent9}, wantFrom: []BudgetTarget{food9, rent9},
+		},
+		{
+			name:  "a target keeps the currency it was set in",
+			setup: append([]given{target("2026-09", "Expenses:Food", eur(40000))}, baseCurrency("USD")), from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Copied: []BudgetTarget{food9}},
+			wantTo: []BudgetTarget{food9}, wantFrom: []BudgetTarget{food9},
+		},
+		{
+			name: "the same month", setup: september, from: "2026-09", to: "2026-09",
+			wantFrom: []BudgetTarget{food9, rent9}, wantErr: "cannot copy the targets of 2026-09 into the same month",
+		},
+		{
+			name: "a source that is no month", setup: september, from: "September", to: "2026-10",
+			wantFrom: []BudgetTarget{food9, rent9}, wantErr: `invalid month "September": use YYYY-MM`,
+		},
+		{
+			name: "a destination that is no month", setup: september, from: "2026-09", to: "2026-10-01",
+			wantFrom: []BudgetTarget{food9, rent9}, wantErr: `invalid month "2026-10-01": use YYYY-MM`,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append(targetLedger(), tc.setup...)...)
+
+			// when
+			got, err := st.CopyBudgetTargets(t.Context(), tc.from, tc.to)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+			gotTo, errTo := st.BudgetTargets(t.Context(), "2026-10")
+			gotFrom, errFrom := st.BudgetTargets(t.Context(), tc.from)
+			if errTo != nil {
+				t.Fatal(errTo)
+			}
+			if diff := cmp.Diff(tc.wantTo, gotTo, equalEmpty); diff != "" {
+				t.Errorf("destination mismatch (-want +got):\n%s", diff)
+			}
+			if errFrom == nil { // a source that is no month has no list
+				if diff := cmp.Diff(tc.wantFrom, gotFrom, equalEmpty); diff != "" {
+					t.Errorf("source mismatch (-want +got):\n%s", diff)
+				}
+			}
+		})
+	}
+}

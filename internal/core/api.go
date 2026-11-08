@@ -99,6 +99,9 @@ type Service interface {
 	ClearBudgetTarget(ctx context.Context, month, category string) error
 	// BudgetTargets lists the targets of month, by category name.
 	BudgetTargets(ctx context.Context, month string) ([]BudgetTarget, error)
+	// CopyBudgetTargets starts the month `to` from the targets of `from`: it adds
+	// those `to` lacks and keeps the ones it has, so that nothing is overwritten.
+	CopyBudgetTargets(ctx context.Context, from, to string) (CopiedTargets, error)
 
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
@@ -419,6 +422,13 @@ type BudgetLine struct {
 type BudgetTarget struct {
 	Category string
 	Amount   ledger.Money
+}
+
+// CopiedTargets is what CopyBudgetTargets did: the targets it added, and how many
+// of the source month's it left alone because the month already had one.
+type CopiedTargets struct {
+	Copied []BudgetTarget // by category name
+	Kept   int
 }
 
 // MonthBudgetRequest asks how a month's spending stands against its targets.
