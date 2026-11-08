@@ -125,6 +125,7 @@ type Model struct {
 	months       []string // months that have transactions, plus the current one, newest first
 	budget       core.BudgetReport
 	monthly      core.MonthBudget // the month's spending against its targets; empty for all time
+	thisMonth    core.MonthBudget // the same for the current month, which the Home shows whichever month is on show
 	budgetTop    listState        // scroll position of the months list on the Budget screen
 	budgetCats   bool             // the categories of the Budget have the focus, not the months
 	budgetSel    string           // the category selected there

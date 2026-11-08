@@ -135,6 +135,16 @@ func (m *Model) homeDetail(w, h int) []string {
 		}
 		add("", warn.Render(m.loc.T("home_no_rate", map[string]any{"Codes": strings.Join(codes, ", "), "First": codes[0], "Base": string(m.netWorth.Base)})))
 	}
+	if hasPlan(m.thisMonth) { // what the Budget plans for the current month, whichever month is on show
+		left := m.loc.Money(m.thisMonth.LeftTotal)
+		if len(m.thisMonth.Missing) > 0 {
+			left = "≈ " + left
+		}
+		if m.thisMonth.LeftTotal.Minor < 0 {
+			left = warn.Render(left)
+		}
+		add(m.loc.T("label_left_month", nil), bold.Render(left))
+	}
 	add(m.loc.T("label_accounts", nil), fmt.Sprint(len(m.accounts)))
 	add(m.loc.T("label_transactions", nil), fmt.Sprint(len(m.rows)))
 	add(m.loc.T("label_period", nil), span)

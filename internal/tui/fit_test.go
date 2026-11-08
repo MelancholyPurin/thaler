@@ -112,6 +112,8 @@ func Test_View_fits(t *testing.T) {
 		keys string
 	}{
 		{name: "home", keys: ""},
+		{name: "home, left this month", keys: "B e text:30 enter L"},
+		{name: "home, left this month, passed", keys: "B e text:5 enter L"},
 		{name: "accounts", keys: "tab"},
 		{name: "one account", keys: "tab down"},
 		{name: "transactions", keys: "tab tab"},

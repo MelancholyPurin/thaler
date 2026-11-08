@@ -257,8 +257,10 @@ func (m *Model) budgetDetail(w int) ([]string, span) {
 
 // hasPlan says whether the month on show has anything set aside to measure against: a
 // target, or something carried in.
-func (m *Model) hasPlan() bool {
-	for _, l := range m.monthly.Lines {
+func (m *Model) hasPlan() bool { return hasPlan(m.monthly) }
+
+func hasPlan(b core.MonthBudget) bool {
+	for _, l := range b.Lines {
 		if l.Planned() {
 			return true
 		}
