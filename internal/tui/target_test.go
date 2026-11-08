@@ -183,7 +183,7 @@ func Test_budgetTargets(t *testing.T) {
 		{
 			name:  "no targets: the spending as before, and how to set one",
 			keys:  "B",
-			shows: []string{"Spending", "Groceries", "Uncategorized", "Press e to set a monthly target"},
+			shows: []string{"Spending", "Groceries", "Uncategorized", "Press e to set a target"},
 			hides: []string{"Left", "No target", "Targets"},
 		},
 		{
@@ -210,7 +210,7 @@ func Test_budgetTargets(t *testing.T) {
 			name:    "the targets of another month do not count",
 			targets: []testTarget{{"2026-09", rent, 90000}},
 			keys:    "B",
-			shows:   []string{"Spending", "Press e to set a monthly target"},
+			shows:   []string{"Spending", "Press e to set a target"},
 			hides:   []string{"Rent", "of 900.00"},
 		},
 		{
@@ -309,6 +309,90 @@ func Test_budgetTargets_red(t *testing.T) {
 			redBar := warn.Render(strings.Repeat("█", 10))
 			if got := strings.Contains(view, redBar); got != tc.want {
 				t.Errorf("a full red bar: got %v, want %v\n%s", got, tc.want, view)
+			}
+		})
+	}
+}
+
+func Test_Update_copyTargets(t *testing.T) {
+	type observed struct {
+		Mode          string
+		Status        string
+		StatusIsError bool
+		October       []core.BudgetTarget
+		September     []core.BudgetTarget
+	}
+	food, rent := "Expenses:Groceries", "Expenses:Rent"
+	both := []testTarget{{"2026-09", food, 10000}, {"2026-09", rent, 90000}}
+	septemberKept := []core.BudgetTarget{{Category: food, Amount: eur(10000)}, {Category: rent, Amount: eur(90000)}}
+	tcs := []struct {
+		name    string
+		targets []testTarget
+		keys    string
+		want    observed
+	}{
+		{
+			name: "the targets of last month into this one", targets: both, keys: "B c",
+			want: observed{Mode: "list", Status: "2 targets copied from Sep 2026 into Oct 2026 · z undoes", October: septemberKept, September: septemberKept},
+		},
+		{
+			name: "one target says so in the singular", targets: both[:1], keys: "B c",
+			want: observed{Mode: "list", Status: "1 target copied from Sep 2026 into Oct 2026 · z undoes",
+				October: septemberKept[:1], September: septemberKept[:1]},
+		},
+		{
+			name: "a target this month has is kept", targets: append([]testTarget{{"2026-10", food, 5000}}, both...), keys: "B c",
+			want: observed{Mode: "list", Status: "1 target copied from Sep 2026 into Oct 2026 · 1 was already set, kept · z undoes",
+				October:   []core.BudgetTarget{{Category: food, Amount: eur(5000)}, {Category: rent, Amount: eur(90000)}},
+				September: septemberKept},
+		},
+		{
+			name: "every target already set", targets: append([]testTarget{{"2026-10", food, 5000}, {"2026-10", rent, 7000}}, both...), keys: "B c",
+			want: observed{Mode: "list", Status: "nothing to copy: every target of Sep 2026 is already set in Oct 2026", StatusIsError: true,
+				October:   []core.BudgetTarget{{Category: food, Amount: eur(5000)}, {Category: rent, Amount: eur(7000)}},
+				September: septemberKept},
+		},
+		{
+			name: "a month before with no targets", keys: "B c",
+			want: observed{Mode: "list", Status: "Sep 2026 has no targets to copy", StatusIsError: true},
+		},
+		{
+			name: "from the month before the one on show", targets: both, keys: "B down c",
+			want: observed{Mode: "list", Status: "Aug 2026 has no targets to copy", StatusIsError: true, September: septemberKept},
+		},
+		{
+			name: "all time has no targets", targets: both, keys: "B g c",
+			want: observed{Mode: "list", Status: "choose a month first: a target is for one month", StatusIsError: true, September: septemberKept},
+		},
+		{
+			name: "z takes back what was copied", targets: both, keys: "B c z",
+			want: observed{Mode: "list", Status: "Targets copied into Oct 2026 taken back", September: septemberKept},
+		},
+		{
+			name: "z leaves the targets the month had", targets: append([]testTarget{{"2026-10", food, 5000}}, both...), keys: "B c z",
+			want: observed{Mode: "list", Status: "Targets copied into Oct 2026 taken back",
+				October: []core.BudgetTarget{{Category: food, Amount: eur(5000)}}, September: septemberKept},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := targetModel(t, tc.targets...)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			got := observed{Mode: modeNames[m.mode], Status: m.status, StatusIsError: m.statusIsError}
+			var err error
+			if got.October, err = st.BudgetTargets(t.Context(), "2026-10"); err != nil {
+				t.Fatal(err)
+			}
+			if got.September, err = st.BudgetTargets(t.Context(), "2026-09"); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
