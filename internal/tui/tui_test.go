@@ -716,6 +716,8 @@ func Test_View_fitsTerminal(t *testing.T) {
 		{name: "the budget", keys: "B"},
 		{name: "the budget with a target", keys: "B e text:30 enter"},
 		{name: "the target popup", keys: "B e"},
+		{name: "the budget categories", keys: "B tab"},
+		{name: "the transactions of a category", keys: "B tab enter"},
 		{name: "the forecast", keys: "F"},
 		{name: "the reports", keys: "R"},
 		{name: "the home tile focused", keys: "1"},

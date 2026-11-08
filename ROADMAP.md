@@ -273,7 +273,7 @@ Getting every transaction into the right category with as little typing as possi
 - ~~`TBU-3` Spent against target with what is left, and overspending in red~~ (folded into `TBU-2`)
 - [x] `TBU-4` Switch rollover on or off per category and see the carried amount: what is left, or overspent, carries into the next month from the month it was switched on, and the figure is worked out when shown
 - [x] `TBU-5` Copy last month's targets into this one: the service adds the targets a month lacks and keeps those it has, and the interface does it on a key and takes it back with `z`
-- [ ] `TBU-6` Open a category to see the transactions behind its number
+- [x] `TBU-6` Open a category to see the transactions behind its number
 - [ ] `TBU-7` Collapse and expand category groups
 - [ ] `TBU-8` A "left this month" figure on the Home panel
 

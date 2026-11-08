@@ -63,9 +63,17 @@ func (m *Model) rightPane(l layout) string {
 	iw := l.rightW - 2
 	var title string
 	var lines []string
+	focused, footer := false, ""
 	switch {
 	case m.screen == screenBudget:
-		title, lines = m.loc.T("budget_title", map[string]any{"Period": m.periodLabel(m.period)}), m.budgetDetail(iw)
+		var at span
+		title = m.loc.T("budget_title", map[string]any{"Period": m.periodLabel(m.period)})
+		lines, at = m.budgetDetail(iw)
+		if m.catsFocused() {
+			focused = true
+			footer = m.loc.T("position_of", map[string]any{"N": m.budgetIndex() + 1, "Total": len(m.budgetEntries())})
+			lines = m.budgetWindow(lines, l.avail-2, at)
+		}
 	case m.focus == paneAccounts:
 		title, lines = m.accountDetail(iw)
 	case m.focus == paneTransactions:
@@ -76,7 +84,7 @@ func (m *Model) rightPane(l layout) string {
 	if ih := l.avail - 2; ih > 1 && len(lines) > ih {
 		lines = append(lines[:ih-1:ih-1], dim.Render(m.loc.T("more_lines", map[string]any{"Count": len(lines) - ih + 1})))
 	}
-	return box(title, lines, l.rightW, l.avail, false, "")
+	return box(title, lines, l.rightW, l.avail, focused, footer)
 }
 
 // kv renders a dim key and a value, with the value wrapped under itself.

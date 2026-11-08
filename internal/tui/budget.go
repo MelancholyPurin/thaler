@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/i18n"
@@ -41,8 +42,86 @@ func (m *Model) budgetCursor() int {
 	return 0
 }
 
-// updateBudget moves through the months list; the selected month is the period.
-// e sets a target for the month, c copies the month before's, and z takes back the last change.
+// catsFocused says the categories of the Budget have the focus. With one column there is
+// no pane of them, so the months keep it, whatever was asked before the terminal shrank.
+func (m *Model) catsFocused() bool { return m.budgetCats && m.layout().two }
+
+// monthsStyle is how the month under the cursor is drawn: bright while the months have
+// the focus, quiet while the categories do.
+func (m *Model) monthsStyle() lipgloss.Style {
+	if m.catsFocused() {
+		return selUnfocused
+	}
+	return selFocused
+}
+
+// budgetEntries are the categories the Budget lists, in the order it lists them: the
+// ones with money set aside, the others that spent, then income.
+func (m *Model) budgetEntries() []string {
+	var out []string
+	if m.hasPlan() {
+		for _, l := range m.monthly.Lines {
+			if l.Planned() {
+				out = append(out, l.Name)
+			}
+		}
+		for _, l := range m.unplanned() {
+			out = append(out, l.Name)
+		}
+	} else {
+		for _, l := range m.budget.Expenses {
+			out = append(out, l.Name)
+		}
+	}
+	for _, l := range m.budget.Income {
+		out = append(out, l.Name)
+	}
+	return out
+}
+
+// budgetIndex is where the selected category is among the entries: the first when it
+// is not there (another month does not have it).
+func (m *Model) budgetIndex() int {
+	for i, name := range m.budgetEntries() {
+		if name == m.budgetSel {
+			return i
+		}
+	}
+	return 0
+}
+
+// budgetSelected is the category selected, or "" if the Budget lists none.
+func (m *Model) budgetSelected() string {
+	entries := m.budgetEntries()
+	if len(entries) == 0 {
+		return ""
+	}
+	return entries[m.budgetIndex()]
+}
+
+// budgetWindow shows the lines of the categories pane that fit in h, scrolled so that
+// the selected category is in view.
+func (m *Model) budgetWindow(lines []string, h int, sel span) []string {
+	if h < 1 || len(lines) <= h {
+		m.budgetScroll = 0
+		return lines
+	}
+	off := max(0, min(m.budgetScroll, len(lines)-h))
+	if sel.from >= 0 {
+		if sel.from < off {
+			off = sel.from
+		}
+		if sel.to > off+h {
+			off = sel.to - h
+		}
+	}
+	m.budgetScroll = max(0, min(off, len(lines)-h))
+	return lines[m.budgetScroll : m.budgetScroll+h]
+}
+
+// updateBudget moves through the months list, or, with tab, through the categories; the
+// selected month is the period. e sets a target for the month, c copies the month
+// before's, and z takes back the last change. enter on a category shows its transactions.
 func (m *Model) updateBudget(key string) tea.Cmd {
 	switch key {
 	case "e":
@@ -53,9 +132,30 @@ func (m *Model) updateBudget(key string) tea.Cmd {
 	case "z":
 		m.undoLast()
 		return nil
+	case "tab", "shift+tab":
+		if m.layout().two { // with one column there is no pane of categories to move into
+			m.budgetCats = !m.budgetCats
+			m.budgetSel = m.budgetSelected()
+		}
+		return nil
+	}
+	l := m.layout()
+	if m.catsFocused() {
+		entries := m.budgetEntries()
+		switch key {
+		case "esc":
+			m.budgetCats = false
+		case "enter":
+			m.openCategory()
+		default:
+			ls := listState{cursor: m.budgetIndex()}
+			if ls.navigate(key, len(entries), max(l.avail-2, 1)) {
+				m.budgetSel = entries[ls.cursor]
+			}
+		}
+		return nil
 	}
 	items := m.budgetItems()
-	l := m.layout()
 	ls := listState{cursor: m.budgetCursor(), offset: m.budgetTop.offset}
 	if ls.navigate(key, len(items), max(l.avail-2, 1)) {
 		m.budgetTop.offset = ls.offset
@@ -64,8 +164,42 @@ func (m *Model) updateBudget(key string) tea.Cmd {
 	return nil
 }
 
-func (m *Model) budgetDetail(w int) []string {
+// openCategory shows the transactions behind a number of the Budget: the Ledger, narrowed
+// to the category selected, in the month on show.
+func (m *Model) openCategory() {
+	name := m.budgetSelected()
+	if name == "" {
+		return
+	}
+	m.onlyCategory, m.onlyUncat = name, false
+	m.filter.SetValue("")
+	m.accts.cursor = 0
+	m.setScreen(screenLedger)
+	m.setFocus(paneTransactions)
+	m.applyFilter(false)
+	m.setStatus(m.loc.T("category_shown", map[string]any{"Count": len(m.view), "Name": m.loc.ShortName(name)}), false)
+}
+
+// span is a run of lines of a pane: from is the first, to the one after the last.
+type span struct{ from, to int }
+
+var noSpan = span{-1, -1}
+
+// budgetDetail is the right pane of the Budget screen, and the lines the selected
+// category takes in it (none unless the categories have the focus).
+func (m *Model) budgetDetail(w int) ([]string, span) {
+	sel, at := "", noSpan
+	if m.catsFocused() {
+		sel = m.budgetSelected()
+	}
 	var lines []string
+	// add appends the rows of a section; where holds the lines the selected one took in it.
+	add := func(rows []string, where span) {
+		if where.from >= 0 {
+			at = span{len(lines) + where.from, len(lines) + where.to}
+		}
+		lines = append(lines, rows...)
+	}
 	net := ledger.Money{Minor: m.budget.IncomeTotal.Minor - m.budget.ExpenseTotal.Minor, Currency: m.netWorth.Base}
 	lines = append(lines, bold.Render(m.periodLabel(m.period)), "")
 	lines = append(lines, leftRight(m.loc.T("budget_income", nil), accent.Render(m.loc.Money(m.budget.IncomeTotal)), w))
@@ -98,27 +232,27 @@ func (m *Model) budgetDetail(w int) []string {
 	switch {
 	case m.hasPlan():
 		lines = append(lines, "", dim.Render(m.loc.T("budget_section_targets", nil)))
-		lines = append(lines, m.targetRows(w)...)
+		add(m.targetRows(w, sel))
 		if rest := m.unplanned(); len(rest) > 0 {
 			lines = append(lines, "", dim.Render(m.loc.T("budget_section_no_target", nil)))
-			lines = append(lines, categoryRows(m.loc, rest, m.monthly.SpentTotal, w, false)...)
+			add(categoryRows(m.loc, rest, m.monthly.SpentTotal, w, false, sel))
 		}
 	default:
 		lines = append(lines, "", dim.Render(m.loc.T("budget_spending", nil)))
-		lines = append(lines, categoryRows(m.loc, m.budget.Expenses, m.budget.ExpenseTotal, w, false)...)
+		add(categoryRows(m.loc, m.budget.Expenses, m.budget.ExpenseTotal, w, false, sel))
 		if len(m.budget.Expenses) == 0 {
 			lines = append(lines, dim.Render("  "+m.loc.T("budget_nothing_spent", nil)))
 		}
 	}
 	if len(m.budget.Income) > 0 {
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
-		lines = append(lines, categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true)...)
+		add(categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true, sel))
 	}
 	if m.period != "" && !m.hasPlan() {
 		lines = append(lines, "")
 		lines = append(lines, wrapped(m.loc.T("budget_targets_hint", nil), w, dim)...)
 	}
-	return lines
+	return lines, at
 }
 
 // hasPlan says whether the month on show has anything set aside to measure against: a
@@ -155,7 +289,7 @@ func (m *Model) signed(a ledger.Money) string {
 // was spent and a bar of how much of what is set aside that is, then the target, what
 // was carried in and what is left, or by how much it was passed (in red, with a full red
 // bar).
-func (m *Model) targetRows(w int) []string {
+func (m *Model) targetRows(w int, sel string) ([]string, span) {
 	const barW = 10
 	var planned []core.MonthBudgetLine
 	amtW := 0
@@ -167,6 +301,7 @@ func (m *Model) targetRows(w int) []string {
 	}
 	nameW := max(8, w-amtW-barW-4)
 	var out []string
+	at := noSpan
 	for _, l := range planned {
 		over := l.Left.Minor < 0
 		available := l.Target.Minor + l.Carried.Minor
@@ -201,16 +336,28 @@ func (m *Model) targetRows(w int) []string {
 		} else {
 			parts = append(parts, m.loc.T("budget_left_part", map[string]any{"Amount": m.loc.Amount(l.Left)}))
 		}
-		out = append(out, "  "+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
+		first := len(out)
+		out = append(out, marked(l.Name == sel)+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
 		for _, line := range wrapped(strings.Join(parts, " · "), w-4, style) {
 			out = append(out, "    "+line)
 		}
+		if l.Name == sel {
+			at = span{first, len(out)}
+		}
 	}
-	return out
+	return out, at
+}
+
+// marked is the start of a category's row: two blanks, or the mark of the one selected.
+func marked(selected bool) string {
+	if selected {
+		return accent.Render("▸") + " "
+	}
+	return "  "
 }
 
 // categoryRows draws one line per category: name, amount, share bar.
-func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Money, w int, isIncome bool) []string {
+func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Money, w int, isIncome bool, sel string) ([]string, span) {
 	const barW = 10
 	amtW := 0
 	for _, l := range list {
@@ -218,6 +365,7 @@ func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Mone
 	}
 	nameW := max(8, w-amtW-barW-4)
 	var out []string
+	at := noSpan
 	for _, l := range list {
 		filled := 0
 		if total.Minor > 0 {
@@ -236,7 +384,10 @@ func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Mone
 		if isIncome {
 			style = accent
 		}
-		out = append(out, "  "+fit(name, nameW)+" "+fitRight(loc.Amount(l.Amount), amtW)+" "+style.Render(bar))
+		if l.Name == sel {
+			at = span{len(out), len(out) + 1}
+		}
+		out = append(out, marked(l.Name == sel)+fit(name, nameW)+" "+fitRight(loc.Amount(l.Amount), amtW)+" "+style.Render(bar))
 	}
-	return out
+	return out, at
 }

@@ -594,5 +594,14 @@
   "target_part_set": "objetivo {{.Amount}}",
   "target_part_cleared": "objetivo quitado",
   "rollover_part_on": "arrastre activado desde {{.Period}}",
-  "rollover_part_off": "arrastre desactivado"
+  "rollover_part_off": "arrastre desactivado",
+  "category_shown": {
+    "one": "{{.Count}} transacción en {{.Name}} · esc las muestra todas",
+    "other": "{{.Count}} transacciones en {{.Name}} · esc las muestra todas"
+  },
+  "hint_tab_categories": "tab categorías",
+  "hint_tab_months": "tab meses",
+  "hint_category": "↑/↓ categoría",
+  "hint_esc_all": "esc mostrar todo",
+  "help_budget_tab": "Presupuesto: pasar de los meses a las categorías; enter en una categoría muestra sus transacciones"
 }

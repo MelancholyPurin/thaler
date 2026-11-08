@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 // testTarget is a target a test starts from.
@@ -575,6 +577,170 @@ func Test_budgetRollover_view(t *testing.T) {
 			// given
 			m, _ := rolloverModel(t, tc.targets, from)
 			m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
+
+// The categories of the Budget can be walked, and each opens the transactions behind its
+// number.
+func Test_Update_budgetCategories(t *testing.T) {
+	type observed struct {
+		Screen       string
+		Period       string
+		CatsFocused  bool
+		Selected     string
+		OnlyCategory string
+		Rows         []string
+		Status       string
+	}
+	uncat, food := ledger.UncategorizedExpense, "Expenses:Groceries"
+	tcs := []struct {
+		name    string
+		targets []testTarget
+		width   int
+		keys    string
+		shrunk  int    // a width the terminal then shrinks to
+		then    string // and the keys pressed after that
+		want    observed
+	}{
+		{
+			name: "tab moves into the categories, on the largest",
+			keys: "B tab",
+			want: observed{Screen: "budget", CatsFocused: true, Selected: uncat},
+		},
+		{
+			name: "down moves to the next",
+			keys: "B tab down",
+			want: observed{Screen: "budget", CatsFocused: true, Selected: food},
+		},
+		{
+			name: "up and down stay among the categories, not the months",
+			keys: "B tab down up",
+			want: observed{Screen: "budget", CatsFocused: true, Selected: uncat},
+		},
+		{
+			name: "tab again goes back to the months",
+			keys: "B tab tab",
+			want: observed{Screen: "budget"},
+		},
+		{
+			name: "esc goes back to the months",
+			keys: "B tab esc",
+			want: observed{Screen: "budget"},
+		},
+		{
+			name: "enter shows the transactions behind the category, in the month",
+			keys: "B tab down enter",
+			want: observed{Screen: "ledger", OnlyCategory: food, Rows: []string{"2026-10-01 REWE -10.00"}, Status: "1 transaction in Groceries · esc shows all"},
+		},
+		{
+			name: "a category with several, newest first",
+			keys: "B tab enter",
+			want: observed{Screen: "ledger", OnlyCategory: uncat,
+				Rows:   []string{"2026-10-03 Kino -12.00", "2026-10-02 REWE -20.00"},
+				Status: "2 transactions in Uncategorized · esc shows all"},
+		},
+		{
+			name: "another month has its own",
+			keys: "B down tab down enter",
+			want: observed{Screen: "ledger", Period: "2026-09", OnlyCategory: food, Rows: []string{"2026-09-15 Edeka -30.00"}, Status: "1 transaction in Groceries · esc shows all"},
+		},
+		{
+			name: "all time has all of them",
+			keys: "B g tab down enter",
+			want: observed{Screen: "ledger", OnlyCategory: food, Rows: []string{"2026-10-01 REWE -10.00", "2026-09-15 Edeka -30.00"}, Status: "2 transactions in Groceries · esc shows all"},
+		},
+		{
+			name: "esc in the ledger shows everything again",
+			keys: "B tab down enter esc",
+			want: observed{Screen: "ledger", Rows: []string{"2026-10-04 to savings -5.00", "2026-10-03 Kino -12.00", "2026-10-02 REWE -20.00", "2026-10-01 REWE -10.00"}},
+		},
+		{
+			name:    "the categories with money set aside come first",
+			targets: []testTarget{{"2026-10", food, 5000}},
+			keys:    "B tab",
+			want:    observed{Screen: "budget", CatsFocused: true, Selected: food},
+		},
+		{
+			name: "an account that was selected does not narrow the category",
+			keys: "L 2 down down B tab down enter",
+			want: observed{Screen: "ledger", OnlyCategory: food, Rows: []string{"2026-10-01 REWE -10.00"}, Status: "1 transaction in Groceries · esc shows all"},
+		},
+		{
+			name:   "if the terminal shrinks to one column the months have the focus again",
+			keys:   "B tab",
+			shrunk: 60,
+			then:   "down",
+			want:   observed{Screen: "budget", Period: "2026-09"},
+		},
+		{
+			name:  "with one column there are no categories to move into",
+			width: 60,
+			keys:  "B tab",
+			want:  observed{Screen: "budget"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := targetModel(t, tc.targets...)
+			if tc.width > 0 {
+				m.Update(tea.WindowSizeMsg{Width: tc.width, Height: 20})
+			}
+
+			// when
+			play(m, tc.keys)
+			if tc.shrunk > 0 {
+				m.Update(tea.WindowSizeMsg{Width: tc.shrunk, Height: 20})
+				play(m, tc.then)
+			}
+
+			// then
+			if tc.want.Period == "" && !strings.Contains(tc.keys, "B g") { // October unless the case says otherwise
+				tc.want.Period = "2026-10"
+			}
+			got := observed{Screen: screenNames2[m.screen], Period: m.period, OnlyCategory: m.onlyCategory, Status: m.status}
+			if m.screen == screenBudget && m.catsFocused() {
+				got.CatsFocused, got.Selected = true, m.budgetSelected()
+			}
+			if m.onlyCategory != "" || strings.HasSuffix(tc.keys, "enter esc") {
+				got.Rows = visibleRows(m)
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// A long list of categories scrolls to keep the selected one in view.
+func Test_budgetCategories_scroll(t *testing.T) {
+	tcs := []struct {
+		name  string
+		keys  string
+		shows []string
+		hides []string
+	}{
+		{name: "at first the largest shows, marked", keys: "B tab", shows: []string{"▸ C01"}, hides: []string{"C24"}},
+		{name: "at the end the last shows, marked, and the first is gone", keys: "B tab G", shows: []string{"▸ C24"}, hides: []string{"C01"}},
+		{name: "in the middle the selected shows", keys: "B tab down down down down down down down down down down", shows: []string{"▸ C11"}},
+		{name: "without the focus nothing is marked", keys: "B", hides: []string{"▸"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := openLedger(t)
+			openAccounts(t, st, "Assets:Bank EUR")
+			for i := 1; i <= 24; i++ {
+				book(t, st, "2026-10-02", "shop", "Assets:Bank", fmt.Sprintf("Expenses:C%02d", i), -int64((30-i)*100))
+			}
+			m := modelOn(t, st, 100, 20)
 
 			// when
 			play(m, tc.keys)
