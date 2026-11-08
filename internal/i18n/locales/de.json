@@ -594,5 +594,14 @@
   "target_part_set": "Ziel {{.Amount}}",
   "target_part_cleared": "Ziel entfernt",
   "rollover_part_on": "Übertrag ab {{.Period}} eingeschaltet",
-  "rollover_part_off": "Übertrag ausgeschaltet"
+  "rollover_part_off": "Übertrag ausgeschaltet",
+  "category_shown": {
+    "one": "{{.Count}} Transaktion in {{.Name}} · esc zeigt alle",
+    "other": "{{.Count}} Transaktionen in {{.Name}} · esc zeigt alle"
+  },
+  "hint_tab_categories": "tab Kategorien",
+  "hint_tab_months": "tab Monate",
+  "hint_category": "↑/↓ Kategorie",
+  "hint_esc_all": "esc alle zeigen",
+  "help_budget_tab": "Budget: zwischen Monaten und Kategorien wechseln; enter auf einer Kategorie zeigt ihre Transaktionen"
 }
