@@ -818,12 +818,17 @@ func (s *Local) BalanceReport(ctx context.Context, req BalanceRequest) (BalanceR
 // monthLayout is how a month is written: 2026-10.
 const monthLayout = "2006-01"
 
-// targetCategory is the expense category that month's target is about, once the month is
-// known to be a month and the category to be one a target can be set on.
-func (s *Local) targetCategory(ctx context.Context, month, category string) (Account, error) {
+// checkMonth is month once it is known to be a month, or the error that says it is not.
+func checkMonth(month string) error {
 	if _, err := time.Parse(monthLayout, month); err != nil {
-		return Account{}, coded.New("invalid_month", map[string]any{"Text": month})
+		return coded.New("invalid_month", map[string]any{"Text": month})
 	}
+	return nil
+}
+
+// expenseCategory is the account named, once it is known to exist and to be a category
+// that can have a target and carry over: an Expenses account other than Uncategorized.
+func (s *Local) expenseCategory(ctx context.Context, category string) (Account, error) {
 	acc, err := s.repo.queries().account(ctx, category)
 	if err != nil {
 		return Account{}, err
@@ -832,6 +837,39 @@ func (s *Local) targetCategory(ctx context.Context, month, category string) (Acc
 		return Account{}, coded.New("target_not_expense", map[string]any{"Name": acc.Name})
 	}
 	return acc, nil
+}
+
+// targetCategory is the expense category that month's target is about, once the month is
+// known to be a month and the category to be one a target can be set on.
+func (s *Local) targetCategory(ctx context.Context, month, category string) (Account, error) {
+	if err := checkMonth(month); err != nil {
+		return Account{}, err
+	}
+	return s.expenseCategory(ctx, category)
+}
+
+// SetBudgetRollover makes category carry its leftover from month `from` on.
+func (s *Local) SetBudgetRollover(ctx context.Context, category, from string) error {
+	acc, err := s.targetCategory(ctx, from, category)
+	if err != nil {
+		return err
+	}
+	return s.repo.queries().putBudgetRollover(ctx, acc.ID, from)
+}
+
+// ClearBudgetRollover stops category carrying over. One that does not is not an error:
+// the result is what was asked for.
+func (s *Local) ClearBudgetRollover(ctx context.Context, category string) error {
+	acc, err := s.expenseCategory(ctx, category)
+	if err != nil {
+		return err
+	}
+	return s.repo.queries().deleteBudgetRollover(ctx, acc.ID)
+}
+
+// BudgetRollovers lists the categories that carry over.
+func (s *Local) BudgetRollovers(ctx context.Context) ([]BudgetRollover, error) {
+	return s.repo.queries().budgetRollovers(ctx)
 }
 
 // CopyBudgetTargets adds to month `to` the targets of month `from` that `to` lacks. A
@@ -1000,14 +1038,20 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 	base := spending.Base
 	zero := ledger.Money{Currency: base}
 	out := MonthBudget{Month: req.Month, Base: base, SpentTotal: spending.ExpenseTotal,
-		TargetTotal: zero, LeftTotal: zero, UnbudgetedTotal: zero}
+		TargetTotal: zero, CarriedTotal: zero, LeftTotal: zero, UnbudgetedTotal: zero}
 	missing := make(map[ledger.Currency]bool)
 	for _, c := range spending.Missing {
 		missing[c] = true
 	}
 	byName := make(map[string]*MonthBudgetLine)
+	lineOf := func(name string) *MonthBudgetLine {
+		if byName[name] == nil {
+			byName[name] = &MonthBudgetLine{Name: name, Spent: zero, Target: zero, Carried: zero, Left: zero}
+		}
+		return byName[name]
+	}
 	for _, e := range spending.Expenses {
-		byName[e.Name] = &MonthBudgetLine{Name: e.Name, Spent: e.Amount, Target: zero, Left: zero}
+		lineOf(e.Name).Spent = e.Amount
 	}
 	for _, t := range targets {
 		// A target keeps the currency it was set in; the base currency may have changed since.
@@ -1016,18 +1060,36 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 			missing[t.Amount.Currency] = true
 			continue
 		}
-		line := byName[t.Category]
-		if line == nil {
-			line = &MonthBudgetLine{Name: t.Category, Spent: zero}
-			byName[t.Category] = line
-		}
+		line := lineOf(t.Category)
 		line.HasTarget, line.Target = true, amount
-		line.Left = ledger.Money{Minor: amount.Minor - line.Spent.Minor, Currency: base}
-		out.TargetTotal.Minor += amount.Minor
-		out.LeftTotal.Minor += line.Left.Minor
 	}
+
+	rollovers, err := s.repo.queries().budgetRollovers(ctx)
+	if err != nil {
+		return MonthBudget{}, err
+	}
+	carried, err := s.carriedIn(ctx, req, book, base, missing)
+	if err != nil {
+		return MonthBudget{}, err
+	}
+	for name, amount := range carried {
+		if amount.Minor != 0 {
+			lineOf(name).Carried = amount
+		}
+	}
+	for _, r := range rollovers {
+		if line := byName[r.Category]; line != nil && r.From <= req.Month {
+			line.Rollover = true
+		}
+	}
+
 	for _, line := range byName {
-		if !line.HasTarget {
+		out.TargetTotal.Minor += line.Target.Minor
+		out.CarriedTotal.Minor += line.Carried.Minor
+		if line.Planned() {
+			line.Left = ledger.Money{Minor: line.Target.Minor + line.Carried.Minor - line.Spent.Minor, Currency: base}
+			out.LeftTotal.Minor += line.Left.Minor
+		} else {
 			out.UnbudgetedTotal.Minor += line.Spent.Minor
 		}
 		out.Lines = append(out.Lines, *line)
@@ -1039,6 +1101,43 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 		return out.Lines[i].Name < out.Lines[j].Name
 	})
 	out.Missing = sortedCurrencies(missing)
+	return out, nil
+}
+
+// carriedIn is what each category that carries over brings into the month: the targets
+// of the months from where it started up to the one before, less what it spent in them,
+// each month at the rates of that month. A currency with no rate is added to missing.
+func (s *Local) carriedIn(ctx context.Context, req MonthBudgetRequest, book *ledger.RateBook, base ledger.Currency, missing map[ledger.Currency]bool) (map[string]ledger.Money, error) {
+	q := s.repo.queries()
+	spent, err := q.carriedSpending(ctx, req.Month)
+	if err != nil {
+		return nil, err
+	}
+	targeted, err := q.carriedTargets(ctx, req.Month)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]ledger.Money)
+	add := func(rows []monthlyAmount, sign int64) {
+		for _, r := range rows {
+			first, err := time.Parse(monthLayout, r.month)
+			if err != nil { // the database holds no such month: GLOB and substr(date) see to it
+				continue
+			}
+			rateDate := s.rateDate(req.RateDate, first.AddDate(0, 1, -1).Format(ledger.DateLayout))
+			amount, ok := book.Convert(r.amount, base, rateDate)
+			if !ok {
+				missing[r.amount.Currency] = true
+				continue
+			}
+			sum := out[r.category]
+			sum.Currency = base
+			sum.Minor += sign * amount.Minor
+			out[r.category] = sum
+		}
+	}
+	add(targeted, 1)
+	add(spent, -1)
 	return out, nil
 }
 

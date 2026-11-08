@@ -99,6 +99,14 @@ type Service interface {
 	ClearBudgetTarget(ctx context.Context, month, category string) error
 	// BudgetTargets lists the targets of month, by category name.
 	BudgetTargets(ctx context.Context, month string) ([]BudgetTarget, error)
+	// SetBudgetRollover makes category carry what is left of its target, or what it
+	// overspent, into the next month, from month `from` on (that month itself starts
+	// with nothing carried in). Setting it again moves the start.
+	SetBudgetRollover(ctx context.Context, category, from string) error
+	// ClearBudgetRollover stops the carrying; a category that has none is left as it is.
+	ClearBudgetRollover(ctx context.Context, category string) error
+	// BudgetRollovers lists the categories that carry over, by name.
+	BudgetRollovers(ctx context.Context) ([]BudgetRollover, error)
 	// CopyBudgetTargets starts the month `to` from the targets of `from`: it adds
 	// those `to` lacks and keeps the ones it has, so that nothing is overwritten.
 	CopyBudgetTargets(ctx context.Context, from, to string) (CopiedTargets, error)
@@ -424,6 +432,13 @@ type BudgetTarget struct {
 	Amount   ledger.Money
 }
 
+// BudgetRollover says a category carries its leftover into the next month, from
+// month From (YYYY-MM) on.
+type BudgetRollover struct {
+	Category string
+	From     string
+}
+
 // CopiedTargets is what CopyBudgetTargets did: the targets it added, and how many
 // of the source month's it left alone because the month already had one.
 type CopiedTargets struct {
@@ -446,10 +461,21 @@ type MonthBudgetLine struct {
 	Spent     ledger.Money
 	HasTarget bool
 	Target    ledger.Money // zero without a target
-	// Left is Target minus Spent: negative when the category overspent. Zero
-	// without a target, where HasTarget says it means nothing.
+	// Rollover says the category carries over this month. Carried is what came in
+	// from the months before: positive if they left money, negative if they
+	// overspent. It is zero without a rollover, in the first month of one, and when
+	// the months before came out exactly.
+	Rollover bool
+	Carried  ledger.Money
+	// Left is Target plus Carried minus Spent: negative when the category overspent.
+	// Zero for a category with neither a target nor anything carried, which Planned
+	// tells.
 	Left ledger.Money
 }
+
+// Planned says the category has money set aside for the month: a target, or
+// something carried in. The others spent without a plan.
+func (l MonthBudgetLine) Planned() bool { return l.HasTarget || l.Carried.Minor != 0 }
 
 // MonthBudget is the answer to a MonthBudgetRequest. Lines are the expense
 // categories that spent something or have a target, the largest spending first.
@@ -458,11 +484,12 @@ type MonthBudget struct {
 	Month string
 	Base  ledger.Currency
 	Lines []MonthBudgetLine
-	// SpentTotal is all spending; TargetTotal the sum of the targets.
-	SpentTotal, TargetTotal ledger.Money
-	// LeftTotal is TargetTotal minus what the categories with a target spent, so
-	// that spending nobody planned for does not hide what is left of what was.
-	// That spending is UnbudgetedTotal, and SpentTotal is the two added.
+	// SpentTotal is all spending; TargetTotal the sum of the targets, and
+	// CarriedTotal the sum of what is carried in.
+	SpentTotal, TargetTotal, CarriedTotal ledger.Money
+	// LeftTotal is TargetTotal plus CarriedTotal minus what the planned categories
+	// spent, so that spending nobody planned for does not hide what is left of what
+	// was. That spending is UnbudgetedTotal, and SpentTotal is the two added.
 	LeftTotal, UnbudgetedTotal ledger.Money
 	// Missing are the currencies with no exchange rate, so left out: spending in
 	// them, or a target set in a base currency that has since changed.

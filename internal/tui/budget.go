@@ -83,8 +83,11 @@ func (m *Model) budgetDetail(w int) []string {
 		lines = append(lines, wrapped(m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.netWorth.Base}), w, warn)...)
 	}
 
-	if m.hasTargets() {
+	if m.hasPlan() {
 		lines = append(lines, leftRight(m.loc.T("budget_target", nil), m.loc.Money(m.monthly.TargetTotal), w))
+		if m.monthly.CarriedTotal.Minor != 0 {
+			lines = append(lines, leftRight(m.loc.T("budget_carried_total", nil), m.signed(m.monthly.CarriedTotal), w))
+		}
 		leftText := m.loc.Money(m.monthly.LeftTotal)
 		if m.monthly.LeftTotal.Minor < 0 {
 			leftText = warn.Render(leftText)
@@ -93,10 +96,10 @@ func (m *Model) budgetDetail(w int) []string {
 	}
 
 	switch {
-	case m.hasTargets():
+	case m.hasPlan():
 		lines = append(lines, "", dim.Render(m.loc.T("budget_section_targets", nil)))
 		lines = append(lines, m.targetRows(w)...)
-		if rest := m.untargeted(); len(rest) > 0 {
+		if rest := m.unplanned(); len(rest) > 0 {
 			lines = append(lines, "", dim.Render(m.loc.T("budget_section_no_target", nil)))
 			lines = append(lines, categoryRows(m.loc, rest, m.monthly.SpentTotal, w, false)...)
 		}
@@ -111,64 +114,95 @@ func (m *Model) budgetDetail(w int) []string {
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
 		lines = append(lines, categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true)...)
 	}
-	if m.period != "" && !m.hasTargets() {
+	if m.period != "" && !m.hasPlan() {
 		lines = append(lines, "")
 		lines = append(lines, wrapped(m.loc.T("budget_targets_hint", nil), w, dim)...)
 	}
 	return lines
 }
 
-// hasTargets says whether the month on show has a target to measure against.
-func (m *Model) hasTargets() bool {
+// hasPlan says whether the month on show has anything set aside to measure against: a
+// target, or something carried in.
+func (m *Model) hasPlan() bool {
 	for _, l := range m.monthly.Lines {
-		if l.HasTarget {
+		if l.Planned() {
 			return true
 		}
 	}
 	return false
 }
 
-// untargeted are the categories that spent something in the month and have no target.
-func (m *Model) untargeted() []core.BudgetLine {
+// unplanned are the categories that spent something in the month with nothing set aside.
+func (m *Model) unplanned() []core.BudgetLine {
 	var out []core.BudgetLine
 	for _, l := range m.monthly.Lines {
-		if !l.HasTarget && l.Spent.Minor != 0 {
+		if !l.Planned() && l.Spent.Minor != 0 {
 			out = append(out, core.BudgetLine{Name: l.Name, Amount: l.Spent})
 		}
 	}
 	return out
 }
 
-// targetRows draws the categories with a target, two lines each: the name, what was
-// spent and a bar of how much of the target that is, then the target and what is
-// left of it, or by how much it was passed (in red, with a full red bar).
+// signed writes an amount with a "+" when it is positive, and the currency.
+func (m *Model) signed(a ledger.Money) string {
+	if a.Minor > 0 {
+		return "+" + m.loc.Money(a)
+	}
+	return m.loc.Money(a)
+}
+
+// targetRows draws the categories with money set aside, two lines each: the name, what
+// was spent and a bar of how much of what is set aside that is, then the target, what
+// was carried in and what is left, or by how much it was passed (in red, with a full red
+// bar).
 func (m *Model) targetRows(w int) []string {
 	const barW = 10
-	var targeted []core.MonthBudgetLine
+	var planned []core.MonthBudgetLine
 	amtW := 0
 	for _, l := range m.monthly.Lines {
-		if l.HasTarget {
-			targeted = append(targeted, l)
+		if l.Planned() {
+			planned = append(planned, l)
 			amtW = max(amtW, len(m.loc.Amount(l.Spent)))
 		}
 	}
 	nameW := max(8, w-amtW-barW-4)
 	var out []string
-	for _, l := range targeted {
+	for _, l := range planned {
 		over := l.Left.Minor < 0
-		filled := int((max(l.Spent.Minor, 0)*barW + l.Target.Minor/2) / l.Target.Minor)
+		available := l.Target.Minor + l.Carried.Minor
+		filled := barW
+		if available > 0 {
+			filled = int((max(l.Spent.Minor, 0)*barW + available/2) / available)
+		} else if l.Spent.Minor <= 0 {
+			filled = 0
+		}
 		filled = max(0, min(barW, filled))
 		if filled == 0 && l.Spent.Minor > 0 {
 			filled = 1
 		}
 		bar := accent.Render(strings.Repeat("█", filled) + strings.Repeat("░", barW-filled))
-		text, style := m.loc.T("budget_of_left", map[string]any{"Target": m.loc.Amount(l.Target), "Left": m.loc.Amount(l.Left)}), dim
+		style := dim
 		if over {
-			bar = warn.Render(strings.Repeat("█", barW))
-			text, style = m.loc.T("budget_of_over", map[string]any{"Target": m.loc.Amount(l.Target), "Over": m.loc.Amount(l.Left.Neg())}), warn
+			bar, style = warn.Render(strings.Repeat("█", barW)), warn
+		}
+		var parts []string
+		if l.HasTarget {
+			parts = append(parts, m.loc.T("budget_of", map[string]any{"Target": m.loc.Amount(l.Target)}))
+		}
+		if l.Carried.Minor != 0 {
+			carried := m.loc.Amount(l.Carried)
+			if l.Carried.Minor > 0 {
+				carried = "+" + carried
+			}
+			parts = append(parts, m.loc.T("budget_carried", map[string]any{"Amount": carried}))
+		}
+		if over {
+			parts = append(parts, m.loc.T("budget_over_part", map[string]any{"Amount": m.loc.Amount(l.Left.Neg())}))
+		} else {
+			parts = append(parts, m.loc.T("budget_left_part", map[string]any{"Amount": m.loc.Amount(l.Left)}))
 		}
 		out = append(out, "  "+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
-		for _, line := range wrapped(text, w-4, style) {
+		for _, line := range wrapped(strings.Join(parts, " · "), w-4, style) {
 			out = append(out, "    "+line)
 		}
 	}
