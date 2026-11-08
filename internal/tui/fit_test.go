@@ -147,6 +147,10 @@ func Test_View_fits(t *testing.T) {
 		{name: "categorize, rule", keys: "tab tab down down c tab text:rewe"},
 		{name: "language", keys: "ctrl+l"},
 		{name: "budget", keys: "B"},
+		{name: "budget with a target", keys: "B e text:30 enter"},
+		{name: "budget with a target passed", keys: "B e text:5 enter"},
+		{name: "target", keys: "B e"},
+		{name: "target, with a target", keys: "B e text:30"},
 		{name: "forecast", keys: "F"},
 		{name: "reports", keys: "R"},
 		{name: "search", keys: "tab tab /"},
@@ -169,6 +173,9 @@ func Test_View_fits(t *testing.T) {
 		{name: "backed up, encrypted", keys: "S tab text:secret tab text:secret enter"},
 		{name: "pruned", keys: "ctrl+p enter"},
 		{name: "language", keys: "ctrl+l down enter"},
+		{name: "target set", keys: "B e text:30 enter"},
+		{name: "target cleared", keys: "B e text:30 enter e ctrl+u enter"},
+		{name: "target set and undone", keys: "B e text:30 enter z"},
 		{name: "nothing to undo", keys: "z"},
 
 		// What the popups say when something is wrong.
@@ -180,6 +187,10 @@ func Test_View_fits(t *testing.T) {
 		{name: "import, no such file", keys: "i raw:/no/such/file.csv enter"},
 		{name: "restore, encrypted needs a passphrase", keys: "ctrl+r down enter"},
 		{name: "categorize, rule with no text", keys: "tab tab down down c tab text:x"},
+		{name: "target, nothing to clear", keys: "B e enter"},
+		{name: "target, not an amount", keys: "B e text:abc enter"},
+		{name: "target, zero", keys: "B e text:0 enter"},
+		{name: "target, all time", keys: "B g e"},
 	}
 	for _, l := range i18n.Languages {
 		for _, sc := range screens {

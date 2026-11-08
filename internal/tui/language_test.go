@@ -220,6 +220,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "categorize", keys: "tab tab down c"},
 		{name: "categorize, rule", keys: "tab tab down c tab"},
 		{name: "budget", keys: "B"},
+		{name: "budget with a target", keys: "B e text:30 enter"},
+		{name: "budget with a target passed", keys: "B e text:5 enter"},
+		{name: "budget target", keys: "B e"},
+		{name: "budget target, error", keys: "B e enter"},
 		{name: "forecast", keys: "F"},
 		{name: "reports", keys: "R"},
 		{name: "language", keys: "ctrl+l"},
@@ -268,6 +272,10 @@ func Test_View_translated(t *testing.T) {
 		{name: "Spanish, the language popup", tag: language.Spanish, keys: "ctrl+l", shows: []string{"Idioma", "✓ Español", "Se guarda en config.toml"}, hides: []string{"Saved in"}},
 		{name: "German, the language popup", tag: language.German, keys: "ctrl+l", shows: []string{"Sprache", "✓ Deutsch", "In config.toml gespeichert"}, hides: []string{"Saved in"}},
 		{name: "Spanish, the budget", tag: language.Spanish, keys: "B", shows: []string{"Presupuesto · oct 2026", "Ingresos", "Gastado"}, hides: []string{"Income", "Spent"}},
+		{name: "Spanish, the budget with a target", tag: language.Spanish, keys: "B e text:30 enter", shows: []string{"Objetivo", "Queda", "Objetivos", "Sin objetivo", "de 30,00 · quedan 20,00"}, hides: []string{"Target", "left", "No target"}},
+		{name: "Spanish, the target popup", tag: language.Spanish, keys: "B e", shows: []string{"Objetivos de oct 2026", "En EUR, la moneda base", "enter guardar"}, hides: []string{"Targets for", "base currency"}},
+		{name: "German, the budget with a target", tag: language.German, keys: "B e text:30 enter", shows: []string{"Ziel", "Übrig", "Ziele", "Ohne Ziel", "von 30,00 · 20,00 übrig"}, hides: []string{"Target", "left", "No target"}},
+		{name: "German, the target popup", tag: language.German, keys: "B e", shows: []string{"Ziele für Okt 2026", "In EUR, der Basiswährung", "enter speichern"}, hides: []string{"Targets for", "base currency"}},
 		{name: "German, the budget", tag: language.German, keys: "B", shows: []string{"Budget · Okt 2026", "Einnahmen", "Ausgegeben"}, hides: []string{"Income", "Spent"}},
 	}
 	for _, tc := range tcs {
@@ -276,6 +284,7 @@ func Test_View_translated(t *testing.T) {
 			st := openLedger(t)
 			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
 			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
+			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -1000)
 			m := inLanguage(t, st, tc.tag)
 
 			// when

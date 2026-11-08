@@ -269,8 +269,8 @@ Getting every transaction into the right category with as little typing as possi
 ### TBU: Budget tab
 
 - [x] `TBU-1` Spending per category for the chosen month
-- [ ] `TBU-2` Set and clear a category's monthly target in a popup
-- [ ] `TBU-3` Spent against target with what is left, and overspending in red
+- [x] `TBU-2` Set and clear a category's monthly target in a popup, and see spent against target with what is left, overspending in red
+- ~~`TBU-3` Spent against target with what is left, and overspending in red~~ (folded into `TBU-2`)
 - [ ] `TBU-4` Switch rollover on or off per category and see the carried amount
 - [ ] `TBU-5` Copy last month's targets into this one
 - [ ] `TBU-6` Open a category to see the transactions behind its number

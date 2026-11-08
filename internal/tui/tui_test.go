@@ -204,7 +204,7 @@ var paneNames = map[pane]string{paneHome: "home", paneAccounts: "accounts", pane
 var screenNames2 = map[screen]string{screenLedger: "ledger", screenBudget: "budget", screenForecast: "forecast", screenReports: "reports"}
 var modeNames = map[mode]string{
 	modeList: "list", modeFilter: "filter", modePick: "pick", modeHelp: "help", modeForm: "form", modeConfirm: "confirm",
-	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune",
+	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language", modeTarget: "target",
 }
 
 // visibleRows are the transactions the list shows, newest first.
@@ -714,6 +714,8 @@ func Test_View_fitsTerminal(t *testing.T) {
 	}{
 		{name: "the ledger", keys: "L"},
 		{name: "the budget", keys: "B"},
+		{name: "the budget with a target", keys: "B e text:30 enter"},
+		{name: "the target popup", keys: "B e"},
 		{name: "the forecast", keys: "F"},
 		{name: "the reports", keys: "R"},
 		{name: "the home tile focused", keys: "1"},

@@ -12,6 +12,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/go-cmp v0.7.0
+	github.com/muesli/termenv v0.16.0
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/text v0.43.0
@@ -36,7 +37,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
