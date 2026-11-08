@@ -397,3 +397,190 @@ func Test_Update_copyTargets(t *testing.T) {
 		})
 	}
 }
+
+// rolloverModel is a targetModel where some categories carry over.
+func rolloverModel(t *testing.T, targets []testTarget, rollovers ...core.BudgetRollover) (*Model, *core.Local) {
+	t.Helper()
+	m, st := targetModel(t, targets...)
+	for _, r := range rollovers {
+		if err := st.SetBudgetRollover(t.Context(), r.Category, r.From); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	return m, st
+}
+
+func Test_Update_targetRollover(t *testing.T) {
+	type observed struct {
+		Mode          string
+		Status        string
+		Pending       bool // the carry-over the popup will save, when it is open
+		Rollovers     []core.BudgetRollover
+		OctoberTarget []core.BudgetTarget
+	}
+	food := "Expenses:Groceries"
+	on := []core.BudgetRollover{{Category: food, From: "2026-10"}}
+	tcs := []struct {
+		name      string
+		targets   []testTarget
+		rollovers []core.BudgetRollover
+		keys      string
+		want      observed
+	}{
+		{
+			name: "tab switches it on in the popup, and nothing is saved yet",
+			keys: "B e tab",
+			want: observed{Mode: "target", Pending: true},
+		},
+		{
+			name: "enter saves it from the month on show",
+			keys: "B e tab enter",
+			want: observed{Mode: "list", Status: "Carry-over on for Groceries from Oct 2026 · z undoes", Rollovers: on},
+		},
+		{
+			name: "tab twice is no change, and an empty amount still has nothing to clear",
+			keys: "B e tab tab enter",
+			want: observed{Mode: "target"},
+		},
+		{
+			name:      "a category that carries over starts switched on, and tab switches it off",
+			rollovers: on,
+			keys:      "B e tab enter",
+			want:      observed{Mode: "list", Status: "Carry-over off for Groceries · z undoes"},
+		},
+		{
+			name:      "the popup shows it on",
+			rollovers: on,
+			keys:      "B e",
+			want:      observed{Mode: "target", Pending: true, Rollovers: on},
+		},
+		{
+			name: "a target and the carry-over together",
+			keys: "B e text:300 tab enter",
+			want: observed{Mode: "list", Status: "Groceries: target 300.00 EUR · carry-over on from Oct 2026 · z undoes", Rollovers: on,
+				OctoberTarget: []core.BudgetTarget{{Category: food, Amount: eur(30000)}}},
+		},
+		{
+			name:      "a carry-over that starts later is moved to the month on show",
+			rollovers: []core.BudgetRollover{{Category: food, From: "2026-11"}},
+			keys:      "B e tab enter",
+			want:      observed{Mode: "list", Status: "Carry-over on for Groceries from Oct 2026 · z undoes", Rollovers: on},
+		},
+		{
+			name:      "z puts the start back",
+			rollovers: []core.BudgetRollover{{Category: food, From: "2026-11"}},
+			keys:      "B e tab enter z",
+			want:      observed{Mode: "list", Status: "Carry-over for Groceries taken back", Rollovers: []core.BudgetRollover{{Category: food, From: "2026-11"}}},
+		},
+		{
+			name: "z takes a new carry-over back",
+			keys: "B e tab enter z",
+			want: observed{Mode: "list", Status: "Carry-over for Groceries taken back"},
+		},
+		{
+			name:      "z puts a carry-over switched off back",
+			rollovers: on,
+			keys:      "B e tab enter z",
+			want:      observed{Mode: "list", Status: "Carry-over for Groceries taken back", Rollovers: on},
+		},
+		{
+			name: "after a target and a carry-over, z takes back the carry-over first",
+			keys: "B e text:300 tab enter z",
+			want: observed{Mode: "list", Status: "Carry-over for Groceries taken back",
+				OctoberTarget: []core.BudgetTarget{{Category: food, Amount: eur(30000)}}},
+		},
+		{
+			name: "and a second z the target",
+			keys: "B e text:300 tab enter z z",
+			want: observed{Mode: "list", Status: "Target for Groceries in Oct 2026 taken back"},
+		},
+		{
+			name:      "enter on what is there changes nothing and says nothing",
+			targets:   []testTarget{{"2026-10", food, 30000}},
+			rollovers: on,
+			keys:      "B e enter",
+			want:      observed{Mode: "list", Rollovers: on, OctoberTarget: []core.BudgetTarget{{Category: food, Amount: eur(30000)}}},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := rolloverModel(t, tc.targets, tc.rollovers...)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			got := observed{Mode: modeNames[m.mode], Status: m.status}
+			if m.tgt != nil {
+				got.Pending = m.tgt.rollover
+			}
+			var err error
+			if got.Rollovers, err = st.BudgetRollovers(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			if got.OctoberTarget, err = st.BudgetTargets(t.Context(), "2026-10"); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// What the month shows of a category that carries over.
+func Test_budgetRollover_view(t *testing.T) {
+	food := "Expenses:Groceries"
+	from := core.BudgetRollover{Category: food, From: "2026-09"}
+	tcs := []struct {
+		name    string
+		targets []testTarget
+		keys    string
+		shows   []string
+		hides   []string
+	}{
+		{
+			name:    "what was left comes in",
+			targets: []testTarget{{"2026-09", food, 10000}, {"2026-10", food, 5000}},
+			keys:    "B",
+			shows:   []string{"Carried in", "+70.00 EUR", "of 50.00 · +70.00 carried · 110.00 left", "Left", "110.00 EUR"},
+		},
+		{
+			name:    "what was overspent comes in as a negative",
+			targets: []testTarget{{"2026-09", food, 2000}, {"2026-10", food, 5000}},
+			keys:    "B",
+			shows:   []string{"Carried in", "-10.00 EUR", "of 50.00 · -10.00 carried · 30.00 left"},
+		},
+		{
+			name:    "a month with no target still has what came in",
+			targets: []testTarget{{"2026-09", food, 10000}},
+			keys:    "B",
+			shows:   []string{"Targets", "Groceries", "+70.00 carried · 60.00 left"},
+			hides:   []string{"of 100", "of 50"},
+		},
+		{
+			name:    "the first month carries nothing in",
+			targets: []testTarget{{"2026-09", food, 10000}, {"2026-10", food, 5000}},
+			keys:    "B down",
+			shows:   []string{"of 100.00 · 70.00 left"},
+			hides:   []string{"carried", "Carried in"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := rolloverModel(t, tc.targets, from)
+			m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			checkView(t, m.View(), tc.shows, tc.hides)
+		})
+	}
+}
