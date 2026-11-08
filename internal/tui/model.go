@@ -120,18 +120,24 @@ type Model struct {
 	multiCurrency bool
 
 	// view state
-	screen    screen
-	period    string   // "2026-10", or "" for all time; scopes every screen
-	months    []string // months that have transactions, plus the current one, newest first
-	budget    core.BudgetReport
-	monthly   core.MonthBudget // the month's spending against its targets; empty for all time
-	budgetTop listState        // scroll position of the months list on the Budget screen
-	now       func() time.Time
-	focus     pane
-	accts     listState // index 0 is "All accounts", then m.accounts
-	txs       listState // index into view
-	view      []int     // indexes into rows that pass the filters
-	onlyUncat bool
+	screen       screen
+	period       string   // "2026-10", or "" for all time; scopes every screen
+	months       []string // months that have transactions, plus the current one, newest first
+	budget       core.BudgetReport
+	monthly      core.MonthBudget // the month's spending against its targets; empty for all time
+	budgetTop    listState        // scroll position of the months list on the Budget screen
+	budgetCats   bool             // the categories of the Budget have the focus, not the months
+	budgetSel    string           // the category selected there
+	budgetScroll int              // first line of the categories pane shown, when it has the focus
+	now          func() time.Time
+	focus        pane
+	accts        listState // index 0 is "All accounts", then m.accounts
+	txs          listState // index into view
+	view         []int     // indexes into rows that pass the filters
+	onlyUncat    bool
+	// onlyCategory narrows the Ledger to the transactions of one category: the ones
+	// behind a number of the Budget.
+	onlyCategory string
 
 	mode   mode
 	filter textinput.Model
@@ -484,8 +490,9 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		return m, m.filter.Focus()
 	case "esc":
-		if m.filter.Value() != "" {
+		if m.filter.Value() != "" || m.onlyCategory != "" {
 			m.filter.SetValue("")
+			m.onlyCategory = ""
 			m.applyFilter(true)
 		}
 		return m, nil

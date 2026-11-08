@@ -96,11 +96,11 @@ func (m *Model) budgetBody(l layout) string {
 		}
 		line := fit(label, iw)
 		if i == cursor {
-			line = selFocused.Render(fit(m.periodLabel(items[i]), iw))
+			line = m.monthsStyle().Render(fit(m.periodLabel(items[i]), iw))
 		}
 		lines = append(lines, line)
 	}
-	left := box(m.loc.T("panel_months", nil), lines, l.leftW, l.avail, true, m.loc.T("position_of", map[string]any{"N": cursor + 1, "Total": len(items)}))
+	left := box(m.loc.T("panel_months", nil), lines, l.leftW, l.avail, !m.catsFocused(), m.loc.T("position_of", map[string]any{"N": cursor + 1, "Total": len(items)}))
 	if !l.two {
 		return left
 	}
@@ -204,6 +204,9 @@ func (m *Model) transactionsPanel(l layout) string {
 	if m.onlyUncat {
 		title += " · " + m.loc.T("panel_uncategorized", nil)
 	}
+	if m.onlyCategory != "" {
+		title += " · " + m.loc.ShortName(m.onlyCategory)
+	}
 	if q := strings.TrimSpace(m.filter.Value()); q != "" {
 		title += " · /" + q
 	}
@@ -213,7 +216,7 @@ func (m *Model) transactionsPanel(l layout) string {
 		switch {
 		case len(m.rows) == 0:
 			lines = []string{dim.Render(m.loc.T("tx_none_yet", nil)), dim.Render(m.loc.T("tx_none_hint", nil))}
-		case m.period != "" && !m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
+		case m.period != "" && !m.onlyUncat && m.onlyCategory == "" && m.filter.Value() == "" && m.scopeAccount() == "":
 			lines = []string{dim.Render(m.loc.T("tx_none_period", map[string]any{"Period": m.periodLabel(m.period)})), dim.Render(m.loc.T("tx_none_period_hint", nil))}
 		case m.onlyUncat && m.filter.Value() == "" && m.scopeAccount() == "":
 			lines = []string{dim.Render(m.loc.T("tx_nothing_left", nil)), dim.Render(m.loc.T("tx_see_all", nil))}
@@ -315,8 +318,10 @@ func (m *Model) bottomBar() string {
 func (m *Model) hintItems() (hints, tail []string) {
 	tail = []string{m.loc.T("hint_help", nil), m.loc.T("hint_quit", nil)}
 	switch {
+	case m.screen == screenBudget && m.catsFocused():
+		return []string{m.loc.T("hint_category", nil), m.loc.T("hint_enter_transactions", nil), m.loc.T("hint_target", nil), m.loc.T("hint_tab_months", nil), m.loc.T("hint_step", nil)}, tail
 	case m.screen == screenBudget:
-		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_target", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
+		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_tab_categories", nil), m.loc.T("hint_target", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
 	case m.screen != screenLedger:
 		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
 	}
@@ -326,7 +331,11 @@ func (m *Model) hintItems() (hints, tail []string) {
 	case paneAccounts:
 		return []string{m.loc.T("hint_pick_account", nil), m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_balance", nil), m.loc.T("hint_new", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	}
-	return []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil)}, tail
+	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil)}
+	if m.onlyCategory != "" {
+		hints = append([]string{m.loc.T("hint_esc_all", nil)}, hints...)
+	}
+	return hints, tail
 }
 
 func (m *Model) centerPopup(screen, popup string) string {
@@ -421,6 +430,7 @@ func (m *Model) helpPopup() string {
 		{"n  b", m.loc.T("help_new_account", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"tab", m.loc.T("help_budget_tab", nil)},
 		{"e", m.loc.T("help_target", nil)},
 		{"c", m.loc.T("help_copy_targets", nil)},
 		{"r", m.loc.T("help_rename", nil)},
