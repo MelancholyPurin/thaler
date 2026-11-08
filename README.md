@@ -120,7 +120,7 @@ The strip along the top switches between **screens**, and the period on its righ
 | Screen | Key | What it shows |
 | --- | --- | --- |
 | Ledger | `L` / `F1` | the three panels below: accounts and the transaction history for the period |
-| Budget | `B` / `F2` | income and spending by category for the period, with share bars; months on the left. Targets and envelopes will become columns here |
+| Budget | `B` / `F2` | income and spending by category for the period, with share bars; months on the left. For a month, the categories with a target show what was spent, the target and what is left (in red once passed), and `e` sets or clears a target (see below). Envelopes will come next |
 | Forecast | `F` / `F3` | not built yet |
 | Reports | `R` / `F4` | not built yet |
 
@@ -151,8 +151,8 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `C` | open `config.toml` in your editor (rules, import folder, bank profiles) |
 | `n` / `b` | new account / set the selected account's balance (see below) |
 | `c` | categorize the selected transaction |
-| `e` / `r` / `d` | edit / rename / delete the selected transaction (`r` opens the edit form on the title; delete asks first) |
-| `z` | undo the last change made in this session: add, edit, delete, categorize or import, repeatable |
+| `e` / `r` / `d` | edit / rename / delete the selected transaction (`r` opens the edit form on the title; delete asks first). On Budget, `e` sets the month's target of a category |
+| `z` | undo the last change made in this session: add, edit, delete, categorize, import or a target, repeatable |
 | `/` | fuzzy search over date, payee, description, category and amount (every word must match; `esc` clears) |
 | `u` | show only uncategorized / all |
 | `?` | key reference popup (`↑`/`↓` scroll it; any other key closes it) |
@@ -187,6 +187,8 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 - Afterwards the account's uncategorized rows are shown, ready for `c`, and `z` takes the whole import back.
 
 **Entries you made by hand are not added twice.** If you log expenses yourself and later import the statement, each bank row is checked against what you typed: the same account, exactly the same amount, dated within three days, an ordinary entry (one account, one category) that has not been matched to a bank row yet. When one is found, the row *takes over* that entry. Nothing is added; the entry just remembers which bank row it is, so importing the file again recognises it. Your payee, date and category stay as you typed them, whatever your rules would have chosen. The review shows these rows as `↔ #12 REWE` before anything is written, each entry is taken over at most once (the closest date first), and `z` lets go of it again. This works for the two halves of a transfer you entered with `x`, too. Entries that are splits, that move between two of your accounts in one transaction, or are an opening balance are never matched.
+
+**Monthly targets.** On the Budget screen, pick a month and press `e`: a popup lists your spending categories with the target each has for that month. Move with `↑` `↓`, type an amount, and `enter` saves it; an empty amount clears the target, and `z` takes a change back. A target belongs to one month (a month keeps its own, so changing next month's leaves this one alone) and is in the base currency; only expense categories have one. For that month the Budget shows the total target and what is left of it, and under each category with a target what was spent, the target and what is left, or by how much it was passed, with the bar and the amount in red. Spending in categories with no target is listed apart, and does not take from what is left of the planned categories. All time has no targets: pick a month.
 
 **Transfers between your own accounts.** Import your current account and your savings account and the same transfer appears in both exports, once going out and once coming in. Counted as an expense and as income, it would inflate both on the Budget screen. So when a new row has the exact opposite amount of a transaction on another of your accounts, within three days, and neither is categorized yet, Thaler pairs them: both are booked to `Equity:Transfers` (so they are neither income nor spending), marked `⇄`, and linked to each other. The import review shows `⇄ Bank` on a paired row before anything is written, and `z` takes the pairing back with the import. It works in either order, each row is paired at most once, and a row a rule has already put in a real category (rent, say) is left alone. Add a rule with the category `Equity:Transfers` to mark a transfer whose other half has not been imported yet; the balance of `Equity:Transfers` is what is still waiting. If you recategorize or change one half, the pair is dissolved and the other half goes back to uncategorized so you notice it.
 
