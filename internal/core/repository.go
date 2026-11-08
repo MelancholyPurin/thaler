@@ -507,6 +507,43 @@ func (q queries) budgetTargets(ctx context.Context, month string) ([]BudgetTarge
 	return out, rows.Err()
 }
 
+// targetToCopy is a target of one month and the category it is for.
+type targetToCopy struct {
+	accountID int64
+	target    BudgetTarget
+}
+
+// targetsToCopy are the targets of month from whose category has none in month to,
+// by category name, and how many the other way round: the ones that month has.
+func (q queries) targetsToCopy(ctx context.Context, from, to string) (missing []targetToCopy, kept int, err error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT t.account_id, a.name, t.amount, t.currency,
+		        EXISTS (SELECT 1 FROM budget_targets o WHERE o.account_id = t.account_id AND o.month = ?)
+		 FROM budget_targets t JOIN accounts a ON a.id = t.account_id
+		 WHERE t.month = ? ORDER BY a.name`, to, from)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			c      targetToCopy
+			cur    string
+			exists bool
+		)
+		if err := rows.Scan(&c.accountID, &c.target.Category, &c.target.Amount.Minor, &cur, &exists); err != nil {
+			return nil, 0, err
+		}
+		c.target.Amount.Currency = ledger.Currency(cur)
+		if exists {
+			kept++
+			continue
+		}
+		missing = append(missing, c)
+	}
+	return missing, kept, rows.Err()
+}
+
 // ---- transfers between your own accounts -----------------------------------
 
 // transferCandidate is a transaction that could be the other half of a transfer.

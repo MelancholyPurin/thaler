@@ -834,6 +834,37 @@ func (s *Local) targetCategory(ctx context.Context, month, category string) (Acc
 	return acc, nil
 }
 
+// CopyBudgetTargets adds to month `to` the targets of month `from` that `to` lacks. A
+// category that has a target in `to` keeps it, so copying twice does nothing the
+// second time, and a month planned by hand is never overwritten. The source is not
+// touched. It all happens or none of it does.
+func (s *Local) CopyBudgetTargets(ctx context.Context, from, to string) (CopiedTargets, error) {
+	for _, month := range []string{from, to} {
+		if _, err := time.Parse(monthLayout, month); err != nil {
+			return CopiedTargets{}, coded.New("invalid_month", map[string]any{"Text": month})
+		}
+	}
+	if from == to {
+		return CopiedTargets{}, coded.New("copy_same_month", map[string]any{"Month": to})
+	}
+	var out CopiedTargets
+	err := s.repo.inTx(ctx, func(q queries) error {
+		missing, kept, err := q.targetsToCopy(ctx, from, to)
+		if err != nil {
+			return err
+		}
+		for _, c := range missing {
+			if err := q.putBudgetTarget(ctx, c.accountID, to, c.target.Amount); err != nil {
+				return err
+			}
+			out.Copied = append(out.Copied, c.target)
+		}
+		out.Kept = kept
+		return nil
+	})
+	return out, err
+}
+
 // SetBudgetTarget sets what category may spend in month, replacing a target already there.
 func (s *Local) SetBudgetTarget(ctx context.Context, month, category string, amount ledger.Money) error {
 	acc, err := s.targetCategory(ctx, month, category)

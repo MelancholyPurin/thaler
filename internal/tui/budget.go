@@ -42,11 +42,14 @@ func (m *Model) budgetCursor() int {
 }
 
 // updateBudget moves through the months list; the selected month is the period.
-// e sets a target for the month and z takes back the last change.
+// e sets a target for the month, c copies the month before's, and z takes back the last change.
 func (m *Model) updateBudget(key string) tea.Cmd {
 	switch key {
 	case "e":
 		return m.openTarget()
+	case "c":
+		m.copyTargets()
+		return nil
 	case "z":
 		m.undoLast()
 		return nil

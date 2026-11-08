@@ -224,6 +224,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget with a target passed", keys: "B e text:5 enter"},
 		{name: "budget target", keys: "B e"},
 		{name: "budget target, error", keys: "B e enter"},
+		{name: "budget, targets copied", keys: "B c"},
+		{name: "budget, targets copied and undone", keys: "B c z"},
+		{name: "budget, nothing to copy", keys: "B c c"},
+		{name: "budget, no targets to copy", keys: "B [ c"},
 		{name: "forecast", keys: "F"},
 		{name: "reports", keys: "R"},
 		{name: "language", keys: "ctrl+l"},
@@ -235,6 +239,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
 			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
+			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {
+				t.Fatal(err)
+			}
 			m := inLanguage(t, st, i18n.PseudoTag)
 
 			// when
@@ -275,6 +282,10 @@ func Test_View_translated(t *testing.T) {
 		{name: "Spanish, the budget with a target", tag: language.Spanish, keys: "B e text:30 enter", shows: []string{"Objetivo", "Queda", "Objetivos", "Sin objetivo", "de 30,00 · quedan 20,00"}, hides: []string{"Target", "left", "No target"}},
 		{name: "Spanish, the target popup", tag: language.Spanish, keys: "B e", shows: []string{"Objetivos de oct 2026", "En EUR, la moneda base", "enter guardar"}, hides: []string{"Targets for", "base currency"}},
 		{name: "German, the budget with a target", tag: language.German, keys: "B e text:30 enter", shows: []string{"Ziel", "Übrig", "Ziele", "Ohne Ziel", "von 30,00 · 20,00 übrig"}, hides: []string{"Target", "left", "No target"}},
+		{name: "Spanish, targets copied", tag: language.Spanish, keys: "B c", shows: []string{"Se copió 1 objetivo de sep 2026 a oct 2026", "z deshace"}, hides: []string{"copied"}},
+		{name: "Spanish, nothing to copy", tag: language.Spanish, keys: "B c c", shows: []string{"nada que copiar: cada objetivo de sep 2026 ya está fijado en oct 2026"}, hides: []string{"nothing to copy"}},
+		{name: "German, targets copied", tag: language.German, keys: "B c", shows: []string{"1 Ziel von Sep 2026 nach Okt 2026 kopiert"}, hides: []string{"copied"}},
+		{name: "German, nothing to copy", tag: language.German, keys: "B c c", shows: []string{"nichts zu kopieren: jedes Ziel von Sep 2026 ist in Okt 2026 schon gesetzt"}, hides: []string{"nothing to copy"}},
 		{name: "German, the target popup", tag: language.German, keys: "B e", shows: []string{"Ziele für Okt 2026", "In EUR, der Basiswährung", "enter speichern"}, hides: []string{"Targets for", "base currency"}},
 		{name: "German, the budget", tag: language.German, keys: "B", shows: []string{"Budget · Okt 2026", "Einnahmen", "Ausgegeben"}, hides: []string{"Income", "Spent"}},
 	}
@@ -285,6 +296,9 @@ func Test_View_translated(t *testing.T) {
 			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
 			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -1000)
+			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {
+				t.Fatal(err)
+			}
 			m := inLanguage(t, st, tc.tag)
 
 			// when

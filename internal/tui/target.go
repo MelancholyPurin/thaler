@@ -3,6 +3,7 @@ package tui
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -190,4 +191,51 @@ func (m *Model) targetPopup() string {
 	}
 	lines = append(lines, msg...)
 	return box(m.loc.T("target_title", map[string]any{"Period": m.periodLabel(f.month)}), lines, w, h, true, m.loc.T("target_footer", nil))
+}
+
+// copyTargets starts the month on show from the targets of the month before. It adds
+// what the month lacks and keeps what it has, so nothing is overwritten and there is
+// nothing to ask; z takes back what it added.
+func (m *Model) copyTargets() {
+	first, err := time.Parse(monthLayout, m.period)
+	if err != nil { // all time
+		m.setStatus(m.loc.T("target_pick_month", nil), true)
+		return
+	}
+	from, to := first.AddDate(0, -1, 0).Format(monthLayout), m.period
+	res, err := m.svc.CopyBudgetTargets(m.ctx, from, to)
+	if err != nil {
+		m.setStatus(m.errText(err), true)
+		return
+	}
+	args := map[string]any{"From": m.periodLabel(from), "To": m.periodLabel(to), "Count": len(res.Copied)}
+	switch {
+	case len(res.Copied) == 0 && res.Kept == 0:
+		m.setStatus(m.loc.T("targets_copy_none", args), true)
+		return
+	case len(res.Copied) == 0:
+		m.setStatus(m.loc.T("targets_copy_nothing_new", args), true)
+		return
+	}
+	added := res.Copied
+	m.undo = append(m.undo, undoOp{
+		undone: func() string { return m.loc.T("undid_targets_copy", args) },
+		run: func() error {
+			for _, t := range added {
+				if err := m.svc.ClearBudgetTarget(m.ctx, to, t.Category); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+	if err := m.reload(); err != nil {
+		m.setStatus(m.errText(err), true)
+		return
+	}
+	parts := []string{m.loc.T("targets_copied", args)}
+	if res.Kept > 0 {
+		parts = append(parts, m.loc.T("targets_kept", map[string]any{"Count": res.Kept}))
+	}
+	m.setStatus(m.statusLine(append(parts, m.loc.T("hint_z_undoes", nil))), false)
 }
