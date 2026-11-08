@@ -815,6 +815,62 @@ func (s *Local) BalanceReport(ctx context.Context, req BalanceRequest) (BalanceR
 
 // BudgetReport totals income and spending per category over a period,
 // converted into the base currency.
+// monthLayout is how a month is written: 2026-10.
+const monthLayout = "2006-01"
+
+// targetCategory is the expense category that month's target is about, once the month is
+// known to be a month and the category to be one a target can be set on.
+func (s *Local) targetCategory(ctx context.Context, month, category string) (Account, error) {
+	if _, err := time.Parse(monthLayout, month); err != nil {
+		return Account{}, coded.New("invalid_month", map[string]any{"Text": month})
+	}
+	acc, err := s.repo.queries().account(ctx, category)
+	if err != nil {
+		return Account{}, err
+	}
+	if acc.Type != ledger.Expenses || acc.Name == ledger.UncategorizedExpense {
+		return Account{}, coded.New("target_not_expense", map[string]any{"Name": acc.Name})
+	}
+	return acc, nil
+}
+
+// SetBudgetTarget sets what category may spend in month, replacing a target already there.
+func (s *Local) SetBudgetTarget(ctx context.Context, month, category string, amount ledger.Money) error {
+	acc, err := s.targetCategory(ctx, month, category)
+	if err != nil {
+		return err
+	}
+	base, err := s.BaseCurrency(ctx)
+	if err != nil {
+		return err
+	}
+	switch {
+	case amount.Minor <= 0:
+		return coded.New("amount_not_positive", nil)
+	case amount.Currency != base:
+		return coded.New("target_not_base_currency", map[string]any{"Currency": amount.Currency, "Base": base})
+	}
+	return s.repo.queries().putBudgetTarget(ctx, acc.ID, month, amount)
+}
+
+// ClearBudgetTarget removes the target of category for month. A category that has none
+// is not an error: the result is what was asked for.
+func (s *Local) ClearBudgetTarget(ctx context.Context, month, category string) error {
+	acc, err := s.targetCategory(ctx, month, category)
+	if err != nil {
+		return err
+	}
+	return s.repo.queries().deleteBudgetTarget(ctx, acc.ID, month)
+}
+
+// BudgetTargets lists the targets set for month.
+func (s *Local) BudgetTargets(ctx context.Context, month string) ([]BudgetTarget, error) {
+	if _, err := time.Parse(monthLayout, month); err != nil {
+		return nil, coded.New("invalid_month", map[string]any{"Text": month})
+	}
+	return s.repo.queries().budgetTargets(ctx, month)
+}
+
 func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetReport, error) {
 	totals, err := s.repo.queries().categoryTotals(ctx, req.From, req.To)
 	if err != nil {

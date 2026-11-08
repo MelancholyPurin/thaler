@@ -469,6 +469,44 @@ func (q queries) rates(ctx context.Context) ([]ledger.RateEntry, error) {
 	return out, rows.Err()
 }
 
+// ---- budget targets --------------------------------------------------------
+
+func (q queries) putBudgetTarget(ctx context.Context, accountID int64, month string, amount ledger.Money) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO budget_targets (account_id, month, amount, currency) VALUES (?, ?, ?, ?)
+		 ON CONFLICT (account_id, month) DO UPDATE SET amount = excluded.amount, currency = excluded.currency`,
+		accountID, month, amount.Minor, string(amount.Currency))
+	return err
+}
+
+func (q queries) deleteBudgetTarget(ctx context.Context, accountID int64, month string) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM budget_targets WHERE account_id = ? AND month = ?`, accountID, month)
+	return err
+}
+
+func (q queries) budgetTargets(ctx context.Context, month string) ([]BudgetTarget, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT a.name, t.amount, t.currency FROM budget_targets t JOIN accounts a ON a.id = t.account_id
+		 WHERE t.month = ? ORDER BY a.name`, month)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BudgetTarget
+	for rows.Next() {
+		var (
+			t   BudgetTarget
+			cur string
+		)
+		if err := rows.Scan(&t.Category, &t.Amount.Minor, &cur); err != nil {
+			return nil, err
+		}
+		t.Amount.Currency = ledger.Currency(cur)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // ---- transfers between your own accounts -----------------------------------
 
 // transferCandidate is a transaction that could be the other half of a transfer.

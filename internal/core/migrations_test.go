@@ -24,6 +24,7 @@ var migrationScriptTimestamps = []uint{
 	20261022,
 	20261025,
 	20261026,
+	20261108100000,
 }
 
 func Test_migrationScriptTimestamps(t *testing.T) {
@@ -100,8 +101,8 @@ func Test_migrationFilesIn(t *testing.T) {
 		},
 		{
 			name: "a timestamp sorts after every date",
-			fsys: file("20261101120000_c.up.sql", "29991231_future.up.sql", "20261022_a.up.sql"),
-			want: []migrationFile{{20261022, "20261022_a.up.sql"}, {29991231, "29991231_future.up.sql"}, {20261101120000, "20261101120000_c.up.sql"}},
+			fsys: file("20991231120000_c.up.sql", "29991231_future.up.sql", "20261022_a.up.sql"),
+			want: []migrationFile{{20261022, "20261022_a.up.sql"}, {29991231, "29991231_future.up.sql"}, {20991231120000, "20991231120000_c.up.sql"}},
 		},
 		{name: "two files with one version", fsys: file("20261022_a.up.sql", "20261022_b.up.sql"), wantErr: "migrations 20261022_a.up.sql and 20261022_b.up.sql have the same version"},
 		{name: "a down migration", fsys: file("20261022_a.down.sql"), wantErr: `bad migration file name "20261022_a.down.sql" (want YYYYMMDDHHMMSS_name.up.sql, in lower case)`},
@@ -211,9 +212,9 @@ func Test_migrateFrom_failure(t *testing.T) {
 		return fsys
 	}
 	const (
-		good1 = "20261101120000_one.up.sql"
-		good2 = "20261101120001_two.up.sql"
-		bad   = "20261101120002_bad.up.sql"
+		good1 = "20991231120000_one.up.sql"
+		good2 = "20991231120001_two.up.sql"
+		bad   = "20991231120002_bad.up.sql"
 	)
 	tcs := []struct {
 		name  string
@@ -227,20 +228,20 @@ func Test_migrateFrom_failure(t *testing.T) {
 			extra: map[string]string{bad: "CREATE TABLE half_done (x INT); THIS IS NOT SQL;"},
 			fixed: map[string]string{bad: "CREATE TABLE fixed (x INT);"},
 			want: observed{
-				Err:     `migration 20261101120002_bad.up.sql: SQL logic error: near "THIS": syntax error (1)`,
-				Version: 20261026,
+				Err:     `migration 20991231120002_bad.up.sql: SQL logic error: near "THIS": syntax error (1)`,
+				Version: migrationScriptTimestamps[len(migrationScriptTimestamps)-1], // the newest real migration: the failed one did not move it
 			},
-			again: observed{Version: 20261101120002, Tables: []string{"fixed"}},
+			again: observed{Version: 20991231120002, Tables: []string{"fixed"}},
 		},
 		{
 			name:  "the ones before it stay applied",
 			extra: map[string]string{good1: "CREATE TABLE one (x INT);", good2: "CREATE TABLE two (x INT);", bad: "CREATE TABLE half_done (x INT); NOPE;"},
 			fixed: map[string]string{bad: "CREATE TABLE three (x INT);"},
 			want: observed{
-				Err:     `migration 20261101120002_bad.up.sql: SQL logic error: near "NOPE": syntax error (1)`,
-				Version: 20261101120001, Tables: []string{"one", "two"},
+				Err:     `migration 20991231120002_bad.up.sql: SQL logic error: near "NOPE": syntax error (1)`,
+				Version: 20991231120001, Tables: []string{"one", "two"},
 			},
-			again: observed{Version: 20261101120002, Tables: []string{"one", "three", "two"}},
+			again: observed{Version: 20991231120002, Tables: []string{"one", "three", "two"}},
 		},
 		{
 			// The trigger makes recording the version fail, after the migration itself
@@ -251,11 +252,11 @@ func Test_migrateFrom_failure(t *testing.T) {
 			},
 			want: observed{
 				Err:     "constraint failed: no (1811) in line 0: INSERT INTO schema_migrations (version, dirty) VALUES (?, ?)",
-				Version: 20261101120002, Dirty: true, Tables: []string{"half_done"},
+				Version: 20991231120002, Dirty: true, Tables: []string{"half_done"},
 			},
 			again: observed{
-				Err:     "the last upgrade of the database stopped halfway, at migration 20261101120002, and it is not safe to go on",
-				Version: 20261101120002, Dirty: true, Tables: []string{"half_done"},
+				Err:     "the last upgrade of the database stopped halfway, at migration 20991231120002, and it is not safe to go on",
+				Version: 20991231120002, Dirty: true, Tables: []string{"half_done"},
 			},
 		},
 	}
