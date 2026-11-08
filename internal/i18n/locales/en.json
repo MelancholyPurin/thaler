@@ -545,5 +545,8 @@
   "opening": "opening {{.Path}}",
   "corrupt_rate": "corrupt exchange rate \"{{.Rate}}\" for {{.Base}}/{{.Quote}} on {{.Date}}",
   "restore_reopen_failed": "the database cannot be opened again either",
-  "restore_in_place_unopenable": "the backup is in place but cannot be opened"
+  "restore_in_place_unopenable": "the backup is in place but cannot be opened",
+  "invalid_month": "invalid month \"{{.Text}}\": use YYYY-MM",
+  "target_not_expense": "{{.Name}} is not a spending category: only an Expenses category, other than Uncategorized, can have a target",
+  "target_not_base_currency": "a target is in the base currency ({{.Base}}), not in {{.Currency}}"
 }
