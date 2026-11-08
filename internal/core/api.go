@@ -87,6 +87,15 @@ type Service interface {
 	BalanceReport(ctx context.Context, req BalanceRequest) (BalanceReport, error)
 	BudgetReport(ctx context.Context, req BudgetRequest) (BudgetReport, error)
 
+	// Budget targets: what an expense category may spend in a month (YYYY-MM),
+	// in the base currency. A month keeps its own targets.
+	// SetBudgetTarget sets or replaces the target of category for month.
+	SetBudgetTarget(ctx context.Context, month, category string, amount ledger.Money) error
+	// ClearBudgetTarget removes it; a category with no target is left as it is.
+	ClearBudgetTarget(ctx context.Context, month, category string) error
+	// BudgetTargets lists the targets of month, by category name.
+	BudgetTargets(ctx context.Context, month string) ([]BudgetTarget, error)
+
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
 	Check(ctx context.Context) ([]string, error)
@@ -400,6 +409,12 @@ type BudgetRequest struct {
 type BudgetLine struct {
 	Name   string
 	Amount ledger.Money
+}
+
+// BudgetTarget is what a category may spend in a month.
+type BudgetTarget struct {
+	Category string
+	Amount   ledger.Money
 }
 
 // BudgetReport is the answer to a BudgetRequest. Expenses are positive; income

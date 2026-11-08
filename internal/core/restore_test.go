@@ -195,9 +195,9 @@ func Test_RestoreBackup(t *testing.T) {
 		{
 			name: "a backup made by a newer version", hasLive: true,
 			source: func(t *testing.T, _, _ string) string {
-				return oldDatabase(t, atVersion(29991231, false)...)
+				return oldDatabase(t, atVersion(29991231235959, false)...)
 			},
-			wantErr: "{src} was made by a newer version of Thaler (it has migration 29991231): update thaler; nothing was changed",
+			wantErr: "{src} was made by a newer version of Thaler (it has migration 29991231235959): update thaler; nothing was changed",
 			want:    observed{Accounts: live},
 		},
 		{

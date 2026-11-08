@@ -129,7 +129,7 @@ Turning bank exports into transactions without duplicating or double-counting an
 Targets per category, and what is left of them.
 
 - [x] `BUD-1` Spending per category for a month, in the base currency
-- [ ] `BUD-2` A monthly target per category
+- [x] `BUD-2` A monthly target per category (kept per month, in the base currency, on expense categories; set, clear and list in the service; the popup is `TBU-2` and the command `CLI-12`)
 - [ ] `BUD-3` Spent, target and left per category, and the total
 - [ ] `BUD-4` Unspent money (or overspending) carries into the next month, switched on per category
 - [ ] `BUD-5` Start a month from the previous month's targets

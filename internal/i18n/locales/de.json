@@ -545,5 +545,8 @@
   "opening": "beim Öffnen von {{.Path}}",
   "corrupt_rate": "beschädigter Wechselkurs \"{{.Rate}}\" für {{.Base}}/{{.Quote}} am {{.Date}}",
   "restore_reopen_failed": "die Datenbank lässt sich auch nicht wieder öffnen",
-  "restore_in_place_unopenable": "das Backup ist an ihrem Platz, lässt sich aber nicht öffnen"
+  "restore_in_place_unopenable": "das Backup ist an ihrem Platz, lässt sich aber nicht öffnen",
+  "invalid_month": "ungültiger Monat \"{{.Text}}\": verwende YYYY-MM",
+  "target_not_expense": "{{.Name}} ist keine Ausgabenkategorie: nur eine Expenses-Kategorie, außer Uncategorized, kann ein Ziel haben",
+  "target_not_base_currency": "ein Ziel gilt in der Basiswährung ({{.Base}}), nicht in {{.Currency}}"
 }

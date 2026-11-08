@@ -317,13 +317,13 @@ func Test_migrate(t *testing.T) {
 		},
 		{
 			name:       "a database that has a migration this build does not know is refused",
-			statements: atVersion(29991231, false),
-			wantErr:    "database has migration 29991231 that this build does not know; update thaler",
+			statements: atVersion(29991231235959, false),
+			wantErr:    "database has migration 29991231235959 that this build does not know; update thaler",
 		},
 		{
 			name:       "so is one that has the name of such a migration in the old table",
-			statements: []string{tracked, `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql'), ('29991231_from_the_future.up.sql')`},
-			wantErr:    "database has migration 29991231 that this build does not know; update thaler",
+			statements: []string{tracked, `INSERT INTO schema_migrations (name) VALUES ('20261022_init.up.sql'), ('29991231235959_from_the_future.up.sql')`},
+			wantErr:    "database has migration 29991231235959 that this build does not know; update thaler",
 		},
 		{
 			name:       "a database whose last upgrade stopped halfway is refused",
@@ -709,8 +709,8 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 		{name: "a new database has nothing to lose", want: observed{Upgraded: true}},
 		{name: "and one opened again is up to date", reopen: true, want: observed{Upgraded: true}},
 		{
-			name: "a database from a newer build is refused, with no copy made", statements: atVersion(29991231, false),
-			want: observed{Err: "database has migration 29991231 that this build does not know; update thaler"},
+			name: "a database from a newer build is refused, with no copy made", statements: atVersion(29991231235959, false),
+			want: observed{Err: "database has migration 29991231235959 that this build does not know; update thaler"},
 		},
 		{
 			name: "when the copy cannot be made the upgrade does not happen", statements: []string{tracked, atInit, anAcct}, block: "backups",
