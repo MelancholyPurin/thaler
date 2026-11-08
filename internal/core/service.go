@@ -884,13 +884,7 @@ func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetRepo
 	if err != nil {
 		return BudgetReport{}, err
 	}
-	rateDate := req.RateDate
-	if rateDate == "" {
-		rateDate = s.today()
-	}
-	if req.To != "" && req.To < rateDate {
-		rateDate = req.To
-	}
+	rateDate := s.rateDate(req.RateDate, req.To)
 
 	b := BudgetReport{
 		Base:         base,
@@ -937,6 +931,84 @@ func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetRepo
 	}
 	b.Missing = sortedCurrencies(missing)
 	return b, nil
+}
+
+// rateDate is the day rates are read on: the one asked for (today when empty), but
+// no later than the end of the period, so that a past period uses its own rates.
+func (s *Local) rateDate(asked, periodEnd string) string {
+	if asked == "" {
+		asked = s.today()
+	}
+	if periodEnd != "" && periodEnd < asked {
+		return periodEnd
+	}
+	return asked
+}
+
+// MonthBudget sets what each expense category spent in a month against its target.
+func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthBudget, error) {
+	first, err := time.Parse(monthLayout, req.Month)
+	if err != nil {
+		return MonthBudget{}, coded.New("invalid_month", map[string]any{"Text": req.Month})
+	}
+	last := first.AddDate(0, 1, -1).Format(ledger.DateLayout)
+	spending, err := s.BudgetReport(ctx, BudgetRequest{From: first.Format(ledger.DateLayout), To: last, RateDate: req.RateDate})
+	if err != nil {
+		return MonthBudget{}, err
+	}
+	targets, err := s.repo.queries().budgetTargets(ctx, req.Month)
+	if err != nil {
+		return MonthBudget{}, err
+	}
+	book, err := s.rateBook(ctx)
+	if err != nil {
+		return MonthBudget{}, err
+	}
+	rateDate := s.rateDate(req.RateDate, last)
+
+	base := spending.Base
+	zero := ledger.Money{Currency: base}
+	out := MonthBudget{Month: req.Month, Base: base, SpentTotal: spending.ExpenseTotal,
+		TargetTotal: zero, LeftTotal: zero, UnbudgetedTotal: zero}
+	missing := make(map[ledger.Currency]bool)
+	for _, c := range spending.Missing {
+		missing[c] = true
+	}
+	byName := make(map[string]*MonthBudgetLine)
+	for _, e := range spending.Expenses {
+		byName[e.Name] = &MonthBudgetLine{Name: e.Name, Spent: e.Amount, Target: zero, Left: zero}
+	}
+	for _, t := range targets {
+		// A target keeps the currency it was set in; the base currency may have changed since.
+		amount, ok := book.Convert(t.Amount, base, rateDate)
+		if !ok {
+			missing[t.Amount.Currency] = true
+			continue
+		}
+		line := byName[t.Category]
+		if line == nil {
+			line = &MonthBudgetLine{Name: t.Category, Spent: zero}
+			byName[t.Category] = line
+		}
+		line.HasTarget, line.Target = true, amount
+		line.Left = ledger.Money{Minor: amount.Minor - line.Spent.Minor, Currency: base}
+		out.TargetTotal.Minor += amount.Minor
+		out.LeftTotal.Minor += line.Left.Minor
+	}
+	for _, line := range byName {
+		if !line.HasTarget {
+			out.UnbudgetedTotal.Minor += line.Spent.Minor
+		}
+		out.Lines = append(out.Lines, *line)
+	}
+	sort.Slice(out.Lines, func(i, j int) bool {
+		if out.Lines[i].Spent.Minor != out.Lines[j].Spent.Minor {
+			return out.Lines[i].Spent.Minor > out.Lines[j].Spent.Minor
+		}
+		return out.Lines[i].Name < out.Lines[j].Name
+	})
+	out.Missing = sortedCurrencies(missing)
+	return out, nil
 }
 
 func sortedCurrencies(set map[ledger.Currency]bool) []ledger.Currency {

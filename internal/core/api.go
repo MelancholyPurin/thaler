@@ -87,6 +87,10 @@ type Service interface {
 	BalanceReport(ctx context.Context, req BalanceRequest) (BalanceReport, error)
 	BudgetReport(ctx context.Context, req BudgetRequest) (BudgetReport, error)
 
+	// MonthBudget is what each expense category spent in a month against its
+	// target, and what is left.
+	MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthBudget, error)
+
 	// Budget targets: what an expense category may spend in a month (YYYY-MM),
 	// in the base currency. A month keeps its own targets.
 	// SetBudgetTarget sets or replaces the target of category for month.
@@ -415,6 +419,44 @@ type BudgetLine struct {
 type BudgetTarget struct {
 	Category string
 	Amount   ledger.Money
+}
+
+// MonthBudgetRequest asks how a month's spending stands against its targets.
+type MonthBudgetRequest struct {
+	Month string // YYYY-MM
+	// RateDate is the day exchange rates are looked up on, as for a BudgetRequest;
+	// empty = today, and a past month uses the rates of that month.
+	RateDate string
+}
+
+// MonthBudgetLine is one expense category in a month. Everything is in the base
+// currency.
+type MonthBudgetLine struct {
+	Name      string
+	Spent     ledger.Money
+	HasTarget bool
+	Target    ledger.Money // zero without a target
+	// Left is Target minus Spent: negative when the category overspent. Zero
+	// without a target, where HasTarget says it means nothing.
+	Left ledger.Money
+}
+
+// MonthBudget is the answer to a MonthBudgetRequest. Lines are the expense
+// categories that spent something or have a target, the largest spending first.
+// Income is not part of it.
+type MonthBudget struct {
+	Month string
+	Base  ledger.Currency
+	Lines []MonthBudgetLine
+	// SpentTotal is all spending; TargetTotal the sum of the targets.
+	SpentTotal, TargetTotal ledger.Money
+	// LeftTotal is TargetTotal minus what the categories with a target spent, so
+	// that spending nobody planned for does not hide what is left of what was.
+	// That spending is UnbudgetedTotal, and SpentTotal is the two added.
+	LeftTotal, UnbudgetedTotal ledger.Money
+	// Missing are the currencies with no exchange rate, so left out: spending in
+	// them, or a target set in a base currency that has since changed.
+	Missing []ledger.Currency
 }
 
 // BudgetReport is the answer to a BudgetRequest. Expenses are positive; income

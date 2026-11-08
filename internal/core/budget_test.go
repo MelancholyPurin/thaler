@@ -242,3 +242,160 @@ func Test_BudgetTargets(t *testing.T) {
 		})
 	}
 }
+
+// spendingUSD books an expense of amount dollars from a dollar account.
+func spendingUSD(date, category string, amount int64) given {
+	return stored(NewTransaction{
+		Date: day(date), Payee: "shop",
+		Postings: []ledger.Posting{{Account: "Assets:Dollars", Amount: usd(-amount)}, {Account: category, Amount: usd(amount)}},
+	})
+}
+
+func Test_MonthBudget(t *testing.T) {
+	// more accounts than targetLedger has, then the steps of the case
+	with := func(steps ...given) []given {
+		return append([]given{accounts("Expenses:Fun", "Assets:Dollars USD")}, steps...)
+	}
+	tcs := []struct {
+		name    string
+		setup   []given
+		req     MonthBudgetRequest
+		want    MonthBudget
+		wantErr string
+	}{
+		{
+			name: "spending against targets, a target not touched, and spending nobody planned",
+			setup: with(
+				target("2026-10", "Expenses:Food", eur(40000)), target("2026-10", "Expenses:Rent", eur(90000)),
+				spending("2026-10-03", "Expenses:Food", 12500), spending("2026-10-20", "Expenses:Food", 2500),
+				spending("2026-10-09", "Expenses:Fun", 1500)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines: []MonthBudgetLine{
+					{"Expenses:Food", eur(15000), true, eur(40000), eur(25000)},
+					{"Expenses:Fun", eur(1500), false, eur(0), eur(0)},
+					{"Expenses:Rent", eur(0), true, eur(90000), eur(90000)},
+				},
+				SpentTotal: eur(16500), TargetTotal: eur(130000), LeftTotal: eur(115000), UnbudgetedTotal: eur(1500),
+			},
+		},
+		{
+			name: "overspending is a negative amount left, and takes from the total left",
+			setup: with(
+				target("2026-10", "Expenses:Food", eur(40000)), target("2026-10", "Expenses:Rent", eur(90000)),
+				spending("2026-10-03", "Expenses:Food", 52500)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines: []MonthBudgetLine{
+					{"Expenses:Food", eur(52500), true, eur(40000), eur(-12500)},
+					{"Expenses:Rent", eur(0), true, eur(90000), eur(90000)},
+				},
+				SpentTotal: eur(52500), TargetTotal: eur(130000), LeftTotal: eur(77500), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
+			name: "only the month asked for: its spending and its targets",
+			setup: with(
+				target("2026-09", "Expenses:Rent", eur(80000)), target("2026-10", "Expenses:Food", eur(40000)),
+				spending("2026-09-30", "Expenses:Food", 9900), spending("2026-10-01", "Expenses:Food", 100),
+				spending("2026-10-31", "Expenses:Food", 200), spending("2026-11-01", "Expenses:Food", 7700)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(300), true, eur(40000), eur(39700)}},
+				SpentTotal: eur(300), TargetTotal: eur(40000), LeftTotal: eur(39700), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
+			name:  "no targets: all of the spending is unbudgeted",
+			setup: with(spending("2026-10-03", "Expenses:Food", 4000)),
+			req:   MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(4000), false, eur(0), eur(0)}},
+				SpentTotal: eur(4000), TargetTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(4000),
+			},
+		},
+		{
+			name: "a month with nothing in it",
+			req:  MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{Month: "2026-10", Base: "EUR", SpentTotal: eur(0), TargetTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(0)},
+		},
+		{
+			name: "equal spending is listed by name",
+			setup: with(
+				spending("2026-10-03", "Expenses:Rent", 100), spending("2026-10-03", "Expenses:Food", 100)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(100), false, eur(0), eur(0)}, {"Expenses:Rent", eur(100), false, eur(0), eur(0)}},
+				SpentTotal: eur(200), TargetTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(200),
+			},
+		},
+		{
+			name: "dollars spent count at the rate of the month",
+			setup: with(setRate("2026-10-01", "USD", "EUR", "0.92"), target("2026-10", "Expenses:Food", eur(40000)),
+				spendingUSD("2026-10-05", "Expenses:Food", 10000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(9200), true, eur(40000), eur(30800)}},
+				SpentTotal: eur(9200), TargetTotal: eur(40000), LeftTotal: eur(30800), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
+			name: "dollars with no rate are left out, and said so",
+			setup: with(target("2026-10", "Expenses:Food", eur(40000)), spending("2026-10-03", "Expenses:Food", 500),
+				spendingUSD("2026-10-05", "Expenses:Food", 10000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(500), true, eur(40000), eur(39500)}},
+				SpentTotal: eur(500), TargetTotal: eur(40000), LeftTotal: eur(39500), UnbudgetedTotal: eur(0),
+				Missing: []ledger.Currency{"USD"},
+			},
+		},
+		{
+			name: "a target set before the base currency changed is converted",
+			setup: with(target("2026-10", "Expenses:Food", eur(40000)), baseCurrency("USD"),
+				setRate("2026-10-01", "EUR", "USD", "1.10"), spendingUSD("2026-10-05", "Expenses:Food", 1000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "USD",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", usd(1000), true, usd(44000), usd(43000)}},
+				SpentTotal: usd(1000), TargetTotal: usd(44000), LeftTotal: usd(43000), UnbudgetedTotal: usd(0),
+			},
+		},
+		{
+			name: "a target in a currency with no rate is left out, and said so",
+			setup: with(target("2026-10", "Expenses:Food", eur(40000)), baseCurrency("USD"),
+				spendingUSD("2026-10-05", "Expenses:Food", 1000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "USD",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", usd(1000), false, usd(0), usd(0)}},
+				SpentTotal: usd(1000), TargetTotal: usd(0), LeftTotal: usd(0), UnbudgetedTotal: usd(1000),
+				Missing: []ledger.Currency{"EUR"},
+			},
+		},
+		{name: "a month that is none", req: MonthBudgetRequest{Month: "2026-1"}, wantErr: `invalid month "2026-1": use YYYY-MM`},
+		{name: "no month", req: MonthBudgetRequest{}, wantErr: `invalid month "": use YYYY-MM`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append(targetLedger(), tc.setup...)...)
+
+			// when
+			got, err := st.MonthBudget(t.Context(), tc.req)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
