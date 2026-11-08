@@ -120,7 +120,7 @@ The strip along the top switches between **screens**, and the period on its righ
 | Screen | Key | What it shows |
 | --- | --- | --- |
 | Ledger | `L` / `F1` | the three panels below: accounts and the transaction history for the period |
-| Budget | `B` / `F2` | income and spending by category for the period, with share bars; months on the left. For a month, the categories with a target show what was spent, the target and what is left (in red once passed), and `e` sets or clears a target and switches a category's carry-over (see below) |
+| Budget | `B` / `F2` | income and spending by category for the period, with share bars; months on the left. For a month, the categories with a target show what was spent, the target and what is left (in red once passed), and `tab` moves into the categories, where `enter` shows the transactions behind a category's number; `e` sets or clears a target and switches a category's carry-over (see below) |
 | Forecast | `F` / `F3` | not built yet |
 | Reports | `R` / `F4` | not built yet |
 
@@ -139,9 +139,9 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `L` `B` `F` `R` (or `F1`–`F4`) | switch screen |
 | `[` `]` | previous / next month |
 | `t` / `T` | this month / all time |
-| `1` `2` `3`, `tab` / `shift+tab` | Ledger: focus a panel |
+| `1` `2` `3`, `tab` / `shift+tab` | Ledger: focus a panel. Budget: move between the months and the categories |
 | `↑` `↓` / `j` `k`, `g` `G`, `PgUp` `PgDn` | move in the focused panel (on Budget: pick the month) |
-| `enter` | open the next panel (Home, Accounts) / categorize (Transactions) |
+| `enter` | open the next panel (Home, Accounts) / categorize (Transactions) / on Budget, in the categories: show the transactions behind the category |
 | `a` | add a transaction (see below) |
 | `i` | import a bank export (see below) |
 | `S` | back up the database: see when the last backup was made and write a new one (see below) |
@@ -153,7 +153,7 @@ Selecting an account in panel 2 limits the transaction history to that account.
 | `e` / `r` / `d` | edit / rename / delete the selected transaction (`r` opens the edit form on the title; delete asks first). On Budget, `e` sets the month's target of a category |
 | `c` | categorize the selected transaction. On Budget, copy last month's targets into the month on show |
 | `z` | undo the last change made in this session: add, edit, delete, categorize, import, a target, a carry-over or a copy of targets, repeatable |
-| `/` | fuzzy search over date, payee, description, category and amount (every word must match; `esc` clears) |
+| `/` | fuzzy search over date, payee, description, category and amount (every word must match; `esc` clears it, and the category a Budget row opened) |
 | `u` | show only uncategorized / all |
 | `?` | key reference popup (`↑`/`↓` scroll it; any other key closes it) |
 | `q` | quit |
@@ -189,6 +189,8 @@ amount ⏎   payee ⏎   category ⏎        e.g.   8.40 ⏎  rew ⏎  ⏎
 **Entries you made by hand are not added twice.** If you log expenses yourself and later import the statement, each bank row is checked against what you typed: the same account, exactly the same amount, dated within three days, an ordinary entry (one account, one category) that has not been matched to a bank row yet. When one is found, the row *takes over* that entry. Nothing is added; the entry just remembers which bank row it is, so importing the file again recognises it. Your payee, date and category stay as you typed them, whatever your rules would have chosen. The review shows these rows as `↔ #12 REWE` before anything is written, each entry is taken over at most once (the closest date first), and `z` lets go of it again. This works for the two halves of a transfer you entered with `x`, too. Entries that are splits, that move between two of your accounts in one transaction, or are an opening balance are never matched.
 
 **Monthly targets.** On the Budget screen, pick a month and press `e`: a popup lists your spending categories with the target each has for that month. Move with `↑` `↓`, type an amount, and `enter` saves it; an empty amount clears the target, and `z` takes a change back. A target belongs to one month (a month keeps its own, so changing next month's leaves this one alone) and is in the base currency; only expense categories have one. For that month the Budget shows the total target and what is left of it, and under each category with a target what was spent, the target and what is left, or by how much it was passed, with the bar and the amount in red. Spending in categories with no target is listed apart, and does not take from what is left of the planned categories. `c` starts the month on show from the month before: it adds the targets the month lacks and keeps the ones it has, so nothing is overwritten, and `z` takes back exactly what it added. All time has no targets: pick a month.
+
+**The transactions behind a number.** On the Budget, `tab` moves from the months into the categories (the same panel that shows the figures, with its own `▸` mark, scrolling when there are more than fit), `↑` `↓` choose one, and `enter` opens the Ledger with its transactions: the month on show, every account, and the category in the panel's title. It is the same list the number was added up from, so you can edit, recategorize or delete from there, and `esc` shows everything again. `tab` or `esc` goes back to the months.
 
 **Carry-over.** In the same popup, `tab` makes the category under the cursor carry what is left of it into the next month, from the month on show (that month itself starts with nothing carried in). What was left comes in as a positive amount, and what was overspent as a negative one, so overspending is paid back out of later months. A month with no target in between goes on, carrying what it spent. Nothing is stored for it: the carried amount is worked out when shown, from the targets and the spending of the months since (each at the exchange rates of its own month), so editing or importing an older transaction can never leave a stale figure. The Budget shows `of 50.00 · +70.00 carried · 110.00 left` for such a category and a `Carried in` total; `z` takes the switch back.
 
