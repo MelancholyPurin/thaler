@@ -507,6 +507,89 @@ func (q queries) budgetTargets(ctx context.Context, month string) ([]BudgetTarge
 	return out, rows.Err()
 }
 
+func (q queries) putBudgetRollover(ctx context.Context, accountID int64, from string) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO budget_rollover (account_id, from_month) VALUES (?, ?)
+		 ON CONFLICT (account_id) DO UPDATE SET from_month = excluded.from_month`, accountID, from)
+	return err
+}
+
+func (q queries) deleteBudgetRollover(ctx context.Context, accountID int64) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM budget_rollover WHERE account_id = ?`, accountID)
+	return err
+}
+
+func (q queries) budgetRollovers(ctx context.Context) ([]BudgetRollover, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT a.name, r.from_month FROM budget_rollover r JOIN accounts a ON a.id = r.account_id ORDER BY a.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BudgetRollover
+	for rows.Next() {
+		var r BudgetRollover
+		if err := rows.Scan(&r.Category, &r.From); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// monthlyAmount is a sum for one category in one month, in the currency it was kept in.
+type monthlyAmount struct {
+	category, month string
+	amount          ledger.Money
+}
+
+// carriedSpending is what the categories that carry over spent in each month from
+// the month they started to the one before month, per currency.
+func (q queries) carriedSpending(ctx context.Context, month string) ([]monthlyAmount, error) {
+	return q.monthlyAmounts(ctx, `
+		SELECT a.name, substr(t.date, 1, 7), p.currency, SUM(p.amount)
+		FROM postings p
+		JOIN accounts a ON a.id = p.account_id
+		JOIN transactions t ON t.id = p.transaction_id
+		JOIN budget_rollover r ON r.account_id = a.id
+		WHERE t.date >= r.from_month || '-01' AND substr(t.date, 1, 7) < ?
+		GROUP BY a.id, substr(t.date, 1, 7), p.currency
+		ORDER BY a.name, substr(t.date, 1, 7), p.currency`, month)
+}
+
+// carriedTargets is the targets of the categories that carry over, for each month
+// from the month they started to the one before month.
+func (q queries) carriedTargets(ctx context.Context, month string) ([]monthlyAmount, error) {
+	return q.monthlyAmounts(ctx, `
+		SELECT a.name, t.month, t.currency, t.amount
+		FROM budget_targets t
+		JOIN accounts a ON a.id = t.account_id
+		JOIN budget_rollover r ON r.account_id = t.account_id
+		WHERE t.month >= r.from_month AND t.month < ?
+		ORDER BY a.name, t.month`, month)
+}
+
+func (q queries) monthlyAmounts(ctx context.Context, query string, args ...any) ([]monthlyAmount, error) {
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []monthlyAmount
+	for rows.Next() {
+		var (
+			a   monthlyAmount
+			cur string
+		)
+		if err := rows.Scan(&a.category, &a.month, &cur, &a.amount.Minor); err != nil {
+			return nil, err
+		}
+		a.amount.Currency = ledger.Currency(cur)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // targetToCopy is a target of one month and the category it is for.
 type targetToCopy struct {
 	accountID int64
