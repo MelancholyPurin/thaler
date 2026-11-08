@@ -554,7 +554,7 @@
   "budget_section_no_target": "No target",
   "budget_of_left": "of {{.Target}} · {{.Left}} left",
   "budget_of_over": "of {{.Target}} · {{.Over}} over",
-  "budget_targets_hint": "Press e to set a monthly target for a category.",
+  "budget_targets_hint": "Press e to set a target for a category, or c to copy last month's.",
   "hint_target": "e target",
   "help_target": "Budget: set or clear a category's target for the month",
   "target_title": "Targets for {{.Period}}",
@@ -567,5 +567,19 @@
   "target_type_amount": "type an amount: there is no target to clear",
   "target_set": "Target for {{.Name}} in {{.Period}}: {{.Amount}}",
   "target_cleared": "Target for {{.Name}} in {{.Period}} cleared",
-  "undid_target": "Target for {{.Name}} in {{.Period}} taken back"
+  "undid_target": "Target for {{.Name}} in {{.Period}} taken back",
+  "copy_same_month": "cannot copy the targets of {{.Month}} into the same month",
+  "targets_copied": {
+    "one": "{{.Count}} target copied from {{.From}} into {{.To}}",
+    "other": "{{.Count}} targets copied from {{.From}} into {{.To}}"
+  },
+  "targets_kept": {
+    "one": "{{.Count}} was already set, kept",
+    "other": "{{.Count}} were already set, kept"
+  },
+  "targets_copy_none": "{{.From}} has no targets to copy",
+  "targets_copy_nothing_new": "nothing to copy: every target of {{.From}} is already set in {{.To}}",
+  "undid_targets_copy": "Targets copied into {{.To}} taken back",
+  "hint_copy_targets": "c copy last month",
+  "help_copy_targets": "Budget: copy last month's targets into this month (keeps the ones already set)"
 }

@@ -554,7 +554,7 @@
   "budget_section_no_target": "Sin objetivo",
   "budget_of_left": "de {{.Target}} · quedan {{.Left}}",
   "budget_of_over": "de {{.Target}} · {{.Over}} de más",
-  "budget_targets_hint": "Presiona e para fijar un objetivo mensual para una categoría.",
+  "budget_targets_hint": "Presiona e para fijar un objetivo para una categoría, o c para copiar los del mes anterior.",
   "hint_target": "e objetivo",
   "help_target": "Presupuesto: fijar o quitar el objetivo de una categoría para el mes",
   "target_title": "Objetivos de {{.Period}}",
@@ -567,5 +567,19 @@
   "target_type_amount": "escribe un importe: no hay objetivo que quitar",
   "target_set": "Objetivo de {{.Name}} en {{.Period}}: {{.Amount}}",
   "target_cleared": "Objetivo de {{.Name}} en {{.Period}} quitado",
-  "undid_target": "Se deshizo el cambio del objetivo de {{.Name}} en {{.Period}}"
+  "undid_target": "Se deshizo el cambio del objetivo de {{.Name}} en {{.Period}}",
+  "copy_same_month": "no se pueden copiar los objetivos de {{.Month}} al mismo mes",
+  "targets_copied": {
+    "one": "Se copió {{.Count}} objetivo de {{.From}} a {{.To}}",
+    "other": "Se copiaron {{.Count}} objetivos de {{.From}} a {{.To}}"
+  },
+  "targets_kept": {
+    "one": "{{.Count}} ya estaba fijado, se conserva",
+    "other": "{{.Count}} ya estaban fijados, se conservan"
+  },
+  "targets_copy_none": "{{.From}} no tiene objetivos que copiar",
+  "targets_copy_nothing_new": "nada que copiar: cada objetivo de {{.From}} ya está fijado en {{.To}}",
+  "undid_targets_copy": "Se deshizo la copia de objetivos en {{.To}}",
+  "hint_copy_targets": "c copiar el mes anterior",
+  "help_copy_targets": "Presupuesto: copiar los objetivos del mes anterior a este mes (conserva los ya fijados)"
 }
