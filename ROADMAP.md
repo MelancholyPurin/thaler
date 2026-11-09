@@ -141,7 +141,7 @@ Targets per category, and what is left of them.
 
 Things that happen on a schedule. Thaler **asks first**: it proposes an occurrence and you confirm, change or skip it.
 
-- [ ] `REC-1` Define a schedule (rent monthly, salary on the 28th, a yearly insurance)
+- [x] `REC-1` Define a schedule (rent monthly, salary on the 28th, a yearly insurance): in the service, a name, a template transaction (payee, description, postings) and a rhythm of every N weeks, months or years from a start date; create, replace, delete and list. A monthly schedule keeps the start day and falls on the last day of a shorter month. Nothing is posted; the screens are `TFC-2` and `CLI-13`
 - [ ] `REC-2` Work out which occurrences are due up to a date
 - [ ] `REC-3` Confirm, edit the amount, or skip a due occurrence; nothing is ever posted without that
 - [ ] `REC-4` An imported bank row settles the occurrence it corresponds to

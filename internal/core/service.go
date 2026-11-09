@@ -1396,3 +1396,101 @@ func verifySnapshot(ctx context.Context, path string) error {
 	}
 	return nil
 }
+
+// ---- schedules -------------------------------------------------------------
+
+// validate checks what can be checked without the database, and tidies the name.
+func (ns *NewSchedule) validate() error {
+	ns.Name = strings.TrimSpace(ns.Name)
+	switch {
+	case ns.Name == "":
+		return coded.New("schedule_name_empty", nil)
+	case ns.Every < 1:
+		return coded.New("schedule_every_invalid", map[string]any{"Every": ns.Every})
+	case ns.Unit != EveryWeek && ns.Unit != EveryMonth && ns.Unit != EveryYear:
+		return coded.New("schedule_unit_invalid", map[string]any{"Unit": string(ns.Unit)})
+	}
+	// The template is a transaction that has not happened: the same rules apply.
+	return NewTransaction{Date: ns.Start, Postings: ns.Postings}.validate()
+}
+
+// storeSchedule writes ns as schedule id, or as a new one when id is 0.
+func storeSchedule(ctx context.Context, q queries, id int64, ns NewSchedule) (int64, error) {
+	if err := ns.validate(); err != nil {
+		return 0, err
+	}
+	if id != 0 {
+		found, err := q.scheduleExists(ctx, id)
+		if err != nil {
+			return 0, err
+		}
+		if !found {
+			return 0, coded.New("schedule_not_found", map[string]any{"ID": id})
+		}
+	}
+	taken, err := q.scheduleNameTaken(ctx, ns.Name, id)
+	if err != nil {
+		return 0, err
+	}
+	if taken {
+		return 0, coded.New("schedule_name_taken", map[string]any{"Name": ns.Name})
+	}
+	var created []string
+	accountIDs, err := resolvePostings(ctx, q, NewTransaction{Postings: ns.Postings}, &created)
+	if err != nil {
+		return 0, err
+	}
+	if id == 0 {
+		if id, err = q.insertSchedule(ctx, ns); err != nil {
+			return 0, err
+		}
+	} else {
+		if err := q.updateSchedule(ctx, id, ns); err != nil {
+			return 0, err
+		}
+		if err := q.deleteSchedulePostings(ctx, id); err != nil {
+			return 0, err
+		}
+	}
+	return id, q.insertSchedulePostings(ctx, id, ns.Postings, accountIDs)
+}
+
+// CreateSchedule stores a new schedule.
+func (s *Local) CreateSchedule(ctx context.Context, ns NewSchedule) (int64, error) {
+	var id int64
+	err := s.repo.inTx(ctx, func(q queries) (err error) {
+		id, err = storeSchedule(ctx, q, 0, ns)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// ReplaceSchedule rewrites schedule id in place.
+func (s *Local) ReplaceSchedule(ctx context.Context, id int64, ns NewSchedule) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		_, err := storeSchedule(ctx, q, id, ns)
+		return err
+	})
+}
+
+// DeleteSchedule removes schedule id.
+func (s *Local) DeleteSchedule(ctx context.Context, id int64) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		found, err := q.deleteSchedule(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return coded.New("schedule_not_found", map[string]any{"ID": id})
+		}
+		return nil
+	})
+}
+
+// Schedules lists every schedule, by name.
+func (s *Local) Schedules(ctx context.Context) ([]Schedule, error) {
+	return s.repo.queries().schedules(ctx)
+}

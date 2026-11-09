@@ -947,3 +947,111 @@ func (q queries) vacuumInto(ctx context.Context, dest string) error {
 	_, err := q.db.ExecContext(ctx, "VACUUM INTO "+literal)
 	return err
 }
+
+// ---- schedules -------------------------------------------------------------
+
+// scheduleNameTaken says whether another schedule than except has the name.
+func (q queries) scheduleNameTaken(ctx context.Context, name string, except int64) (bool, error) {
+	var n int
+	err := q.db.QueryRowContext(ctx, `SELECT count(*) FROM schedules WHERE name = ? AND id <> ?`, name, except).Scan(&n)
+	return n > 0, err
+}
+
+func (q queries) scheduleExists(ctx context.Context, id int64) (bool, error) {
+	var n int
+	err := q.db.QueryRowContext(ctx, `SELECT count(*) FROM schedules WHERE id = ?`, id).Scan(&n)
+	return n > 0, err
+}
+
+func (q queries) insertSchedule(ctx context.Context, ns NewSchedule) (int64, error) {
+	res, err := q.db.ExecContext(ctx,
+		`INSERT INTO schedules (name, every, unit, start_date, payee, description) VALUES (?, ?, ?, ?, ?, ?)`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), ns.Payee, ns.Description)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func (q queries) updateSchedule(ctx context.Context, id int64, ns NewSchedule) error {
+	_, err := q.db.ExecContext(ctx,
+		`UPDATE schedules SET name = ?, every = ?, unit = ?, start_date = ?, payee = ?, description = ? WHERE id = ?`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), ns.Payee, ns.Description, id)
+	return err
+}
+
+func (q queries) insertSchedulePostings(ctx context.Context, id int64, postings []ledger.Posting, accountIDs []int64) error {
+	for i, p := range postings {
+		if _, err := q.db.ExecContext(ctx,
+			`INSERT INTO schedule_postings (schedule_id, position, account_id, amount, currency) VALUES (?, ?, ?, ?, ?)`,
+			id, i, accountIDs[i], p.Amount.Minor, string(p.Amount.Currency)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (q queries) deleteSchedulePostings(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM schedule_postings WHERE schedule_id = ?`, id)
+	return err
+}
+
+func (q queries) deleteSchedule(ctx context.Context, id int64) (bool, error) {
+	if err := q.deleteSchedulePostings(ctx, id); err != nil {
+		return false, err
+	}
+	res, err := q.db.ExecContext(ctx, `DELETE FROM schedules WHERE id = ?`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT id, name, every, unit, start_date, payee, description FROM schedules ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Schedule
+	byID := map[int64]int{}
+	for rows.Next() {
+		var (
+			s    Schedule
+			unit string
+		)
+		if err := rows.Scan(&s.ID, &s.Name, &s.Every, &unit, &s.Start, &s.Payee, &s.Description); err != nil {
+			return nil, err
+		}
+		s.Unit = ScheduleUnit(unit)
+		byID[s.ID] = len(out)
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	prows, err := q.db.QueryContext(ctx,
+		`SELECT p.schedule_id, a.name, p.amount, p.currency
+		 FROM schedule_postings p JOIN accounts a ON a.id = p.account_id
+		 ORDER BY p.schedule_id, p.position`)
+	if err != nil {
+		return nil, err
+	}
+	defer prows.Close()
+	for prows.Next() {
+		var (
+			id  int64
+			p   PostingView
+			cur string
+		)
+		if err := prows.Scan(&id, &p.Account, &p.Amount.Minor, &cur); err != nil {
+			return nil, err
+		}
+		p.Amount.Currency = ledger.Currency(cur)
+		i := byID[id]
+		out[i].Postings = append(out[i].Postings, p)
+	}
+	return out, prows.Err()
+}
