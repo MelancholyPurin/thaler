@@ -113,6 +113,19 @@ type Service interface {
 	// those `to` lacks and keeps the ones it has, so that nothing is overwritten.
 	CopyBudgetTargets(ctx context.Context, from, to string) (CopiedTargets, error)
 
+	// Schedules: transactions that repeat. A schedule is a template and a rhythm;
+	// defining one posts nothing (what is due, and asking first, come with REC-2
+	// and REC-3).
+	// CreateSchedule stores a schedule and returns its id. A category it names that
+	// does not exist yet is created, as for a transaction.
+	CreateSchedule(ctx context.Context, ns NewSchedule) (int64, error)
+	// ReplaceSchedule rewrites the schedule id in place.
+	ReplaceSchedule(ctx context.Context, id int64, ns NewSchedule) error
+	// DeleteSchedule removes a schedule; the transactions it was confirmed into stay.
+	DeleteSchedule(ctx context.Context, id int64) error
+	// Schedules lists them by name.
+	Schedules(ctx context.Context) ([]Schedule, error)
+
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
 	Check(ctx context.Context) ([]string, error)
@@ -441,6 +454,41 @@ type BudgetTarget struct {
 type BudgetRollover struct {
 	Category string
 	From     string
+}
+
+// ScheduleUnit is what a schedule counts in.
+type ScheduleUnit string
+
+const (
+	EveryWeek  ScheduleUnit = "week"
+	EveryMonth ScheduleUnit = "month"
+	EveryYear  ScheduleUnit = "year"
+)
+
+// NewSchedule is the input for defining a schedule: the transaction that repeats
+// (Payee, Description and Postings, as for NewTransaction) every Every Units,
+// the first time on Start. A monthly or yearly schedule keeps Start's day of the
+// month, and falls on the last day of a month that is shorter.
+type NewSchedule struct {
+	Name        string // unique, whatever the case
+	Every       int    // 1 or more: 2 with EveryWeek is every other week
+	Unit        ScheduleUnit
+	Start       time.Time
+	Payee       string
+	Description string
+	Postings    []ledger.Posting
+}
+
+// Schedule is a stored schedule.
+type Schedule struct {
+	ID          int64
+	Name        string
+	Every       int
+	Unit        ScheduleUnit
+	Start       string // YYYY-MM-DD
+	Payee       string
+	Description string
+	Postings    []PostingView
 }
 
 // CopiedTargets is what CopyBudgetTargets did: the targets it added, and how many
