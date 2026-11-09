@@ -58,6 +58,8 @@ thaler cli account add Assets:Sparkasse --currency EUR
 thaler cli import --account Assets:Sparkasse --dry-run export.csv   # preview, writes nothing
 thaler cli import --account Assets:Sparkasse export.csv
 thaler cli balance
+thaler cli budget set Expenses:Groceries 400   # a monthly target
+thaler cli budget                              # this month against its targets
 thaler cli list -a Expenses:Uncategorized
 
 thaler                         # no arguments: the interactive UI
@@ -252,6 +254,7 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 | `thaler cli recategorize [--dry-run]` | apply the config.toml rules to transactions still uncategorized |
 | `thaler cli category set ID CATEGORY` | move one transaction to another category (created if new) |
 | `thaler cli balance [--as-of D] [--all]` | balances and net worth |
+| `thaler cli budget [-m YYYY-MM]` / `thaler cli budget set CATEGORY AMOUNT [-m M]` / `thaler cli budget clear CATEGORY [-m M]` | a month's spending against its targets (spent, target, carried in, left), and setting or clearing a category's target; the month defaults to this one, amounts are in the base currency |
 | `thaler cli currency [set CODE]`, `thaler cli rate set/list` | base currency and exchange rates |
 | `thaler cli backup [DEST] [--encrypt \| --passphrase-file F]` | consistent snapshot via `VACUUM INTO`, checked after it is written; **not encrypted** unless `--encrypt` (asks for a passphrase twice) or `--passphrase-file` (first line of a file, for scripts) is given, which writes an age file ending in `.age`; also `S` in the interface |
 | `thaler cli decrypt SRC [DEST] [--passphrase-file F]` | open an encrypted backup as a plain database file, and check it |

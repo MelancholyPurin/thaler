@@ -207,7 +207,7 @@ The scriptable surface (`thaler cli ...`), for cron and one-off jobs.
 - [x] `CLI-9` Verify the ledger is consistent
 - [ ] `CLI-10` Machine-readable output for every listing
 - [ ] `CLI-11` Export transactions as CSV
-- [ ] `CLI-12` Set and show budget targets
+- [x] `CLI-12` Set and show budget targets (`thaler cli budget`, `budget set`, `budget clear`; switching carry-over on and copying a month's targets stay in the interface)
 - [ ] `CLI-13` Manage schedules and confirm what is due
 - [ ] `CLI-14` The reports of `RPT` (reports and projections), as commands
 - ~~`CLI-15` Help and messages in English, Spanish and German, following the language setting~~ (dropped: `thaler cli` is for scripts and for people who read English; everything it prints stays English, whatever the language setting)
