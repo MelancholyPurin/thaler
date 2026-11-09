@@ -127,9 +127,17 @@ type Service interface {
 	Schedules(ctx context.Context) ([]Schedule, error)
 	// Due lists the occurrences of every schedule from its start date up to and
 	// including upTo (YYYY-MM-DD), oldest first, a schedule's name breaking a tie
-	// on the same day. It only proposes: nothing is posted. Once occurrences can
-	// be confirmed or skipped (REC-3) the ones dealt with leave the list.
+	// on the same day. It only proposes: nothing is posted. An occurrence that was
+	// confirmed or skipped is not listed again.
 	Due(ctx context.Context, upTo string) ([]Occurrence, error)
+	// ConfirmOccurrence books the occurrence of schedule id on date as a transaction
+	// dated that day, and returns it. postings, when given, replace the template's
+	// (to change an amount); they must balance. Only a date Due lists today can be
+	// confirmed. Deleting the transaction later makes the occurrence due again.
+	ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (AddResult, error)
+	// SkipOccurrence passes on the occurrence: nothing is booked, and it is not
+	// listed as due again.
+	SkipOccurrence(ctx context.Context, id int64, date string) error
 
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.

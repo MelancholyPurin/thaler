@@ -1536,17 +1536,116 @@ func (s *Local) Due(ctx context.Context, upTo string) ([]Occurrence, error) {
 	if err != nil {
 		return nil, err
 	}
+	done, err := s.repo.queries().handledOccurrences(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []Occurrence
 	for _, sch := range schedules {
-		start, err := ledger.ParseDate(sch.Start)
+		dates, err := scheduleDates(sch, end)
 		if err != nil {
 			return nil, err
 		}
-		for _, d := range occurrencesUpTo(start, sch.Every, sch.Unit, end) {
-			out = append(out, Occurrence{Schedule: sch, Date: d.Format(ledger.DateLayout)})
+		for _, d := range dates {
+			if !done[handled{sch.ID, d}] {
+				out = append(out, Occurrence{Schedule: sch, Date: d})
+			}
 		}
 	}
 	// Schedules come by name, and the sort is stable: a tie on the date keeps that order.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Date < out[j].Date })
 	return out, nil
+}
+
+// scheduleDates is the dates of sch up to and including end, as stored.
+func scheduleDates(sch Schedule, end time.Time) ([]string, error) {
+	start, err := ledger.ParseDate(sch.Start)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, d := range occurrencesUpTo(start, sch.Every, sch.Unit, end) {
+		out = append(out, d.Format(ledger.DateLayout))
+	}
+	return out, nil
+}
+
+// answerable finds the occurrence of schedule id on date and checks that it can
+// be answered now: that it is one of the schedule's dates, is not in the future,
+// and has not been answered. date is returned as stored.
+func (s *Local) answerable(ctx context.Context, q queries, id int64, date string) (Schedule, string, error) {
+	d, err := ledger.ParseDate(date)
+	if err != nil {
+		return Schedule{}, "", err
+	}
+	date = d.Format(ledger.DateLayout)
+	all, err := q.schedules(ctx)
+	if err != nil {
+		return Schedule{}, "", err
+	}
+	for _, sch := range all {
+		if sch.ID != id {
+			continue
+		}
+		dates, err := scheduleDates(sch, d)
+		if err != nil {
+			return Schedule{}, "", err
+		}
+		args := map[string]any{"Name": sch.Name, "Date": date}
+		switch {
+		case len(dates) == 0 || dates[len(dates)-1] != date:
+			return Schedule{}, "", coded.New("occurrence_not_on_schedule", args)
+		case date > s.today():
+			return Schedule{}, "", coded.New("occurrence_not_due", args)
+		}
+		done, err := q.handledOccurrences(ctx)
+		if err != nil {
+			return Schedule{}, "", err
+		}
+		if done[handled{id, date}] {
+			return Schedule{}, "", coded.New("occurrence_done", args)
+		}
+		return sch, date, nil
+	}
+	return Schedule{}, "", coded.New("schedule_not_found", map[string]any{"ID": id})
+}
+
+// ConfirmOccurrence books one occurrence.
+func (s *Local) ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (AddResult, error) {
+	var res AddResult
+	err := s.repo.inTx(ctx, func(q queries) error {
+		sch, date, err := s.answerable(ctx, q, id, date)
+		if err != nil {
+			return err
+		}
+		when, err := ledger.ParseDate(date)
+		if err != nil {
+			return err
+		}
+		if postings == nil {
+			for _, p := range sch.Postings {
+				postings = append(postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
+			}
+		}
+		nt := NewTransaction{Date: when, Payee: sch.Payee, Description: sch.Description, Postings: postings}
+		if res.ID, err = storeTransaction(ctx, q, nt, 0, &res.Created); err != nil {
+			return err
+		}
+		return q.putOccurrence(ctx, handled{id, date}, res.ID)
+	})
+	if err != nil {
+		return AddResult{}, err
+	}
+	return res, nil
+}
+
+// SkipOccurrence passes on one occurrence.
+func (s *Local) SkipOccurrence(ctx context.Context, id int64, date string) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		_, date, err := s.answerable(ctx, q, id, date)
+		if err != nil {
+			return err
+		}
+		return q.putOccurrence(ctx, handled{id, date}, 0)
+	})
 }
