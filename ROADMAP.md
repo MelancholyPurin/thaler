@@ -277,7 +277,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TBU-6` Open a category to see the transactions behind its number
 - [ ] `TBU-7` Collapse and expand category groups
 - [x] `TBU-8` A "left this month" figure on the Home panel
-- [ ] `TBU-9` Plan income in the target popup, and see planned income, the targets and what is still unassigned
+- [x] `TBU-9` Plan income in the target popup, and see planned income, the targets and what is still unassigned (income categories follow the spending ones in the popup; the Budget shows planned income, unassigned, and each plan against what came in)
 
 ### TRP: Reports tab
 
