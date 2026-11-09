@@ -1055,3 +1055,40 @@ func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 	}
 	return out, prows.Err()
 }
+
+// handledOccurrences is the set of occurrences confirmed or skipped, keyed by
+// schedule and date.
+func (q queries) handledOccurrences(ctx context.Context) (map[handled]bool, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT schedule_id, date FROM schedule_occurrences`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[handled]bool{}
+	for rows.Next() {
+		var h handled
+		if err := rows.Scan(&h.schedule, &h.date); err != nil {
+			return nil, err
+		}
+		out[h] = true
+	}
+	return out, rows.Err()
+}
+
+// handled names an occurrence.
+type handled struct {
+	schedule int64
+	date     string
+}
+
+// putOccurrence records the answer to an occurrence; txID is 0 for a skip.
+func (q queries) putOccurrence(ctx context.Context, h handled, txID int64) error {
+	status, tx := "skipped", any(nil)
+	if txID != 0 {
+		status, tx = "posted", txID
+	}
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO schedule_occurrences (schedule_id, date, status, transaction_id) VALUES (?, ?, ?, ?)`,
+		h.schedule, h.date, status, tx)
+	return err
+}

@@ -453,3 +453,245 @@ func Test_Due(t *testing.T) {
 		})
 	}
 }
+
+// dueDates is what Due lists, as "date name" lines.
+func dueDates(t *testing.T, st *Local, upTo string) []string {
+	t.Helper()
+	due, err := st.Due(t.Context(), upTo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, o := range due {
+		out = append(out, o.Date+" "+o.Schedule.Name)
+	}
+	return out
+}
+
+func Test_ConfirmOccurrence(t *testing.T) {
+	tcs := []struct {
+		name     string
+		setup    []given
+		id       int64
+		date     string
+		postings []ledger.Posting
+		want     []TxView // every transaction afterwards
+		wantDue  []string // up to 2027-01-31
+		wantErr  string
+	}{
+		{
+			name: "the template is booked on the day it falls",
+			id:   1, date: "2026-11-28",
+			want:    []TxView{{ID: 1, Date: "2026-11-28", Payee: "Landlord", Description: "Rent", Postings: []PostingView{{"Assets:Bank", eur(-90000)}, {"Expenses:Rent", eur(90000)}}}},
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "an older occurrence is booked on its own date",
+			id:   1, date: "2026-12-28", setup: []given{today("2027-01-05")},
+			want:    []TxView{{ID: 1, Date: "2026-12-28", Payee: "Landlord", Description: "Rent", Postings: []PostingView{{"Assets:Bank", eur(-90000)}, {"Expenses:Rent", eur(90000)}}}},
+			wantDue: []string{"2026-11-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "another amount",
+			id:   1, date: "2026-11-28",
+			postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-95000)}, {Account: "Expenses:Rent", Amount: eur(95000)}},
+			want:     []TxView{{ID: 1, Date: "2026-11-28", Payee: "Landlord", Description: "Rent", Postings: []PostingView{{"Assets:Bank", eur(-95000)}, {"Expenses:Rent", eur(95000)}}}},
+			wantDue:  []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "the date typed the German way",
+			id:   1, date: "28.11.2026",
+			want:    []TxView{{ID: 1, Date: "2026-11-28", Payee: "Landlord", Description: "Rent", Postings: []PostingView{{"Assets:Bank", eur(-90000)}, {"Expenses:Rent", eur(90000)}}}},
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "not today yet",
+			id:   1, date: "2026-12-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `2026-12-28 of "Rent" is not due yet`,
+		},
+		{
+			name: "a day the schedule does not fall on",
+			id:   1, date: "2026-11-27",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `"Rent" does not fall on 2026-11-27`,
+		},
+		{
+			name: "before the schedule starts",
+			id:   1, date: "2026-10-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `"Rent" does not fall on 2026-10-28`,
+		},
+		{
+			name: "one that was confirmed already",
+			id:   1, date: "2026-11-28", setup: []given{confirmed(1, "2026-11-28")},
+			want:    []TxView{{ID: 1, Date: "2026-11-28", Payee: "Landlord", Description: "Rent", Postings: []PostingView{{"Assets:Bank", eur(-90000)}, {"Expenses:Rent", eur(90000)}}}},
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `2026-11-28 of "Rent" was already confirmed or skipped`,
+		},
+		{
+			name: "one that was skipped",
+			id:   1, date: "2026-11-28", setup: []given{skipped(1, "2026-11-28")},
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `2026-11-28 of "Rent" was already confirmed or skipped`,
+		},
+		{
+			name: "amounts that do not balance book nothing and leave it due",
+			id:   1, date: "2026-11-28",
+			postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-95000)}, {Account: "Expenses:Rent", Amount: eur(90000)}},
+			wantDue:  []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr:  "postings do not balance: off by EUR -50.00",
+		},
+		{
+			name: "a schedule that does not exist",
+			id:   9, date: "2026-11-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: "schedule 9 does not exist",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			steps := []given{accounts("Assets:Bank EUR"), schedule(rent()), today("2026-12-01")}
+			st := newLedger(t, append(steps, tc.setup...)...)
+
+			// when
+			res, err := st.ConfirmOccurrence(t.Context(), tc.id, tc.date, tc.postings)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			txs, lerr := st.ListTransactions(t.Context(), TxFilter{})
+			if lerr != nil {
+				t.Fatal(lerr)
+			}
+			if diff := cmp.Diff(tc.want, txs, equalEmpty); diff != "" {
+				t.Errorf("transactions mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2027-01-31"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			if err == nil && res.ID == 0 {
+				t.Error("no transaction id returned")
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func Test_SkipOccurrence(t *testing.T) {
+	tcs := []struct {
+		name    string
+		setup   []given
+		id      int64
+		date    string
+		wantDue []string // up to 2027-01-31
+		wantErr string
+	}{
+		{name: "it is not listed again", id: 1, date: "2026-11-28", wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"}},
+		{name: "the others stay due", id: 1, date: "2026-12-28", setup: []given{today("2026-12-30")}, wantDue: []string{"2026-11-28 Rent", "2027-01-28 Rent"}},
+		{name: "not today yet", id: 1, date: "2026-12-28", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"}, wantErr: `2026-12-28 of "Rent" is not due yet`},
+		{name: "a day the schedule does not fall on", id: 1, date: "2026-11-29", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"}, wantErr: `"Rent" does not fall on 2026-11-29`},
+		{name: "twice", id: 1, date: "2026-11-28", setup: []given{skipped(1, "2026-11-28")}, wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"}, wantErr: `2026-11-28 of "Rent" was already confirmed or skipped`},
+		{name: "a schedule that does not exist", id: 9, date: "2026-11-28", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"}, wantErr: "schedule 9 does not exist"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			steps := []given{accounts("Assets:Bank EUR"), schedule(rent()), today("2026-12-01")}
+			st := newLedger(t, append(steps, tc.setup...)...)
+
+			// when
+			err := st.SkipOccurrence(t.Context(), tc.id, tc.date)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2027-01-31")); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			txs, lerr := st.ListTransactions(t.Context(), TxFilter{})
+			if lerr != nil {
+				t.Fatal(lerr)
+			}
+			if diff := cmp.Diff([]TxView(nil), txs, equalEmpty); diff != "" {
+				t.Errorf("a skip must book nothing (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ConfirmOccurrence_whatBecomesOfIt(t *testing.T) {
+	tcs := []struct {
+		name       string
+		act        func(t *testing.T, st *Local)
+		wantDue    []string // up to 2026-12-31
+		wantBooked int
+	}{
+		{
+			name:       "deleting the transaction makes it due again",
+			act:        func(t *testing.T, st *Local) { check(t, st.DeleteTransaction(t.Context(), 1)) },
+			wantDue:    []string{"2026-11-28 Rent", "2026-12-28 Rent"},
+			wantBooked: 0,
+		},
+		{
+			name: "editing the transaction leaves it answered",
+			act: func(t *testing.T, st *Local) {
+				nt := NewTransaction{Date: day("2026-11-30"), Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-1)}, {Account: "Expenses:Rent", Amount: eur(1)}}}
+				_, err := st.ReplaceTransaction(t.Context(), 1, nt)
+				check(t, err)
+			},
+			wantDue:    []string{"2026-12-28 Rent"},
+			wantBooked: 1,
+		},
+		{
+			name:       "deleting the schedule keeps what it booked",
+			act:        func(t *testing.T, st *Local) { check(t, st.DeleteSchedule(t.Context(), 1)) },
+			wantDue:    nil,
+			wantBooked: 1,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR"), schedule(rent()), today("2026-12-31"), confirmed(1, "2026-11-28"))
+
+			// when
+			tc.act(t, st)
+
+			// then
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2026-12-31"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			txs, err := st.ListTransactions(t.Context(), TxFilter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.wantBooked, len(txs)); diff != "" {
+				t.Errorf("booked mismatch (-want +got):\n%s", diff)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func check(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// confirmed and skipped answer an occurrence in a ledger.
+func confirmed(id int64, date string) given {
+	return func(t *testing.T, st *Local) {
+		t.Helper()
+		_, err := st.ConfirmOccurrence(t.Context(), id, date, nil)
+		check(t, err)
+	}
+}
+
+func skipped(id int64, date string) given {
+	return func(t *testing.T, st *Local) {
+		t.Helper()
+		check(t, st.SkipOccurrence(t.Context(), id, date))
+	}
+}
