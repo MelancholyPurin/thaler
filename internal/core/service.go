@@ -953,7 +953,6 @@ func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetRepo
 	if err != nil {
 		return BudgetReport{}, err
 	}
-	rateDate := s.rateDate(req.RateDate, req.To)
 
 	b := BudgetReport{
 		Base:         base,
@@ -963,7 +962,7 @@ func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetRepo
 	byName := make(map[string]*BudgetLine)
 	missing := make(map[ledger.Currency]bool)
 	for _, t := range totals {
-		amount, ok := book.Convert(t.Amount, base, rateDate)
+		amount, ok := s.convertOn(book, t.Amount, base, req.RateDate, t.date, req.To)
 		if !ok {
 			missing[t.Amount.Currency] = true
 			continue
@@ -1000,6 +999,18 @@ func (s *Local) BudgetReport(ctx context.Context, req BudgetRequest) (BudgetRepo
 	}
 	b.Missing = sortedCurrencies(missing)
 	return b, nil
+}
+
+// convertOn converts an amount that was booked on day at the rate of that day, so that
+// what a transaction counts for does not change when a later rate is entered. A day
+// before the first rate of its currency falls back to the rate of fallback (the end
+// of the period), which is how a rate entered today still counts the days before it.
+// asked caps both, as in rateDate.
+func (s *Local) convertOn(book *ledger.RateBook, m ledger.Money, base ledger.Currency, asked, day, fallback string) (ledger.Money, bool) {
+	if out, ok := book.Convert(m, base, s.rateDate(asked, day)); ok {
+		return out, true
+	}
+	return book.Convert(m, base, s.rateDate(asked, fallback))
 }
 
 // rateDate is the day rates are read on: the one asked for (today when empty), but
@@ -1118,14 +1129,24 @@ func (s *Local) carriedIn(ctx context.Context, req MonthBudgetRequest, book *led
 		return nil, err
 	}
 	out := make(map[string]ledger.Money)
-	add := func(rows []monthlyAmount, sign int64) {
+	// A target is converted at the rates of the end of its month, spending at those of
+	// the day it was made (the end of its month when its currency has no rate yet).
+	add := func(rows []monthlyAmount, sign int64, daily bool) {
 		for _, r := range rows {
-			first, err := time.Parse(monthLayout, r.month)
+			month := r.month
+			if daily && len(month) >= len(monthLayout) {
+				month = month[:len(monthLayout)]
+			}
+			first, err := time.Parse(monthLayout, month)
 			if err != nil { // the database holds no such month: GLOB and substr(date) see to it
 				continue
 			}
-			rateDate := s.rateDate(req.RateDate, first.AddDate(0, 1, -1).Format(ledger.DateLayout))
-			amount, ok := book.Convert(r.amount, base, rateDate)
+			monthEnd := first.AddDate(0, 1, -1).Format(ledger.DateLayout)
+			day := monthEnd
+			if daily {
+				day = r.month
+			}
+			amount, ok := s.convertOn(book, r.amount, base, req.RateDate, day, monthEnd)
 			if !ok {
 				missing[r.amount.Currency] = true
 				continue
@@ -1136,8 +1157,8 @@ func (s *Local) carriedIn(ctx context.Context, req MonthBudgetRequest, book *led
 			out[r.category] = sum
 		}
 	}
-	add(targeted, 1)
-	add(spent, -1)
+	add(targeted, 1, false)
+	add(spent, -1, true)
 	return out, nil
 }
 

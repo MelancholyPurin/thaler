@@ -135,7 +135,7 @@ Targets per category, and what is left of them.
 - ~~`BUD-5` Start a month from the previous month's targets~~ (folded into `TBU-5`)
 - [ ] `BUD-6` Planned income against targets, and what is still unassigned
 - [ ] `BUD-7` Group categories (Housing, Food) with a target and totals for the group
-- [ ] `BUD-8` Spending in other currencies counted against base-currency targets
+- [x] `BUD-8` Spending in other currencies counted against base-currency targets (each amount is converted at the rate of the day it was booked, so a later rate leaves counted months alone; a day before the first rate takes the rate at the end of the period)
 
 ### REC: Recurring transactions
 

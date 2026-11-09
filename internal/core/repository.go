@@ -397,21 +397,45 @@ func (q queries) balances(ctx context.Context, asOf string) ([]Balance, error) {
 		ORDER BY a.name, p.currency`, asOf, asOf)
 }
 
-// categoryTotals sums the postings on Income and Expenses accounts per account
-// and currency, for transactions dated from..to (inclusive; an empty bound is
-// open).
-func (q queries) categoryTotals(ctx context.Context, from, to string) ([]Balance, error) {
-	return q.sums(ctx, `
-		SELECT a.name, a.type, p.currency, SUM(p.amount)
+// datedBalance is a Balance for one day.
+type datedBalance struct {
+	Balance
+	date string
+}
+
+// categoryTotals sums the postings on Income and Expenses accounts per account,
+// currency and day, for transactions dated from..to (inclusive; an empty bound is
+// open). The day is there so that each sum can be converted at the rate of its own
+// day.
+func (q queries) categoryTotals(ctx context.Context, from, to string) ([]datedBalance, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT a.name, a.type, p.currency, t.date, SUM(p.amount)
 		FROM postings p
 		JOIN accounts a ON a.id = p.account_id
 		JOIN transactions t ON t.id = p.transaction_id
 		WHERE a.type IN ('Income', 'Expenses')
 		  AND (? = '' OR t.date >= ?)
 		  AND (? = '' OR t.date <= ?)
-		GROUP BY a.id, p.currency
+		GROUP BY a.id, p.currency, t.date
 		HAVING SUM(p.amount) <> 0
-		ORDER BY a.name, p.currency`, from, from, to, to)
+		ORDER BY a.name, p.currency, t.date`, from, from, to, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []datedBalance
+	for rows.Next() {
+		var (
+			d        datedBalance
+			typ, cur string
+		)
+		if err := rows.Scan(&d.Account, &typ, &cur, &d.date, &d.Amount.Minor); err != nil {
+			return nil, err
+		}
+		d.Type, d.Amount.Currency = ledger.AccountType(typ), ledger.Currency(cur)
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 func (q queries) sums(ctx context.Context, query string, args ...any) ([]Balance, error) {
@@ -537,24 +561,25 @@ func (q queries) budgetRollovers(ctx context.Context) ([]BudgetRollover, error) 
 	return out, rows.Err()
 }
 
-// monthlyAmount is a sum for one category in one month, in the currency it was kept in.
+// monthlyAmount is a sum for one category in one month (a target) or on one day
+// (spending), in the currency it was kept in.
 type monthlyAmount struct {
-	category, month string
+	category, month string // month is YYYY-MM for a target, YYYY-MM-DD for spending
 	amount          ledger.Money
 }
 
-// carriedSpending is what the categories that carry over spent in each month from
+// carriedSpending is what the categories that carry over spent on each day from
 // the month they started to the one before month, per currency.
 func (q queries) carriedSpending(ctx context.Context, month string) ([]monthlyAmount, error) {
 	return q.monthlyAmounts(ctx, `
-		SELECT a.name, substr(t.date, 1, 7), p.currency, SUM(p.amount)
+		SELECT a.name, t.date, p.currency, SUM(p.amount)
 		FROM postings p
 		JOIN accounts a ON a.id = p.account_id
 		JOIN transactions t ON t.id = p.transaction_id
 		JOIN budget_rollover r ON r.account_id = a.id
 		WHERE t.date >= r.from_month || '-01' AND substr(t.date, 1, 7) < ?
-		GROUP BY a.id, substr(t.date, 1, 7), p.currency
-		ORDER BY a.name, substr(t.date, 1, 7), p.currency`, month)
+		GROUP BY a.id, t.date, p.currency
+		ORDER BY a.name, t.date, p.currency`, month)
 }
 
 // carriedTargets is the targets of the categories that carry over, for each month
