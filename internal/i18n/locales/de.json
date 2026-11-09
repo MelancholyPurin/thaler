@@ -547,6 +547,7 @@
   "restore_in_place_unopenable": "das Backup ist an ihrem Platz, lässt sich aber nicht öffnen",
   "invalid_month": "ungültiger Monat \"{{.Text}}\": verwende YYYY-MM",
   "target_not_expense": "{{.Name}} ist keine Ausgabenkategorie: nur eine Expenses-Kategorie, außer Uncategorized, kann ein Ziel haben oder übertragen",
+  "target_not_category": "{{.Name}} ist keine Income- oder Expenses-Kategorie: nur diese, außer Uncategorized, können ein Ziel haben",
   "target_not_base_currency": "ein Ziel gilt in der Basiswährung ({{.Base}}), nicht in {{.Currency}}",
   "budget_target": "Ziel",
   "budget_left": "Übrig",
