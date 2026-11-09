@@ -1494,3 +1494,59 @@ func (s *Local) DeleteSchedule(ctx context.Context, id int64) error {
 func (s *Local) Schedules(ctx context.Context) ([]Schedule, error) {
 	return s.repo.queries().schedules(ctx)
 }
+
+// occurrenceOn is the k-th date (0 is the start) of a schedule that repeats every
+// `every` units from start. It counts from start each time rather than from the
+// previous date, so a schedule that starts on the 31st falls on the 28th in
+// February and is back on the 31st in March: shortening a month once never moves
+// the days after it.
+func occurrenceOn(start time.Time, every int, unit ScheduleUnit, k int) time.Time {
+	if unit == EveryWeek {
+		return start.AddDate(0, 0, 7*every*k)
+	}
+	months := every * k
+	if unit == EveryYear {
+		months *= 12
+	}
+	// Day 1 of the right month first: time.Date would roll 31 February into March.
+	first := time.Date(start.Year(), start.Month()+time.Month(months), 1, 0, 0, 0, 0, time.UTC)
+	last := first.AddDate(0, 1, -1).Day()
+	return time.Date(first.Year(), first.Month(), min(start.Day(), last), 0, 0, 0, 0, time.UTC)
+}
+
+// occurrencesUpTo lists the dates from start through upTo, both included.
+func occurrencesUpTo(start time.Time, every int, unit ScheduleUnit, upTo time.Time) []time.Time {
+	var out []time.Time
+	for k := 0; ; k++ {
+		d := occurrenceOn(start, every, unit, k)
+		if d.After(upTo) {
+			return out
+		}
+		out = append(out, d)
+	}
+}
+
+// Due lists the occurrences up to and including upTo.
+func (s *Local) Due(ctx context.Context, upTo string) ([]Occurrence, error) {
+	end, err := ledger.ParseDate(upTo)
+	if err != nil {
+		return nil, err
+	}
+	schedules, err := s.repo.queries().schedules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []Occurrence
+	for _, sch := range schedules {
+		start, err := ledger.ParseDate(sch.Start)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range occurrencesUpTo(start, sch.Every, sch.Unit, end) {
+			out = append(out, Occurrence{Schedule: sch, Date: d.Format(ledger.DateLayout)})
+		}
+	}
+	// Schedules come by name, and the sort is stable: a tie on the date keeps that order.
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Date < out[j].Date })
+	return out, nil
+}

@@ -349,3 +349,107 @@ func schedule(ns NewSchedule) given {
 		}
 	}
 }
+
+func Test_occurrencesUpTo(t *testing.T) {
+	tcs := []struct {
+		name  string
+		start string
+		every int
+		unit  ScheduleUnit
+		upTo  string
+		want  []string
+	}{
+		{name: "monthly on the 28th", start: "2026-11-28", every: 1, unit: EveryMonth, upTo: "2027-02-28", want: []string{"2026-11-28", "2026-12-28", "2027-01-28", "2027-02-28"}},
+		{name: "the day before the last one is not enough", start: "2026-11-28", every: 1, unit: EveryMonth, upTo: "2027-02-27", want: []string{"2026-11-28", "2026-12-28", "2027-01-28"}},
+		{name: "the start day itself", start: "2026-11-28", every: 1, unit: EveryMonth, upTo: "2026-11-28", want: []string{"2026-11-28"}},
+		{name: "before the start", start: "2026-11-28", every: 1, unit: EveryMonth, upTo: "2026-11-27", want: nil},
+		{name: "the 31st shortens in short months and comes back", start: "2026-01-31", every: 1, unit: EveryMonth, upTo: "2026-05-31", want: []string{"2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31"}},
+		{name: "the 31st in a leap year", start: "2028-01-31", every: 1, unit: EveryMonth, upTo: "2028-03-31", want: []string{"2028-01-31", "2028-02-29", "2028-03-31"}},
+		{name: "the 30th", start: "2026-01-30", every: 1, unit: EveryMonth, upTo: "2026-03-30", want: []string{"2026-01-30", "2026-02-28", "2026-03-30"}},
+		{name: "every 3 months across a year end", start: "2026-11-15", every: 3, unit: EveryMonth, upTo: "2027-11-15", want: []string{"2026-11-15", "2027-02-15", "2027-05-15", "2027-08-15", "2027-11-15"}},
+		{name: "every 2 weeks", start: "2026-11-02", every: 2, unit: EveryWeek, upTo: "2026-12-14", want: []string{"2026-11-02", "2026-11-16", "2026-11-30", "2026-12-14"}},
+		{name: "weekly over a month end", start: "2026-10-28", every: 1, unit: EveryWeek, upTo: "2026-11-11", want: []string{"2026-10-28", "2026-11-04", "2026-11-11"}},
+		{name: "yearly", start: "2026-03-10", every: 1, unit: EveryYear, upTo: "2028-12-31", want: []string{"2026-03-10", "2027-03-10", "2028-03-10"}},
+		{name: "yearly from 29 February", start: "2028-02-29", every: 1, unit: EveryYear, upTo: "2032-03-01", want: []string{"2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28", "2032-02-29"}},
+		{name: "every 2 years", start: "2026-06-01", every: 2, unit: EveryYear, upTo: "2030-06-01", want: []string{"2026-06-01", "2028-06-01", "2030-06-01"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			start, upTo := day(tc.start), day(tc.upTo)
+
+			// when
+			dates := occurrencesUpTo(start, tc.every, tc.unit, upTo)
+
+			// then
+			var got []string
+			for _, d := range dates {
+				got = append(got, d.Format(ledger.DateLayout))
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("dates mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Due(t *testing.T) {
+	named := func(name, start string, every int, unit ScheduleUnit) given {
+		ns := rent()
+		ns.Name, ns.Start, ns.Every, ns.Unit = name, day(start), every, unit
+		return schedule(ns)
+	}
+	view := func(id int64, name, start string, every int, unit ScheduleUnit) Schedule {
+		s := rentView(id)
+		s.Name, s.Start, s.Every, s.Unit = name, start, every, unit
+		return s
+	}
+	tcs := []struct {
+		name    string
+		setup   []given
+		upTo    string
+		want    []Occurrence
+		wantErr string
+	}{
+		{name: "no schedules", upTo: "2027-01-01"},
+		{
+			name:  "a schedule that has not started is not due",
+			setup: []given{named("Rent", "2026-12-28", 1, EveryMonth)},
+			upTo:  "2026-12-27",
+		},
+		{
+			name:  "oldest first, and a tie goes by name",
+			setup: []given{named("Rent", "2026-11-28", 1, EveryMonth), named("Gym", "2026-11-28", 1, EveryMonth), named("Bike", "2026-12-01", 1, EveryYear)},
+			upTo:  "2026-12-28",
+			want: []Occurrence{
+				{view(2, "Gym", "2026-11-28", 1, EveryMonth), "2026-11-28"},
+				{view(1, "Rent", "2026-11-28", 1, EveryMonth), "2026-11-28"},
+				{view(3, "Bike", "2026-12-01", 1, EveryYear), "2026-12-01"},
+				{view(2, "Gym", "2026-11-28", 1, EveryMonth), "2026-12-28"},
+				{view(1, "Rent", "2026-11-28", 1, EveryMonth), "2026-12-28"},
+			},
+		},
+		{
+			name:  "a date typed the German way",
+			setup: []given{named("Rent", "2026-11-28", 1, EveryMonth)},
+			upTo:  "28.11.2026",
+			want:  []Occurrence{{view(1, "Rent", "2026-11-28", 1, EveryMonth), "2026-11-28"}},
+		},
+		{name: "a date that is not one", upTo: "soon", wantErr: `invalid date "soon": use YYYY-MM-DD or DD.MM.YYYY`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR")}, tc.setup...)...)
+
+			// when
+			got, err := st.Due(t.Context(), tc.upTo)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
