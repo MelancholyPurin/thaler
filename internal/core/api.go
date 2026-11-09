@@ -93,7 +93,9 @@ type Service interface {
 
 	// Budget targets: what an expense category may spend in a month (YYYY-MM),
 	// in the base currency. A month keeps its own targets.
-	// SetBudgetTarget sets or replaces the target of category for month.
+	// SetBudgetTarget sets or replaces the target of category for month: what an
+	// Expenses category may spend, or what an Income category is planned to bring in
+	// (MonthBudget compares the plan with the targets). Uncategorized has none.
 	SetBudgetTarget(ctx context.Context, month, category string, amount ledger.Money) error
 	// ClearBudgetTarget removes it; a category with no target is left as it is.
 	ClearBudgetTarget(ctx context.Context, month, category string) error
@@ -494,9 +496,28 @@ type MonthBudget struct {
 	// spent, so that spending nobody planned for does not hide what is left of what
 	// was. That spending is UnbudgetedTotal, and SpentTotal is the two added.
 	LeftTotal, UnbudgetedTotal ledger.Money
+	// Income is the Income categories that brought something in or have a planned
+	// amount, the largest first. IncomeTotal is what came in, PlannedIncomeTotal the
+	// sum of the plans. Unassigned is PlannedIncomeTotal less TargetTotal: what is
+	// planned to come in and has no target to go to, negative when the targets add up
+	// to more than the plan. It is zero, and HasPlannedIncome false, when no income is
+	// planned, since there is then nothing to assign.
+	Income                          []MonthIncomeLine
+	IncomeTotal, PlannedIncomeTotal ledger.Money
+	HasPlannedIncome                bool
+	Unassigned                      ledger.Money
 	// Missing are the currencies with no exchange rate, so left out: spending in
 	// them, or a target set in a base currency that has since changed.
 	Missing []ledger.Currency
+}
+
+// MonthIncomeLine is one Income category in a month, in the base currency. Planned
+// is what a target said would come in, and is zero without one (HasPlan false).
+type MonthIncomeLine struct {
+	Name     string
+	Received ledger.Money
+	HasPlan  bool
+	Planned  ledger.Money
 }
 
 // BudgetReport is the answer to a BudgetRequest. Expenses are positive; income

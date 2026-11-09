@@ -30,7 +30,7 @@ func baseCurrency(c ledger.Currency) given {
 }
 
 func targetLedger() []given {
-	return []given{accounts("Assets:Bank EUR", "Expenses:Food", "Expenses:Rent", "Income:Salary", ledger.UncategorizedExpense)}
+	return []given{accounts("Assets:Bank EUR", "Expenses:Food", "Expenses:Rent", "Income:Salary", ledger.UncategorizedExpense, ledger.UncategorizedIncome)}
 }
 
 func Test_SetBudgetTarget(t *testing.T) {
@@ -80,17 +80,22 @@ func Test_SetBudgetTarget(t *testing.T) {
 		{
 			name:  "an account that is not a category",
 			month: "2026-10", category: "Assets:Bank", amount: eur(40000),
-			wantErr: "Assets:Bank is not a spending category: only an Expenses category, other than Uncategorized, can have a target or carry over",
+			wantErr: "Assets:Bank is not an Income or Expenses category: only those, other than Uncategorized, can have a target",
 		},
 		{
-			name:  "income has no target",
-			month: "2026-10", category: "Income:Salary", amount: eur(40000),
-			wantErr: "Income:Salary is not a spending category: only an Expenses category, other than Uncategorized, can have a target or carry over",
+			name:  "an income category is planned to bring something in",
+			month: "2026-10", category: "Income:Salary", amount: eur(300000),
+			want: []BudgetTarget{{"Income:Salary", eur(300000)}},
+		},
+		{
+			name:  "income that is not categorized has no target",
+			month: "2026-10", category: ledger.UncategorizedIncome, amount: eur(40000),
+			wantErr: "Income:Uncategorized is not an Income or Expenses category: only those, other than Uncategorized, can have a target",
 		},
 		{
 			name:  "uncategorized has no target",
 			month: "2026-10", category: ledger.UncategorizedExpense, amount: eur(40000),
-			wantErr: "Expenses:Uncategorized is not a spending category: only an Expenses category, other than Uncategorized, can have a target or carry over",
+			wantErr: "Expenses:Uncategorized is not an Income or Expenses category: only those, other than Uncategorized, can have a target",
 		},
 		{
 			name:  "zero",
@@ -161,6 +166,12 @@ func Test_ClearBudgetTarget(t *testing.T) {
 			name:  "one target goes, the others stay",
 			setup: both, month: "2026-10", category: "Expenses:Food",
 			wantMonth: []BudgetTarget{{"Expenses:Rent", eur(90000)}},
+			wantSep:   []BudgetTarget{{"Expenses:Food", eur(30000)}},
+		},
+		{
+			name:  "a planned income goes like a target",
+			setup: append([]given{target("2026-10", "Income:Salary", eur(300000))}, both...), month: "2026-10", category: "Income:Salary",
+			wantMonth: []BudgetTarget{{"Expenses:Food", eur(40000)}, {"Expenses:Rent", eur(90000)}},
 			wantSep:   []BudgetTarget{{"Expenses:Food", eur(30000)}},
 		},
 		{
@@ -278,7 +289,7 @@ func Test_MonthBudget(t *testing.T) {
 					{"Expenses:Fun", eur(1500), false, eur(0), false, eur(0), eur(0)},
 					{"Expenses:Rent", eur(0), true, eur(90000), false, eur(0), eur(90000)},
 				},
-				SpentTotal: eur(16500), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(115000), UnbudgetedTotal: eur(1500),
+				SpentTotal: eur(16500), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(115000), UnbudgetedTotal: eur(1500), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -293,7 +304,7 @@ func Test_MonthBudget(t *testing.T) {
 					{"Expenses:Food", eur(52500), true, eur(40000), false, eur(0), eur(-12500)},
 					{"Expenses:Rent", eur(0), true, eur(90000), false, eur(0), eur(90000)},
 				},
-				SpentTotal: eur(52500), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(77500), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(52500), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(77500), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -306,7 +317,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(300), true, eur(40000), false, eur(0), eur(39700)}},
-				SpentTotal: eur(300), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(39700), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(300), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(39700), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -316,13 +327,13 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(4000), false, eur(0), false, eur(0), eur(0)}},
-				SpentTotal: eur(4000), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(4000),
+				SpentTotal: eur(4000), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(4000), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
 			name: "a month with nothing in it",
 			req:  MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
-			want: MonthBudget{Month: "2026-10", Base: "EUR", SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(0)},
+			want: MonthBudget{Month: "2026-10", Base: "EUR", SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0)},
 		},
 		{
 			name: "equal spending is listed by name",
@@ -332,7 +343,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(100), false, eur(0), false, eur(0), eur(0)}, {"Expenses:Rent", eur(100), false, eur(0), false, eur(0), eur(0)}},
-				SpentTotal: eur(200), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(200),
+				SpentTotal: eur(200), TargetTotal: eur(0), CarriedTotal: eur(0), LeftTotal: eur(0), UnbudgetedTotal: eur(200), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -343,7 +354,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(9200), true, eur(40000), false, eur(0), eur(30800)}},
-				SpentTotal: eur(9200), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(30800), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(9200), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(30800), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -355,7 +366,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(18200), true, eur(40000), false, eur(0), eur(21800)}},
-				SpentTotal: eur(18200), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(21800), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(18200), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(21800), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -366,7 +377,76 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(9000), true, eur(40000), false, eur(0), eur(31000)}},
-				SpentTotal: eur(9000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(31000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(9000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(31000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
+			},
+		},
+		{
+			name: "planned income against the targets: what is still unassigned",
+			setup: with(accounts("Income:Bonus"), target("2026-10", "Income:Salary", eur(300000)), target("2026-10", "Income:Bonus", eur(20000)),
+				target("2026-10", "Expenses:Food", eur(40000)), target("2026-10", "Expenses:Rent", eur(90000)),
+				earning("2026-10-02", "Income:Salary", 280000), earning("2026-09-30", "Income:Salary", 999)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines: []MonthBudgetLine{
+					{"Expenses:Food", eur(0), true, eur(40000), false, eur(0), eur(40000)},
+					{"Expenses:Rent", eur(0), true, eur(90000), false, eur(0), eur(90000)},
+				},
+				SpentTotal: eur(0), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(130000), UnbudgetedTotal: eur(0),
+				Income:      []MonthIncomeLine{{"Income:Salary", eur(280000), true, eur(300000)}, {"Income:Bonus", eur(0), true, eur(20000)}},
+				IncomeTotal: eur(280000), PlannedIncomeTotal: eur(320000), HasPlannedIncome: true, Unassigned: eur(190000),
+			},
+		},
+		{
+			name: "targets that add up to more than the plan leave a negative amount unassigned",
+			setup: with(target("2026-10", "Income:Salary", eur(100000)),
+				target("2026-10", "Expenses:Food", eur(40000)), target("2026-10", "Expenses:Rent", eur(90000))),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines: []MonthBudgetLine{
+					{"Expenses:Food", eur(0), true, eur(40000), false, eur(0), eur(40000)},
+					{"Expenses:Rent", eur(0), true, eur(90000), false, eur(0), eur(90000)},
+				},
+				SpentTotal: eur(0), TargetTotal: eur(130000), CarriedTotal: eur(0), LeftTotal: eur(130000), UnbudgetedTotal: eur(0),
+				Income:      []MonthIncomeLine{{"Income:Salary", eur(0), true, eur(100000)}},
+				IncomeTotal: eur(0), PlannedIncomeTotal: eur(100000), HasPlannedIncome: true, Unassigned: eur(-30000),
+			},
+		},
+		{
+			name:  "income nobody planned is listed, and nothing is unassigned",
+			setup: with(target("2026-10", "Expenses:Food", eur(40000)), earning("2026-10-02", "Income:Salary", 280000)),
+			req:   MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(0), true, eur(40000), false, eur(0), eur(40000)}},
+				SpentTotal: eur(0), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(40000), UnbudgetedTotal: eur(0),
+				Income:      []MonthIncomeLine{{"Income:Salary", eur(280000), false, eur(0)}},
+				IncomeTotal: eur(280000), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
+			},
+		},
+		{
+			name: "a plan set before the base currency changed is converted",
+			setup: with(target("2026-10", "Income:Salary", eur(100000)), target("2026-10", "Expenses:Food", eur(40000)),
+				baseCurrency("USD"), setRate("2026-10-01", "EUR", "USD", "1.10")),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "USD",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", usd(0), true, usd(44000), false, usd(0), usd(44000)}},
+				SpentTotal: usd(0), TargetTotal: usd(44000), CarriedTotal: usd(0), LeftTotal: usd(44000), UnbudgetedTotal: usd(0),
+				Income:      []MonthIncomeLine{{"Income:Salary", usd(0), true, usd(110000)}},
+				IncomeTotal: usd(0), PlannedIncomeTotal: usd(110000), HasPlannedIncome: true, Unassigned: usd(66000),
+			},
+		},
+		{
+			name:  "a plan in a currency with no rate is left out, and said so",
+			setup: with(target("2026-10", "Income:Salary", eur(100000)), baseCurrency("USD")),
+			req:   MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "USD",
+				SpentTotal: usd(0), TargetTotal: usd(0), CarriedTotal: usd(0), LeftTotal: usd(0), UnbudgetedTotal: usd(0),
+				IncomeTotal: usd(0), PlannedIncomeTotal: usd(0), Unassigned: usd(0),
+				Missing: []ledger.Currency{"EUR"},
 			},
 		},
 		{
@@ -377,7 +457,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(500), true, eur(40000), false, eur(0), eur(39500)}},
-				SpentTotal: eur(500), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(39500), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(500), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(39500), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 				Missing: []ledger.Currency{"USD"},
 			},
 		},
@@ -389,7 +469,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "USD",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", usd(1000), true, usd(44000), false, usd(0), usd(43000)}},
-				SpentTotal: usd(1000), TargetTotal: usd(44000), CarriedTotal: usd(0), LeftTotal: usd(43000), UnbudgetedTotal: usd(0),
+				SpentTotal: usd(1000), TargetTotal: usd(44000), CarriedTotal: usd(0), LeftTotal: usd(43000), UnbudgetedTotal: usd(0), IncomeTotal: usd(0), PlannedIncomeTotal: usd(0), Unassigned: usd(0),
 			},
 		},
 		{
@@ -400,7 +480,7 @@ func Test_MonthBudget(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "USD",
 				Lines:      []MonthBudgetLine{{"Expenses:Food", usd(1000), false, usd(0), false, usd(0), usd(0)}},
-				SpentTotal: usd(1000), TargetTotal: usd(0), CarriedTotal: usd(0), LeftTotal: usd(0), UnbudgetedTotal: usd(1000),
+				SpentTotal: usd(1000), TargetTotal: usd(0), CarriedTotal: usd(0), LeftTotal: usd(0), UnbudgetedTotal: usd(1000), IncomeTotal: usd(0), PlannedIncomeTotal: usd(0), Unassigned: usd(0),
 				Missing: []ledger.Currency{"EUR"},
 			},
 		},
@@ -440,6 +520,12 @@ func Test_CopyBudgetTargets(t *testing.T) {
 			name: "every target into an empty month", setup: september, from: "2026-09", to: "2026-10",
 			want:   CopiedTargets{Copied: []BudgetTarget{food9, rent9}},
 			wantTo: []BudgetTarget{food9, rent9}, wantFrom: []BudgetTarget{food9, rent9},
+		},
+		{
+			name:  "a planned income is copied with the targets",
+			setup: []given{target("2026-09", "Expenses:Food", eur(40000)), target("2026-09", "Income:Salary", eur(300000))}, from: "2026-09", to: "2026-10",
+			want:   CopiedTargets{Copied: []BudgetTarget{food9, {"Income:Salary", eur(300000)}}},
+			wantTo: []BudgetTarget{food9, {"Income:Salary", eur(300000)}}, wantFrom: []BudgetTarget{food9, {"Income:Salary", eur(300000)}},
 		},
 		{
 			name:  "a category that has a target keeps it",
@@ -641,7 +727,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(10000), true, eur(40000), true, eur(25000), eur(55000)}},
-				SpentTotal: eur(10000), TargetTotal: eur(40000), CarriedTotal: eur(25000), LeftTotal: eur(55000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(10000), TargetTotal: eur(40000), CarriedTotal: eur(25000), LeftTotal: eur(55000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -651,7 +737,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-09", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(15000), true, eur(40000), true, eur(0), eur(25000)}},
-				SpentTotal: eur(15000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(25000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(15000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(25000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -662,7 +748,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(10000), true, eur(40000), true, eur(-20000), eur(10000)}},
-				SpentTotal: eur(10000), TargetTotal: eur(40000), CarriedTotal: eur(-20000), LeftTotal: eur(10000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(10000), TargetTotal: eur(40000), CarriedTotal: eur(-20000), LeftTotal: eur(10000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -673,7 +759,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), true, eur(40000), true, eur(55000), eur(95000)}},
-				SpentTotal: eur(0), TargetTotal: eur(40000), CarriedTotal: eur(55000), LeftTotal: eur(95000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(40000), CarriedTotal: eur(55000), LeftTotal: eur(95000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -684,7 +770,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(15000), eur(15000)}},
-				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(15000), LeftTotal: eur(15000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(15000), LeftTotal: eur(15000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -695,7 +781,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-11", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(30000), eur(30000)}},
-				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(30000), LeftTotal: eur(30000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(30000), LeftTotal: eur(30000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -705,7 +791,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-09", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(15000), true, eur(40000), false, eur(0), eur(25000)}},
-				SpentTotal: eur(15000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(25000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(15000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(25000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -715,7 +801,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), true, eur(40000), false, eur(0), eur(40000)}},
-				SpentTotal: eur(0), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(40000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(40000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -729,7 +815,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 					{"Expenses:Rent", eur(500), false, eur(0), false, eur(0), eur(0)},
 					{food, eur(0), false, eur(0), true, eur(40000), eur(40000)},
 				},
-				SpentTotal: eur(500), TargetTotal: eur(0), CarriedTotal: eur(40000), LeftTotal: eur(40000), UnbudgetedTotal: eur(500),
+				SpentTotal: eur(500), TargetTotal: eur(0), CarriedTotal: eur(40000), LeftTotal: eur(40000), UnbudgetedTotal: eur(500), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -740,7 +826,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(31000), eur(31000)}},
-				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(31000), LeftTotal: eur(31000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(31000), LeftTotal: eur(31000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -751,7 +837,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(31000), eur(31000)}},
-				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(31000), LeftTotal: eur(31000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(31000), LeftTotal: eur(31000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 			},
 		},
 		{
@@ -761,7 +847,7 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",
 				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(40000), eur(40000)}},
-				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(40000), LeftTotal: eur(40000), UnbudgetedTotal: eur(0),
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(40000), LeftTotal: eur(40000), UnbudgetedTotal: eur(0), IncomeTotal: eur(0), PlannedIncomeTotal: eur(0), Unassigned: eur(0),
 				Missing: []ledger.Currency{"USD"},
 			},
 		},
