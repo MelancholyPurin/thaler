@@ -12,13 +12,15 @@ import (
 )
 
 // The target popup (e on the Budget screen) sets or clears what a category may
-// spend in the month on show. The categories are listed with the target each has,
-// the amount is typed under them, and an empty amount clears the target. tab
-// switches whether the category carries what is left of it into the next month, from
-// the month on show. z takes each change back, as for everything else.
+// spend in the month on show, or, for an Income category, the income planned for it.
+// The categories are listed with the target each has, the amount is typed under them,
+// and an empty amount clears the target. tab switches whether a spending category
+// carries what is left of it into the next month, from the month on show; an Income
+// one has nothing to carry. z takes each change back, as for everything else.
 
 type targetCat struct {
 	name   string
+	income bool // an Income category: its target is the income planned for it
 	target ledger.Money
 	has    bool
 	// rollFrom is the month the category started carrying over, "" if it does not.
@@ -47,8 +49,8 @@ func (m *Model) targetSize() (w, h int) {
 	return min(max(m.width-6, 30), 60), min(targetRows, len(m.tgt.cats)) + 9 // the list, a rule, the amount, the carry-over, two lines of hint, two of message, the border
 }
 
-// openTarget lists the expense categories with the month's target of each, with the
-// cursor on the first one.
+// openTarget lists the spending categories, then the income ones, with the month's
+// target of each, with the cursor on the first one.
 func (m *Model) openTarget() tea.Cmd {
 	if m.period == "" {
 		m.setStatus(m.loc.T("target_pick_month", nil), true)
@@ -58,6 +60,11 @@ func (m *Model) openTarget() tea.Cmd {
 	for _, l := range m.monthly.Lines {
 		if l.HasTarget {
 			have[l.Name] = l.Target
+		}
+	}
+	for _, l := range m.monthly.Income {
+		if l.HasPlan {
+			have[l.Name] = l.Planned
 		}
 	}
 	rollovers, err := m.svc.BudgetRollovers(m.ctx)
@@ -71,18 +78,22 @@ func (m *Model) openTarget() tea.Cmd {
 	}
 	f := &targetForm{month: m.period, amount: newInput("")}
 	for _, name := range m.categories {
-		if typ, _ := ledger.TypeOf(name); typ != ledger.Expenses {
-			continue
-		}
+		typ, _ := ledger.TypeOf(name)
 		t, ok := have[name]
 		start := from[name]
-		f.cats = append(f.cats, targetCat{name: name, target: t, has: ok, rollFrom: start, roll: start != "" && start <= m.period})
+		f.cats = append(f.cats, targetCat{name: name, income: typ == ledger.Income, target: t, has: ok, rollFrom: start, roll: start != "" && start <= m.period})
 	}
 	if len(f.cats) == 0 {
 		m.setStatus(m.loc.T("target_no_categories", nil), true)
 		return nil
 	}
-	sort.Slice(f.cats, func(i, j int) bool { return f.cats[i].name < f.cats[j].name })
+	// Spending first, then income; each by name.
+	sort.Slice(f.cats, func(i, j int) bool {
+		if a, b := f.cats[i], f.cats[j]; a.income != b.income {
+			return !a.income
+		}
+		return f.cats[i].name < f.cats[j].name
+	})
 	m.tgt, m.mode = f, modeTarget
 	w, _ := m.targetSize()
 	f.amount.Width = max(8, w-2-targetLabelW-1-1) // minus the border, the label, a space and the cursor cell
@@ -115,8 +126,10 @@ func (m *Model) updateTarget(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.saveTarget()
 		return m, nil
 	case "tab":
-		f.rollover = !f.rollover
-		f.err = ""
+		if !f.cats[f.list.cursor].income { // income has nothing to carry
+			f.rollover = !f.rollover
+			f.err = ""
+		}
 		return m, nil
 	case "up", "down", "pgup", "pgdown":
 		f.list.navigate(key, len(f.cats), targetRows)
@@ -248,7 +261,10 @@ func (m *Model) targetPopup() string {
 			amount = m.loc.Amount(c.target)
 		}
 		name := m.loc.ShortName(c.name)
-		if c.roll {
+		switch {
+		case c.income:
+			name += " +"
+		case c.roll:
 			name += " ↻"
 		}
 		line := " " + leftRight(name, amount, iw-2) + " "
@@ -260,12 +276,18 @@ func (m *Model) targetPopup() string {
 		lines = append(lines, line)
 	}
 	lines = append(lines, dim.Render(strings.Repeat("─", iw)))
-	lines = append(lines, accent.Render(fit("▸ "+m.loc.T("label_target", nil), targetLabelW))+" "+f.amount.View())
-	mark := "[ ]"
-	if f.rollover {
-		mark = "[x]"
+	label, carry := m.loc.T("label_target", nil), ""
+	if f.cats[f.list.cursor].income {
+		label = m.loc.T("label_planned", nil)
+	} else {
+		mark := "[ ]"
+		if f.rollover {
+			mark = "[x]"
+		}
+		carry = dim.Render(fit("  "+m.loc.T("label_carry", nil), targetLabelW)) + " " + mark + dim.Render("  "+m.loc.T("carry_hint", nil))
 	}
-	lines = append(lines, dim.Render(fit("  "+m.loc.T("label_carry", nil), targetLabelW))+" "+mark+dim.Render("  "+m.loc.T("carry_hint", nil)))
+	lines = append(lines, accent.Render(fit("▸ "+label, targetLabelW))+" "+f.amount.View())
+	lines = append(lines, carry)
 	hint := wrapped(m.loc.T("target_hint", map[string]any{"Currency": m.monthly.Base}), iw, dim)
 	lines = append(lines, hint...)
 	for len(lines) < h-4 {

@@ -228,6 +228,14 @@ func (m *Model) budgetDetail(w int) ([]string, span) {
 		}
 		lines = append(lines, leftRight(m.loc.T("budget_left", nil), bold.Render(leftText), w))
 	}
+	if m.monthly.HasPlannedIncome {
+		unassigned := m.loc.Money(m.monthly.Unassigned)
+		if m.monthly.Unassigned.Minor < 0 {
+			unassigned = warn.Render(unassigned)
+		}
+		lines = append(lines, leftRight(m.loc.T("budget_planned_income", nil), m.loc.Money(m.monthly.PlannedIncomeTotal), w))
+		lines = append(lines, leftRight(m.loc.T("budget_unassigned", nil), bold.Render(unassigned), w))
+	}
 
 	switch {
 	case m.hasPlan():
@@ -244,7 +252,18 @@ func (m *Model) budgetDetail(w int) ([]string, span) {
 			lines = append(lines, dim.Render("  "+m.loc.T("budget_nothing_spent", nil)))
 		}
 	}
-	if len(m.budget.Income) > 0 {
+	switch {
+	case m.monthly.HasPlannedIncome:
+		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
+		add(m.plannedIncomeRows(w, sel))
+		var rest []core.BudgetLine
+		for _, l := range m.monthly.Income {
+			if !l.HasPlan {
+				rest = append(rest, core.BudgetLine{Name: l.Name, Amount: l.Received})
+			}
+		}
+		add(categoryRows(m.loc, rest, m.monthly.IncomeTotal, w, true, sel))
+	case len(m.budget.Income) > 0:
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
 		add(categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true, sel))
 	}
@@ -341,6 +360,50 @@ func (m *Model) targetRows(w int, sel string) ([]string, span) {
 		first := len(out)
 		out = append(out, marked(l.Name == sel)+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
 		for _, line := range wrapped(strings.Join(parts, " · "), w-4, style) {
+			out = append(out, "    "+line)
+		}
+		if l.Name == sel {
+			at = span{first, len(out)}
+		}
+	}
+	return out, at
+}
+
+// plannedIncomeRows draws the income categories with a plan, two lines each like the
+// spending ones: the name, what has come in and a bar of how much of the plan that is,
+// then the plan and what is still to come, or by how much it passed the plan.
+func (m *Model) plannedIncomeRows(w int, sel string) ([]string, span) {
+	const barW = 10
+	var planned []core.MonthIncomeLine
+	amtW := 0
+	for _, l := range m.monthly.Income {
+		if l.HasPlan {
+			planned = append(planned, l)
+			amtW = max(amtW, len(m.loc.Amount(l.Received)))
+		}
+	}
+	nameW := max(8, w-amtW-barW-4)
+	var out []string
+	at := noSpan
+	for _, l := range planned {
+		filled := barW
+		if l.Planned.Minor > 0 {
+			filled = int((max(l.Received.Minor, 0)*barW + l.Planned.Minor/2) / l.Planned.Minor)
+		}
+		filled = max(0, min(barW, filled))
+		if filled == 0 && l.Received.Minor > 0 {
+			filled = 1
+		}
+		bar := accent.Render(strings.Repeat("█", filled) + strings.Repeat("░", barW-filled))
+		parts := []string{m.loc.T("budget_of", map[string]any{"Target": m.loc.Amount(l.Planned)})}
+		if rest := l.Planned.Minor - l.Received.Minor; rest > 0 {
+			parts = append(parts, m.loc.T("budget_to_come", map[string]any{"Amount": m.loc.Amount(ledger.Money{Minor: rest, Currency: l.Planned.Currency})}))
+		} else if rest < 0 {
+			parts = append(parts, m.loc.T("budget_above_plan", map[string]any{"Amount": m.loc.Amount(ledger.Money{Minor: -rest, Currency: l.Planned.Currency})}))
+		}
+		first := len(out)
+		out = append(out, marked(l.Name == sel)+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Received), amtW)+" "+bar)
+		for _, line := range wrapped(strings.Join(parts, " · "), w-4, dim) {
 			out = append(out, "    "+line)
 		}
 		if l.Name == sel {

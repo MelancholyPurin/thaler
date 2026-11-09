@@ -63,6 +63,7 @@ func fitModel(t *testing.T, tag language.Tag) *Model {
 	openAccounts(t, st, "Assets:Bank EUR", "Assets:USD USD")
 	book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 	book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
+	book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
 	keep := 1
 	m, err := newWithClock(t.Context(), st, Options{
 		LoadConfig:     func() (*config.Config, error) { return &config.Config{KeepBackups: &keep}, nil },
@@ -158,6 +159,11 @@ func Test_View_fits(t *testing.T) {
 		{name: "target", keys: "B e"},
 		{name: "target, with a target", keys: "B e text:30"},
 		{name: "target, carry-over on", keys: "B e tab"},
+		{name: "budget, planned income", keys: "B e down text:80 enter"},
+		{name: "budget, planned income passed", keys: "B e down text:20 enter"},
+		{name: "budget, planned income, categories", keys: "B e down text:80 enter tab tab"},
+		{name: "target, income", keys: "B e down"},
+		{name: "target, income with a plan", keys: "B e down text:80"},
 		{name: "forecast", keys: "F"},
 		{name: "reports", keys: "R"},
 		{name: "search", keys: "tab tab /"},
@@ -181,6 +187,8 @@ func Test_View_fits(t *testing.T) {
 		{name: "pruned", keys: "ctrl+p enter"},
 		{name: "language", keys: "ctrl+l down enter"},
 		{name: "target set", keys: "B e text:30 enter"},
+		{name: "planned income set", keys: "B e down text:80 enter"},
+		{name: "planned income cleared", keys: "B e down text:80 enter e down ctrl+u enter"},
 		{name: "targets copied", keys: "B [ e text:30 enter ] c"},
 		{name: "targets copied and undone", keys: "B [ e text:30 enter ] c z"},
 		{name: "nothing to copy", keys: "B [ e text:30 enter ] e text:5 enter c"},

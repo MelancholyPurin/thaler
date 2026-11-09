@@ -195,8 +195,9 @@ func Test_View_builtinNames(t *testing.T) {
 func Test_View_pseudoLanguage(t *testing.T) {
 	english := regexp.MustCompile(`(?i)\b(press|cancel|save|next|field|create|review|choose|passphrase|encrypted|restore|undo|undoes|search|quit|categorize|transfer|account|accounts|balance|import|backup|backups|transaction|transactions|payee|description|amount|never|nothing|please|wait|current|folder|database|profile|income|spending|targets|reports|forecast|ledger|budget|home|keys|delete|rule|rules|match|new|today|yesterday|language)\b`)
 	tcs := []struct {
-		name string
-		keys string
+		name   string
+		keys   string
+		salary bool // books Income:Salary first
 	}{
 		{name: "home", keys: ""},
 		{name: "the transactions", keys: "tab tab down"},
@@ -223,6 +224,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget with a target", keys: "B e text:30 enter"},
 		{name: "budget with a target passed", keys: "B e text:5 enter"},
 		{name: "budget target", keys: "B e"},
+		{name: "budget target, income", keys: "B e down", salary: true},
+		{name: "budget, planned income", keys: "B e down text:80 enter", salary: true},
+		{name: "budget, planned income passed", keys: "B e down text:20 enter", salary: true},
+		{name: "budget, targets over the planned income", keys: "B e down text:10 enter e text:30 enter", salary: true},
 		{name: "budget target, error", keys: "B e enter"},
 		{name: "budget, categories", keys: "B tab"},
 		{name: "budget, a category's transactions", keys: "B tab enter"},
@@ -244,6 +249,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
 			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
+			if tc.salary { // not in the others: the picker shows the stored name, Income:Salary, in English
+				book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
+			}
 			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {
 				t.Fatal(err)
 			}
