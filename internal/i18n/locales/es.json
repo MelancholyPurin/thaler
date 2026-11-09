@@ -547,6 +547,7 @@
   "restore_in_place_unopenable": "la copia está en su sitio pero no se puede abrir",
   "invalid_month": "mes inválido \"{{.Text}}\": usa YYYY-MM",
   "target_not_expense": "{{.Name}} no es una categoría de gasto: solo una categoría de Expenses, distinta de Uncategorized, puede tener un objetivo o acumular",
+  "target_not_category": "{{.Name}} no es una categoría de Income ni de Expenses: solo esas, distintas de Uncategorized, pueden tener un objetivo",
   "target_not_base_currency": "un objetivo se fija en la moneda base ({{.Base}}), no en {{.Currency}}",
   "budget_target": "Objetivo",
   "budget_left": "Queda",

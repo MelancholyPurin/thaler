@@ -133,7 +133,7 @@ Targets per category, and what is left of them.
 - [x] `BUD-3` Spent, target and left per category, and the total (`MonthBudget` in the service: overspending is a negative amount left, spending in categories with no target is counted apart, and the tab that shows it is `TBU-3`)
 - ~~`BUD-4` Unspent money (or overspending) carries into the next month, switched on per category~~ (folded into `TBU-4`)
 - ~~`BUD-5` Start a month from the previous month's targets~~ (folded into `TBU-5`)
-- [ ] `BUD-6` Planned income against targets, and what is still unassigned
+- [x] `BUD-6` Planned income against targets, and what is still unassigned (an Income category takes a target like an expense one; `MonthBudget` has the income lines, the plan, and `Unassigned`, the plan less the targets; the screens are `TBU-9` and `CLI-16`)
 - [ ] `BUD-7` Group categories (Housing, Food) with a target and totals for the group
 - [x] `BUD-8` Spending in other currencies counted against base-currency targets (each amount is converted at the rate of the day it was booked, so a later rate leaves counted months alone; a day before the first rate takes the rate at the end of the period)
 
@@ -208,6 +208,7 @@ The scriptable surface (`thaler cli ...`), for cron and one-off jobs.
 - [ ] `CLI-10` Machine-readable output for every listing
 - [ ] `CLI-11` Export transactions as CSV
 - [x] `CLI-12` Set and show budget targets (`thaler cli budget`, `budget set`, `budget clear`; switching carry-over on and copying a month's targets stay in the interface)
+- [ ] `CLI-16` Show planned income and what is still unassigned in `thaler cli budget`
 - [ ] `CLI-13` Manage schedules and confirm what is due
 - [ ] `CLI-14` The reports of `RPT` (reports and projections), as commands
 - ~~`CLI-15` Help and messages in English, Spanish and German, following the language setting~~ (dropped: `thaler cli` is for scripts and for people who read English; everything it prints stays English, whatever the language setting)
@@ -276,6 +277,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TBU-6` Open a category to see the transactions behind its number
 - [ ] `TBU-7` Collapse and expand category groups
 - [x] `TBU-8` A "left this month" figure on the Home panel
+- [ ] `TBU-9` Plan income in the target popup, and see planned income, the targets and what is still unassigned
 
 ### TRP: Reports tab
 

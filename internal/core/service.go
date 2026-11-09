@@ -839,18 +839,31 @@ func (s *Local) expenseCategory(ctx context.Context, category string) (Account, 
 	return acc, nil
 }
 
-// targetCategory is the expense category that month's target is about, once the month is
-// known to be a month and the category to be one a target can be set on.
+// targetCategory is the category that month's target is about, once the month is known
+// to be a month and the category to be one a target can be set on: an Expenses category
+// (what it may spend) or an Income one (what is planned to come in), other than the
+// Uncategorized two.
 func (s *Local) targetCategory(ctx context.Context, month, category string) (Account, error) {
 	if err := checkMonth(month); err != nil {
 		return Account{}, err
 	}
-	return s.expenseCategory(ctx, category)
+	acc, err := s.repo.queries().account(ctx, category)
+	if err != nil {
+		return Account{}, err
+	}
+	planned := acc.Type == ledger.Expenses || acc.Type == ledger.Income
+	if !planned || acc.Name == ledger.UncategorizedExpense || acc.Name == ledger.UncategorizedIncome {
+		return Account{}, coded.New("target_not_category", map[string]any{"Name": acc.Name})
+	}
+	return acc, nil
 }
 
 // SetBudgetRollover makes category carry its leftover from month `from` on.
 func (s *Local) SetBudgetRollover(ctx context.Context, category, from string) error {
-	acc, err := s.targetCategory(ctx, from, category)
+	if err := checkMonth(from); err != nil {
+		return err
+	}
+	acc, err := s.expenseCategory(ctx, category)
 	if err != nil {
 		return err
 	}
@@ -903,7 +916,8 @@ func (s *Local) CopyBudgetTargets(ctx context.Context, from, to string) (CopiedT
 	return out, err
 }
 
-// SetBudgetTarget sets what category may spend in month, replacing a target already there.
+// SetBudgetTarget sets what category may spend in month (or, for an Income category,
+// what is planned to come in), replacing a target already there.
 func (s *Local) SetBudgetTarget(ctx context.Context, month, category string, amount ledger.Money) error {
 	acc, err := s.targetCategory(ctx, month, category)
 	if err != nil {
@@ -1049,7 +1063,8 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 	base := spending.Base
 	zero := ledger.Money{Currency: base}
 	out := MonthBudget{Month: req.Month, Base: base, SpentTotal: spending.ExpenseTotal,
-		TargetTotal: zero, CarriedTotal: zero, LeftTotal: zero, UnbudgetedTotal: zero}
+		TargetTotal: zero, CarriedTotal: zero, LeftTotal: zero, UnbudgetedTotal: zero,
+		IncomeTotal: spending.IncomeTotal, PlannedIncomeTotal: zero, Unassigned: zero}
 	missing := make(map[ledger.Currency]bool)
 	for _, c := range spending.Missing {
 		missing[c] = true
@@ -1064,11 +1079,26 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 	for _, e := range spending.Expenses {
 		lineOf(e.Name).Spent = e.Amount
 	}
+	incomeByName := make(map[string]*MonthIncomeLine)
+	incomeOf := func(name string) *MonthIncomeLine {
+		if incomeByName[name] == nil {
+			incomeByName[name] = &MonthIncomeLine{Name: name, Received: zero, Planned: zero}
+		}
+		return incomeByName[name]
+	}
+	for _, i := range spending.Income {
+		incomeOf(i.Name).Received = i.Amount
+	}
 	for _, t := range targets {
 		// A target keeps the currency it was set in; the base currency may have changed since.
 		amount, ok := book.Convert(t.Amount, base, rateDate)
 		if !ok {
 			missing[t.Amount.Currency] = true
+			continue
+		}
+		if typ, _ := ledger.TypeOf(t.Category); typ == ledger.Income {
+			line := incomeOf(t.Category)
+			line.HasPlan, line.Planned = true, amount
 			continue
 		}
 		line := lineOf(t.Category)
@@ -1111,6 +1141,23 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 		}
 		return out.Lines[i].Name < out.Lines[j].Name
 	})
+
+	for _, line := range incomeByName {
+		if line.HasPlan {
+			out.PlannedIncomeTotal.Minor += line.Planned.Minor
+			out.HasPlannedIncome = true
+		}
+		out.Income = append(out.Income, *line)
+	}
+	sort.Slice(out.Income, func(i, j int) bool {
+		if out.Income[i].Received.Minor != out.Income[j].Received.Minor {
+			return out.Income[i].Received.Minor > out.Income[j].Received.Minor
+		}
+		return out.Income[i].Name < out.Income[j].Name
+	})
+	if out.HasPlannedIncome {
+		out.Unassigned.Minor = out.PlannedIncomeTotal.Minor - out.TargetTotal.Minor
+	}
 	out.Missing = sortedCurrencies(missing)
 	return out, nil
 }

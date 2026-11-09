@@ -46,7 +46,9 @@ A target belongs to one month and one category, in the base currency:
 		Use:   "set CATEGORY AMOUNT",
 		Short: "Set what a category may spend in a month, e.g. Expenses:Groceries 400",
 		Long: `Set the target of an expense category for a month, in the base currency. A
-target that is already there is replaced.`,
+target that is already there is replaced. An Income category takes an amount
+too: what is planned to come in that month (thaler cli budget set Income:Salary
+3000).`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
