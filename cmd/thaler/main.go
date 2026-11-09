@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/text/language"
@@ -36,6 +37,8 @@ type app struct {
 	// notice receives messages that are not a command's result; nil means
 	// standard error. Tests replace it.
 	notice io.Writer
+	// now is the clock; nil means the system's. Tests replace it.
+	now func() time.Time
 }
 
 func (a *app) dbPath() string {
@@ -187,6 +190,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 		a.restoreCmd(),
 		a.pruneCmd(),
 		a.checkCmd(),
+		a.budgetCmd(),
 	)
 	root.AddCommand(cli)
 	return root
