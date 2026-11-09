@@ -19,7 +19,9 @@ func (a *app) budgetCmd() *cobra.Command {
 is left. A category carries over what is left of it into the next month when it
 is switched on in the interface (the Carried column); the Left total counts the
 categories with a target or something carried in, and says what the others
-spent. Amounts are in the base currency ("thaler cli currency").
+spent. Amounts are in the base currency ("thaler cli currency"). A month with
+income planned (budget set on an Income category) also lists the income against
+its plan, and what is unassigned: the planned income less the targets.
 
 A target belongs to one month and one category, in the base currency:
   thaler cli budget set Expenses:Groceries 400 --month 2026-10
@@ -118,7 +120,7 @@ func (a *app) monthFlag(month string) string {
 // printMonthBudget writes a month as a table: the categories with money set aside
 // first, then the ones that spent without, and a total.
 func printMonthBudget(w io.Writer, b core.MonthBudget) {
-	if len(b.Lines) == 0 {
+	if len(b.Lines) == 0 && !b.HasPlannedIncome {
 		fmt.Fprintf(w, "Nothing spent and no targets in %s. Set one with: thaler cli budget set Expenses:Groceries 400 --month %s\n", b.Month, b.Month)
 		return
 	}
@@ -172,13 +174,47 @@ func printMonthBudget(w io.Writer, b core.MonthBudget) {
 	rows = append(rows, row("Total", &b.SpentTotal, &b.TargetTotal, &b.CarriedTotal, &b.LeftTotal))
 
 	fmt.Fprintf(w, "Budget for %s, in %s\n\n", b.Month, b.Base)
-	printTable(w, header, rows)
+	if len(b.Lines) > 0 {
+		printTable(w, header, rows)
+	}
 	if planned && b.UnbudgetedTotal.Minor != 0 {
 		fmt.Fprintf(w, "\nLeft counts the categories with a target or something carried in; %s was spent on the others.\n", b.UnbudgetedTotal.Decimal())
+	}
+	if b.HasPlannedIncome {
+		printPlannedIncome(w, b, len(b.Lines) > 0)
 	}
 	for _, c := range b.Missing {
 		fmt.Fprintf(w, "warning: no exchange rate %s -> %s, so %s is left out; add one with: thaler cli rate set %s %s <rate>\n", c, b.Base, c, c, b.Base)
 	}
+}
+
+// printPlannedIncome writes the income of a month that has some planned: each category
+// with what came in, the plan and what is still to come (negative once the plan is
+// passed, as Left is), then what is still unassigned. Without a plan the month shows
+// no income at all, as before. after says the spending table was written before it.
+func printPlannedIncome(w io.Writer, b core.MonthBudget, after bool) {
+	var rows [][]string
+	toComeTotal := ledger.Money{Currency: b.Base} // of the planned categories: income from the others does not make up for them
+	for _, pass := range []bool{true, false} {    // those with a plan, then the others
+		for _, l := range b.Income {
+			if l.HasPlan != pass {
+				continue
+			}
+			planned, toCome := "", ""
+			if l.HasPlan {
+				left := ledger.Money{Minor: l.Planned.Minor - l.Received.Minor, Currency: b.Base}
+				planned, toCome = l.Planned.Decimal(), left.Decimal()
+				toComeTotal.Minor += left.Minor
+			}
+			rows = append(rows, []string{l.Name, l.Received.Decimal(), planned, toCome})
+		}
+	}
+	rows = append(rows, []string{"Total", b.IncomeTotal.Decimal(), b.PlannedIncomeTotal.Decimal(), toComeTotal.Decimal()})
+	if after {
+		fmt.Fprintln(w)
+	}
+	printTable(w, []string{"Income", "Received", "Planned", "To come"}, rows)
+	fmt.Fprintf(w, "\nUnassigned: %s (planned income %s less targets %s)\n", b.Unassigned.Decimal(), b.PlannedIncomeTotal.Decimal(), b.TargetTotal.Decimal())
 }
 
 // cell writes an amount without its currency (the title has it), or nothing.
