@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -24,6 +25,9 @@ func cheapScrypt(t *testing.T) {
 	core.ScryptWorkFactor = 8
 	t.Cleanup(func() { core.ScryptWorkFactor = old })
 }
+
+// fixedNow is the clock of every test: 22 October 2026.
+func fixedNow() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC) }
 
 // runApp executes the command tree with args against a temporary database.
 func runApp(t *testing.T, a *app, db string, args ...string) (string, error) {
@@ -95,7 +99,7 @@ func (e *cliEnv) run(args ...string) (string, error) {
 		full = append(full, strings.ReplaceAll(a, "{dir}", e.dir))
 	}
 	full = append(full, "--config", e.cfg)
-	a := &app{version: "v1.2.3", getenv: func(name string) string { return e.env[name] }}
+	a := &app{version: "v1.2.3", getenv: func(name string) string { return e.env[name] }, now: fixedNow}
 	if e.answers != nil {
 		answers := e.answers
 		a.ask = func(prompt string) (string, error) {
