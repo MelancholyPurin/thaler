@@ -194,15 +194,39 @@ func Test_BudgetReport(t *testing.T) {
 			},
 		},
 		{
-			name:  "all time uses today's rate",
+			name:  "all time uses the rate of each day, not today's",
 			setup: append(budgetLedger(), setRate("2026-10-01", "USD", "EUR", "0.90"), setRate("2026-11-15", "USD", "EUR", "2"), today("2026-12-01")),
 			req:   BudgetRequest{},
 			want: BudgetReport{
 				Base:         "EUR",
-				Income:       []BudgetLine{{"Income:Salary", eur(200000)}, {"Income:Gift", eur(2000)}},
+				Income:       []BudgetLine{{"Income:Salary", eur(200000)}, {"Income:Gift", eur(900)}},
 				Expenses:     []BudgetLine{{"Expenses:Rent", eur(100000)}, {"Expenses:Food", eur(800)}, {"Expenses:Fun", eur(500)}},
-				IncomeTotal:  eur(202000),
+				IncomeTotal:  eur(200900),
 				ExpenseTotal: eur(101300),
+			},
+		},
+		{
+			name:  "a rate entered after the day counts only from its own day on",
+			setup: append(budgetLedger(), setRate("2026-10-02", "USD", "EUR", "0.90"), setRate("2026-10-10", "USD", "EUR", "2")),
+			req:   BudgetRequest{From: "2026-10-01", To: "2026-10-31", RateDate: "2026-10-31"},
+			want: BudgetReport{
+				Base:         "EUR",
+				Income:       []BudgetLine{{"Income:Salary", eur(200000)}, {"Income:Gift", eur(900)}}, // 3 October: 0.90, not 2
+				Expenses:     []BudgetLine{{"Expenses:Rent", eur(100000)}, {"Expenses:Food", eur(500)}, {"Expenses:Fun", eur(500)}},
+				IncomeTotal:  eur(200900),
+				ExpenseTotal: eur(101000),
+			},
+		},
+		{
+			name:  "a day before the first rate takes the rate at the end of the period",
+			setup: append(budgetLedger(), setRate("2026-10-15", "USD", "EUR", "0.80")),
+			req:   BudgetRequest{From: "2026-10-01", To: "2026-10-31", RateDate: "2026-10-31"},
+			want: BudgetReport{
+				Base:         "EUR",
+				Income:       []BudgetLine{{"Income:Salary", eur(200000)}, {"Income:Gift", eur(800)}},
+				Expenses:     []BudgetLine{{"Expenses:Rent", eur(100000)}, {"Expenses:Food", eur(500)}, {"Expenses:Fun", eur(500)}},
+				IncomeTotal:  eur(200800),
+				ExpenseTotal: eur(101000),
 			},
 		},
 		{
@@ -257,18 +281,29 @@ func Test_categoryTotals(t *testing.T) {
 	tcs := []struct {
 		name     string
 		from, to string
-		want     []Balance
+		want     []datedBalance
 	}{
 		{
 			name: "one month", from: "2026-10-01", to: "2026-10-31",
-			want: []Balance{{"Expenses:Food", ledger.Expenses, eur(750)}, {"Expenses:Rent", ledger.Expenses, eur(100000)}, {"Income:Salary", ledger.Income, eur(-200000)}},
+			want: []datedBalance{
+				{Balance{"Expenses:Food", ledger.Expenses, eur(500)}, "2026-10-01"},
+				{Balance{"Expenses:Food", ledger.Expenses, eur(250)}, "2026-10-15"},
+				{Balance{"Expenses:Rent", ledger.Expenses, eur(100000)}, "2026-10-20"},
+				{Balance{"Income:Salary", ledger.Income, eur(-200000)}, "2026-10-02"},
+			},
 		},
 		{
-			name: "all time", from: "", to: "",
-			want: []Balance{{"Expenses:Food", ledger.Expenses, eur(1050)}, {"Expenses:Rent", ledger.Expenses, eur(100000)}, {"Income:Salary", ledger.Income, eur(-200000)}},
+			name: "all time, a line per day", from: "", to: "",
+			want: []datedBalance{
+				{Balance{"Expenses:Food", ledger.Expenses, eur(300)}, "2026-09-30"},
+				{Balance{"Expenses:Food", ledger.Expenses, eur(500)}, "2026-10-01"},
+				{Balance{"Expenses:Food", ledger.Expenses, eur(250)}, "2026-10-15"},
+				{Balance{"Expenses:Rent", ledger.Expenses, eur(100000)}, "2026-10-20"},
+				{Balance{"Income:Salary", ledger.Income, eur(-200000)}, "2026-10-02"},
+			},
 		},
-		{name: "from a date on", from: "2026-10-16", to: "", want: []Balance{{"Expenses:Rent", ledger.Expenses, eur(100000)}}},
-		{name: "up to a date", from: "", to: "2026-09-30", want: []Balance{{"Expenses:Food", ledger.Expenses, eur(300)}}},
+		{name: "from a date on", from: "2026-10-16", to: "", want: []datedBalance{{Balance{"Expenses:Rent", ledger.Expenses, eur(100000)}, "2026-10-20"}}},
+		{name: "up to a date", from: "", to: "2026-09-30", want: []datedBalance{{Balance{"Expenses:Food", ledger.Expenses, eur(300)}, "2026-09-30"}}},
 		{name: "a period with nothing", from: "2025-01-01", to: "2025-01-31"},
 	}
 	for _, tc := range tcs {
@@ -281,7 +316,7 @@ func Test_categoryTotals(t *testing.T) {
 
 			// then
 			checkErr(t, err, "", nil)
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, cmp.AllowUnexported(datedBalance{})); diff != "" {
 				t.Errorf("totals mismatch (-want +got):\n%s", diff)
 			}
 		})

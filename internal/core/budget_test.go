@@ -347,6 +347,29 @@ func Test_MonthBudget(t *testing.T) {
 			},
 		},
 		{
+			name: "each day's dollars count at the rate of that day, and a later rate leaves them alone",
+			setup: with(setRate("2026-10-01", "USD", "EUR", "0.92"), setRate("2026-10-20", "USD", "EUR", "0.90"),
+				target("2026-10", "Expenses:Food", eur(40000)),
+				spendingUSD("2026-10-05", "Expenses:Food", 10000), spendingUSD("2026-10-25", "Expenses:Food", 10000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(18200), true, eur(40000), false, eur(0), eur(21800)}},
+				SpentTotal: eur(18200), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(21800), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
+			name: "dollars spent before the first rate count at the rate of the end of the month",
+			setup: with(setRate("2026-10-20", "USD", "EUR", "0.90"), target("2026-10", "Expenses:Food", eur(40000)),
+				spendingUSD("2026-10-05", "Expenses:Food", 10000)),
+			req: MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"},
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{"Expenses:Food", eur(9000), true, eur(40000), false, eur(0), eur(31000)}},
+				SpentTotal: eur(9000), TargetTotal: eur(40000), CarriedTotal: eur(0), LeftTotal: eur(31000), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
 			name: "dollars with no rate are left out, and said so",
 			setup: with(target("2026-10", "Expenses:Food", eur(40000)), spending("2026-10-03", "Expenses:Food", 500),
 				spendingUSD("2026-10-05", "Expenses:Food", 10000)),
@@ -713,6 +736,17 @@ func Test_MonthBudget_rollover(t *testing.T) {
 			name: "each month is converted at its own rates",
 			setup: with(rollover(food, "2026-09"), target("2026-09", food, eur(40000)), setRate("2026-09-01", "USD", "EUR", "0.90"),
 				setRate("2026-10-01", "USD", "EUR", "0.50"), spendingUSD("2026-09-10", food, 10000)),
+			month: "2026-10",
+			want: MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines:      []MonthBudgetLine{{food, eur(0), false, eur(0), true, eur(31000), eur(31000)}},
+				SpentTotal: eur(0), TargetTotal: eur(0), CarriedTotal: eur(31000), LeftTotal: eur(31000), UnbudgetedTotal: eur(0),
+			},
+		},
+		{
+			name: "carried spending counts at the rate of its day, not of the end of its month",
+			setup: with(rollover(food, "2026-09"), target("2026-09", food, eur(40000)), setRate("2026-09-01", "USD", "EUR", "0.90"),
+				setRate("2026-09-20", "USD", "EUR", "0.50"), spendingUSD("2026-09-10", food, 10000)),
 			month: "2026-10",
 			want: MonthBudget{
 				Month: "2026-10", Base: "EUR",

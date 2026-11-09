@@ -414,8 +414,10 @@ type BalanceReport struct {
 // BudgetRequest asks where money came from and went over a period.
 type BudgetRequest struct {
 	From, To string // YYYY-MM-DD, inclusive; an empty bound is open
-	// RateDate is the day exchange rates are looked up on; empty = today. It is
-	// capped at To so that a past month uses the rates of that month.
+	// RateDate is the latest day exchange rates are looked up on; empty = today.
+	// Each amount is converted at the rate of the day it was booked (never a later
+	// one than RateDate), so a rate entered afterwards leaves earlier days alone. A
+	// day before its currency's first rate takes the rate at the end of the period.
 	RateDate string
 }
 
@@ -449,8 +451,9 @@ type CopiedTargets struct {
 // MonthBudgetRequest asks how a month's spending stands against its targets.
 type MonthBudgetRequest struct {
 	Month string // YYYY-MM
-	// RateDate is the day exchange rates are looked up on, as for a BudgetRequest;
-	// empty = today, and a past month uses the rates of that month.
+	// RateDate is the latest day exchange rates are looked up on, as for a
+	// BudgetRequest; empty = today. Spending, the carried months' too, is converted
+	// at the rate of its own day; a target at the rate of the end of its month.
 	RateDate string
 }
 
