@@ -16,6 +16,9 @@ var (
 	spendKiosk     = []string{"cli", "add", "-a", "Assets:Bank", "--amount=-32.50", "-d", "2026-10-09"}
 	spendSeptember = []string{"cli", "add", "-a", "Assets:Bank", "--amount=-30", "-t", "Expenses:Groceries", "-d", "2026-09-12"}
 	targetFood     = []string{"cli", "budget", "set", "Expenses:Groceries", "400", "--month", "2026-10"}
+	earnOctober    = []string{"cli", "add", "-a", "Assets:Bank", "--amount=2900", "-t", "Income:Salary", "-d", "2026-10-02"}
+	earnSeptember  = []string{"cli", "add", "-a", "Assets:Bank", "--amount=2900", "-t", "Income:Salary", "-d", "2026-09-02"}
+	planSalary     = []string{"cli", "budget", "set", "Income:Salary", "3000", "--month", "2026-10"}
 	targetRent     = []string{"cli", "budget", "set", "Expenses:Rent", "900", "--month", "2026-10"}
 )
 
@@ -81,6 +84,78 @@ func Test_budget(t *testing.T) {
 				"Expenses:Groceries  120.00\n" +
 				"Total               120.00\n" +
 				"warning: no exchange rate USD -> EUR, so USD is left out; add one with: thaler cli rate set USD EUR <rate>\n",
+		},
+		{
+			name:  "planned income: what came in, the plan, and what is unassigned",
+			setup: [][]string{addBank, spendGroceries, earnOctober, targetFood, planSalary},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent  Target    Left\n" +
+				"Expenses:Groceries  120.00  400.00  280.00\n" +
+				"Total               120.00  400.00  280.00\n" +
+				"\n" +
+				"Income         Received  Planned  To come\n" +
+				"Income:Salary   2900.00  3000.00   100.00\n" +
+				"Total           2900.00  3000.00   100.00\n" +
+				"\nUnassigned: 2600.00 (planned income 3000.00 less targets 400.00)\n",
+		},
+		{
+			name:  "income past the plan is a negative amount to come, and income nobody planned is listed after",
+			setup: [][]string{addBank, spendGroceries, earnOctober, {"cli", "add", "-a", "Assets:Bank", "--amount=50", "-t", "Income:Gift", "-d", "2026-10-05"}, targetFood, {"cli", "budget", "set", "Income:Salary", "2500", "--month", "2026-10"}},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent  Target    Left\n" +
+				"Expenses:Groceries  120.00  400.00  280.00\n" +
+				"Total               120.00  400.00  280.00\n" +
+				"\n" +
+				"Income         Received  Planned  To come\n" +
+				"Income:Salary   2900.00  2500.00  -400.00\n" +
+				"Income:Gift       50.00\n" +
+				"Total           2950.00  2500.00  -400.00\n" +
+				"\nUnassigned: 2100.00 (planned income 2500.00 less targets 400.00)\n",
+		},
+		{
+			name:  "targets over the plan are a negative amount unassigned",
+			setup: [][]string{addBank, spendGroceries, spendRent, earnOctober, targetFood, targetRent, {"cli", "budget", "set", "Income:Salary", "1000", "--month", "2026-10"}},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent   Target    Left\n" +
+				"Expenses:Rent       800.00   900.00  100.00\n" +
+				"Expenses:Groceries  120.00   400.00  280.00\n" +
+				"Total               920.00  1300.00  380.00\n" +
+				"\n" +
+				"Income         Received  Planned   To come\n" +
+				"Income:Salary   2900.00  1000.00  -1900.00\n" +
+				"Total           2900.00  1000.00  -1900.00\n" +
+				"\nUnassigned: -300.00 (planned income 1000.00 less targets 1300.00)\n",
+		},
+		{
+			name:  "a plan and nothing else: the income alone",
+			setup: [][]string{addBank, earnSeptember, planSalary},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Income         Received  Planned  To come\n" +
+				"Income:Salary      0.00  3000.00  3000.00\n" +
+				"Total              0.00  3000.00  3000.00\n" +
+				"\nUnassigned: 3000.00 (planned income 3000.00 less targets 0.00)\n",
+		},
+		{
+			name:  "income with no plan is not listed, as before",
+			setup: [][]string{addBank, spendGroceries, earnOctober, targetFood},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent  Target    Left\n" +
+				"Expenses:Groceries  120.00  400.00  280.00\n" +
+				"Total               120.00  400.00  280.00\n",
+		},
+		{
+			name:  "the plan of another month does not count",
+			setup: [][]string{addBank, spendGroceries, earnOctober, targetFood, {"cli", "budget", "set", "Income:Salary", "3000", "--month", "2026-09"}},
+			args:  []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent  Target    Left\n" +
+				"Expenses:Groceries  120.00  400.00  280.00\n" +
+				"Total               120.00  400.00  280.00\n",
 		},
 		{name: "a month that is none", setup: [][]string{addBank}, args: []string{"cli", "budget", "--month", "October"}, wantErr: `invalid month "October": use YYYY-MM`},
 		{name: "arguments are not expected", setup: [][]string{addBank}, args: []string{"cli", "budget", "Expenses:Food"}, wantErr: `unknown command "Expenses:Food" for "thaler cli budget"`},
