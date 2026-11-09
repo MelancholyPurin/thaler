@@ -217,7 +217,7 @@
   },
   "uncat_review": "{{.Count}}  ●  press 3, then u to review",
   "home_no_rate": "no rate for {{.Codes}}; add one with: thaler cli rate set {{.First}} {{.Base}} RATE",
-  "home_keys_hint": "? for keys · 2 accounts · 3 transactions",
+  "home_keys_hint": "Press ? for all keys, 1 2 3 to jump between panels.",
   "home_credit": "From Purin",
   "label_net_worth": "Net worth",
   "label_accounts": "Accounts",

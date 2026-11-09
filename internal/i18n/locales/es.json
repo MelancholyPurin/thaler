@@ -217,7 +217,7 @@
   },
   "uncat_review": "{{.Count}}  ●  presiona 3 y luego u para revisar",
   "home_no_rate": "sin tipo de cambio para {{.Codes}}; añade uno con: thaler cli rate set {{.First}} {{.Base}} RATE",
-  "home_keys_hint": "? teclas · 2 cuentas · 3 transacciones",
+  "home_keys_hint": "Presiona ? para ver todas las teclas, 1 2 3 para pasar de un panel a otro.",
   "home_credit": "De Purin",
   "label_net_worth": "Patrimonio neto",
   "label_accounts": "Cuentas",

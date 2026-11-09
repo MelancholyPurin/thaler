@@ -217,7 +217,7 @@
   },
   "uncat_review": "{{.Count}}  ●  drücke 3, dann u zum Prüfen",
   "home_no_rate": "kein Kurs für {{.Codes}}; lege einen an mit: thaler cli rate set {{.First}} {{.Base}} RATE",
-  "home_keys_hint": "? Tasten · 2 Konten · 3 Transaktionen",
+  "home_keys_hint": "Drücke ? für alle Tasten, 1 2 3 zum Wechseln zwischen den Panels.",
   "home_credit": "Von Purin",
   "label_net_worth": "Nettovermögen",
   "label_accounts": "Konten",
