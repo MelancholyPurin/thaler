@@ -127,16 +127,22 @@ func Test_budget_set(t *testing.T) {
 			want:  "Target for Expenses:Groceries in 2026-10: 400.00 EUR\n",
 		},
 		{
+			name:  "an income category is planned to bring something in",
+			setup: [][]string{addBank, {"cli", "add", "-a", "Assets:Bank", "--amount=2900", "-t", "Income:Salary", "-d", "2026-09-28"}},
+			args:  []string{"cli", "budget", "set", "Income:Salary", "3000", "--month", "2026-10"},
+			want:  "Target for Income:Salary in 2026-10: 3000.00 EUR\n",
+		},
+		{
 			name:    "a category that does not exist",
 			setup:   [][]string{addBank},
 			args:    []string{"cli", "budget", "set", "Expenses:Nope", "400"},
 			wantErr: "account does not exist: Expenses:Nope",
 		},
 		{
-			name:    "an account that is not a spending category",
+			name:    "an account that is not a category",
 			setup:   [][]string{addBank},
 			args:    []string{"cli", "budget", "set", "Assets:Bank", "400"},
-			wantErr: "Assets:Bank is not a spending category: only an Expenses category, other than Uncategorized, can have a target or carry over",
+			wantErr: "Assets:Bank is not an Income or Expenses category: only those, other than Uncategorized, can have a target",
 		},
 		{
 			name:    "zero",
