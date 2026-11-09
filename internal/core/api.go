@@ -125,6 +125,11 @@ type Service interface {
 	DeleteSchedule(ctx context.Context, id int64) error
 	// Schedules lists them by name.
 	Schedules(ctx context.Context) ([]Schedule, error)
+	// Due lists the occurrences of every schedule from its start date up to and
+	// including upTo (YYYY-MM-DD), oldest first, a schedule's name breaking a tie
+	// on the same day. It only proposes: nothing is posted. Once occurrences can
+	// be confirmed or skipped (REC-3) the ones dealt with leave the list.
+	Due(ctx context.Context, upTo string) ([]Occurrence, error)
 
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
@@ -489,6 +494,12 @@ type Schedule struct {
 	Payee       string
 	Description string
 	Postings    []PostingView
+}
+
+// Occurrence is one date a schedule falls on.
+type Occurrence struct {
+	Schedule Schedule
+	Date     string // YYYY-MM-DD
 }
 
 // CopiedTargets is what CopyBudgetTargets did: the targets it added, and how many
