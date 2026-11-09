@@ -143,7 +143,7 @@ Things that happen on a schedule. Thaler **asks first**: it proposes an occurren
 
 - [x] `REC-1` Define a schedule (rent monthly, salary on the 28th, a yearly insurance): in the service, a name, a template transaction (payee, description, postings) and a rhythm of every N weeks, months or years from a start date; create, replace, delete and list. A monthly schedule keeps the start day and falls on the last day of a shorter month. Nothing is posted; the screens are `TFC-2` and `CLI-13`
 - [x] `REC-2` Work out which occurrences are due up to a date (`Due` in the service lists every schedule's dates from its start through the date, oldest first; each date is counted from the start, so a schedule on the 31st does not stay on the 28th after February. Dates already confirmed or skipped leave the list with `REC-3`)
-- [ ] `REC-3` Confirm, edit the amount, or skip a due occurrence; nothing is ever posted without that
+- [x] `REC-3` Confirm, edit the amount, or skip a due occurrence; nothing is ever posted without that (`ConfirmOccurrence` books the template, or other postings, on the occurrence's own date and only for a date that is due today; `SkipOccurrence` books nothing; either takes the date off `Due`, and deleting the booked transaction puts it back; the screens are `TFC-3` and `CLI-13`)
 - [ ] `REC-4` An imported bank row settles the occurrence it corresponds to
 - [ ] `REC-5` An estimate with a tolerance for bills that change (electricity)
 - [ ] `REC-6` Pause a schedule, give it an end date, skip a single occurrence
