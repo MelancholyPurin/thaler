@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -30,7 +31,7 @@ Without a subcommand it lists the schedules.`,
 		Args: cobra.NoArgs,
 		RunE: a.listSchedules,
 	}
-	cmd.AddCommand(a.scheduleAddCmd(), a.scheduleListCmd(), a.scheduleEditCmd(), a.scheduleDeleteCmd(), a.scheduleDueCmd(), a.scheduleConfirmCmd(), a.scheduleSkipCmd())
+	cmd.AddCommand(a.scheduleAddCmd(), a.scheduleListCmd(), a.scheduleEditCmd(), a.scheduleDeleteCmd(), a.schedulePauseCmd(), a.scheduleResumeCmd(), a.scheduleDueCmd(), a.scheduleConfirmCmd(), a.scheduleSkipCmd())
 	return cmd
 }
 
@@ -82,14 +83,15 @@ func amountOf(s core.Schedule) string {
 
 func (a *app) scheduleAddCmd() *cobra.Command {
 	var every int
-	var unit, start, account, amount, to, payee, memo, currency string
+	var unit, start, end, account, amount, to, payee, memo, currency string
 	cmd := &cobra.Command{
 		Use:   "add NAME",
 		Short: "Define a schedule, e.g. Rent, monthly",
 		Long: `Define a schedule: a transaction like "thaler cli add" makes, repeated every
 --every weeks, months or years (--unit) from --start. A monthly schedule keeps
 the day of its start, and falls on the last day of a month that is shorter. The
-schedule books nothing by itself; see "thaler cli schedule due".`,
+schedule books nothing by itself; see "thaler cli schedule due". --end is the last
+day it may fall on.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -120,6 +122,12 @@ schedule books nothing by itself; see "thaler cli schedule due".`,
 			if err != nil {
 				return err
 			}
+			var last time.Time
+			if end != "" {
+				if last, err = a.parseDateFlag(end); err != nil {
+					return err
+				}
+			}
 			counter := to
 			if counter == "" {
 				counter = ledger.UncategorizedExpense
@@ -128,20 +136,25 @@ schedule books nothing by itself; see "thaler cli schedule due".`,
 				}
 			}
 			id, err := svc.CreateSchedule(ctx, core.NewSchedule{
-				Name: args[0], Every: every, Unit: u, Start: when, Payee: payee, Description: memo,
+				Name: args[0], Every: every, Unit: u, Start: when, End: last, Payee: payee, Description: memo,
 				Postings: []ledger.Posting{{Account: acc.Name, Amount: amt}, {Account: counter, Amount: amt.Neg()}},
 			})
 			if err != nil {
 				return err
 			}
 			s := core.Schedule{Every: every, Unit: u}
-			fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s, %s  %s -> %s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), signed(amt), acc.Name, counter)
+			until := ""
+			if !last.IsZero() {
+				until = " until " + last.Format(ledger.DateLayout)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s%s, %s  %s -> %s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), until, signed(amt), acc.Name, counter)
 			return nil
 		},
 	}
 	cmd.Flags().IntVar(&every, "every", 1, "repeat every this many units")
 	cmd.Flags().StringVar(&unit, "unit", "", "week, month or year (required)")
 	cmd.Flags().StringVarP(&start, "start", "d", "", "the first date, YYYY-MM-DD or DD.MM.YYYY (default: today)")
+	cmd.Flags().StringVar(&end, "end", "", "the last date it may fall on, YYYY-MM-DD or DD.MM.YYYY (default: no end)")
 	cmd.Flags().StringVarP(&account, "account", "a", "", "account the money moves in or out of, e.g. Assets:Sparkasse (required)")
 	cmd.Flags().StringVar(&amount, "amount", "", "signed amount, e.g. -900 or 2450,00 (required)")
 	cmd.Flags().StringVarP(&to, "to", "t", "", "category or other account on the other side (default: Expenses:Uncategorized / Income:Uncategorized)")
@@ -173,12 +186,35 @@ func (a *app) listSchedules(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintln(out, "No schedules. Add one with: thaler cli schedule add Rent --unit month -a Assets:Bank --amount=-900 -t Expenses:Rent --start 2026-11-28")
 		return nil
 	}
+	header := []string{"Schedule", "ID", "Repeats", "Start", "Amount"}
 	var rows [][]string
+	notes := false
 	for _, s := range all {
-		rows = append(rows, []string{s.Name, strconv.FormatInt(s.ID, 10), repeats(s), s.Start, amountOf(s)})
+		note := scheduleNote(s)
+		notes = notes || note != ""
+		rows = append(rows, []string{s.Name, strconv.FormatInt(s.ID, 10), repeats(s), s.Start, amountOf(s), note})
 	}
-	printTable(out, []string{"Schedule", "ID", "Repeats", "Start", "Amount"}, rows)
+	if !notes { // most schedules run for ever: no column for what they do not have
+		for i := range rows {
+			rows[i] = rows[i][:len(header)]
+		}
+	} else {
+		header = append(header, "Note")
+	}
+	printTable(out, header, rows)
 	return nil
+}
+
+// scheduleNote says what is out of the ordinary about s: paused, or ending.
+func scheduleNote(s core.Schedule) string {
+	var notes []string
+	if s.Paused() {
+		notes = append(notes, "paused")
+	}
+	if s.End != "" {
+		notes = append(notes, "ends "+s.End)
+	}
+	return strings.Join(notes, ", ")
 }
 
 // scheduleNamed finds schedule id, for the words of a message.
@@ -196,7 +232,7 @@ func scheduleNamed(cmd *cobra.Command, svc core.Service, id int64) (core.Schedul
 }
 
 func (a *app) scheduleEditCmd() *cobra.Command {
-	var name, unit, start, amount, payee, memo string
+	var name, unit, start, end, amount, payee, memo string
 	var every int
 	cmd := &cobra.Command{
 		Use:   "edit ID",
@@ -204,7 +240,8 @@ func (a *app) scheduleEditCmd() *cobra.Command {
 		Long: `Change a schedule. Only the flags you give change; the rest stays. --amount is
 the amount on the account, signed as in "thaler cli add", and works on a schedule
 with one account and one category. To move a schedule to other accounts, delete
-it and add it again. Occurrences already confirmed or skipped stay as they are.`,
+it and add it again. Occurrences already confirmed or skipped stay as they are.
+Pauses are not changed here; see "schedule pause".`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -224,18 +261,23 @@ it and add it again. Occurrences already confirmed or skipped stay as they are.`
 			if ns.Start, err = ledger.ParseDate(cur.Start); err != nil {
 				return err
 			}
+			if cur.End != "" {
+				if ns.End, err = ledger.ParseDate(cur.End); err != nil {
+					return err
+				}
+			}
 			for _, p := range cur.Postings {
 				ns.Postings = append(ns.Postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
 			}
 			f := cmd.Flags()
 			changes := 0
-			for _, flag := range []string{"name", "every", "unit", "start", "amount", "payee", "memo"} {
+			for _, flag := range []string{"name", "every", "unit", "start", "end", "amount", "payee", "memo"} {
 				if f.Changed(flag) {
 					changes++
 				}
 			}
 			if changes == 0 {
-				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --amount, --payee, --memo")
+				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --payee, --memo")
 			}
 			if f.Changed("name") {
 				ns.Name = name
@@ -251,6 +293,14 @@ it and add it again. Occurrences already confirmed or skipped stay as they are.`
 			if f.Changed("start") {
 				if ns.Start, err = a.parseDateFlag(start); err != nil {
 					return err
+				}
+			}
+			if f.Changed("end") {
+				ns.End = time.Time{}
+				if strings.ToLower(strings.TrimSpace(end)) != "none" {
+					if ns.End, err = a.parseDateFlag(end); err != nil {
+						return err
+					}
 				}
 			}
 			if f.Changed("payee") {
@@ -275,6 +325,7 @@ it and add it again. Occurrences already confirmed or skipped stay as they are.`
 	cmd.Flags().IntVar(&every, "every", 1, "repeat every this many units")
 	cmd.Flags().StringVar(&unit, "unit", "", "week, month or year")
 	cmd.Flags().StringVarP(&start, "start", "d", "", "a new first date, YYYY-MM-DD or DD.MM.YYYY")
+	cmd.Flags().StringVar(&end, "end", "", "a new last date, or none for no end")
 	cmd.Flags().StringVar(&amount, "amount", "", "a new signed amount on the account")
 	cmd.Flags().StringVarP(&payee, "payee", "p", "", "a new payee")
 	cmd.Flags().StringVarP(&memo, "memo", "m", "", "a new description")
@@ -329,6 +380,58 @@ func (a *app) scheduleDeleteCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func (a *app) schedulePauseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pause ID",
+		Short: "Stop a schedule proposing anything from today",
+		Long: `Pause a schedule from today: it proposes nothing until it is resumed, and the
+dates that fall in between are dropped, not held back for later. Dates before the
+pause that were not answered stay due. To end a schedule for good, set its --end.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.pauseOrResume(cmd, args[0], true)
+		},
+	}
+}
+
+func (a *app) scheduleResumeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume ID",
+		Short: "Start a paused schedule again from today",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.pauseOrResume(cmd, args[0], false)
+		},
+	}
+}
+
+func (a *app) pauseOrResume(cmd *cobra.Command, idArg string, pause bool) error {
+	ctx := cmd.Context()
+	svc, err := a.service(ctx)
+	if err != nil {
+		return err
+	}
+	id, err := scheduleID(idArg)
+	if err != nil {
+		return err
+	}
+	if pause {
+		err = svc.PauseSchedule(ctx, id)
+	} else {
+		err = svc.ResumeSchedule(ctx, id)
+	}
+	if err != nil {
+		return err
+	}
+	s, _ := scheduleNamed(cmd, svc, id)
+	if pause {
+		fmt.Fprintf(cmd.OutOrStdout(), "Paused schedule #%d %s: nothing is proposed until it is resumed\n", id, s.Name)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Resumed schedule #%d %s\n", id, s.Name)
+	}
+	return nil
 }
 
 func (a *app) scheduleDueCmd() *cobra.Command {
