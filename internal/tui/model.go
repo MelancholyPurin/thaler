@@ -64,6 +64,7 @@ const (
 	modePrune                // removing the oldest backups
 	modeLanguage             // choosing the language
 	modeTarget               // setting a category's target for the month
+	modeSchedule             // creating or editing a schedule
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -133,6 +134,7 @@ type Model struct {
 	schedules    []core.ScheduleStatus // the Forecast's schedules, the soonest first
 	sched        listState             // the schedule selected there
 	schedScroll  int                   // first line of them shown
+	schedForm    *scheduleForm         // the schedule popup while it is open
 	now          func() time.Time
 	focus        pane
 	accts        listState // index 0 is "All accounts", then m.accounts
@@ -388,6 +390,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLanguage(msg)
 		case modeTarget:
 			return m.updateTarget(msg)
+		case modeSchedule:
+			return m.updateScheduleForm(msg)
 		default:
 			return m.updateList(msg)
 		}

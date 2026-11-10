@@ -1374,3 +1374,44 @@ func Test_ScheduleStatuses(t *testing.T) {
 		})
 	}
 }
+
+func Test_Schedule_NewSchedule(t *testing.T) {
+	tcs := []struct {
+		name    string
+		in      NewSchedule
+		wantErr string
+	}{
+		{name: "an ordinary schedule", in: rent()},
+		{name: "with an end, an estimate and a payee", in: func() NewSchedule {
+			ns := rent()
+			ns.End, ns.Tolerance, ns.Payee = day("2027-06-28"), 25, "Landlord"
+			return ns
+		}()},
+		{name: "a transfer", in: saving()},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given: what is stored comes back as what was given
+			st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Savings EUR"), schedule(tc.in))
+			stored, err := st.Schedules(t.Context())
+			check(t, err)
+
+			// when
+			got, err := stored[0].NewSchedule()
+
+			// then
+			check(t, err)
+			if diff := cmp.Diff(tc.in, got, equalEmpty); diff != "" {
+				t.Errorf("schedule mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+	t.Run("a stored date that is not one", func(t *testing.T) {
+		// when
+		_, err := Schedule{Start: "soon"}.NewSchedule()
+
+		// then
+		checkErr(t, err, `invalid date "soon": use YYYY-MM-DD or DD.MM.YYYY`, nil)
+	})
+}

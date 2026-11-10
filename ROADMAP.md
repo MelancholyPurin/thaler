@@ -291,7 +291,7 @@ Getting every transaction into the right category with as little typing as possi
 ### TFC: Forecast tab and recurring transactions
 
 - [x] `TFC-1` See all schedules and when each is next due (the Forecast screen lists them, the soonest first, with amount, rhythm, transfer, estimate, end and pause; `!` marks a date nobody answered, and the count is said above; `ScheduleStatuses` in the service works out the next date as of a day; the keys to create, edit and answer are `TFC-2` and `TFC-3`)
-- [ ] `TFC-2` Create, edit, pause and end a schedule
+- [x] `TFC-2` Create, edit, pause and end a schedule (on the Forecast: `n` new and `e` edit in a popup with name, amount, account, what it goes to (a category, or one of your accounts for a transfer), rhythm, start, end and tolerance; `p` pauses or resumes; `z` undoes each; deleting a schedule and one with several postings stay with the service and the command line)
 - [ ] `TFC-3` Go through what is due and confirm, change or skip each
 - [ ] `TFC-4` Projected balance per account, week by week
 - [ ] `TFC-5` Warn about the day a balance would dip below your chosen amount
