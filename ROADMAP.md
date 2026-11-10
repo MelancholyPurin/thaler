@@ -157,7 +157,7 @@ Read-only queries over the ledger.
 - [ ] `RPT-2` Net worth over time, in the base currency
 - [ ] `RPT-3` Income against spending per month, and the savings rate
 - [ ] `RPT-4` Where the most money goes, by payee
-- [ ] `RPT-5` Projected balance per account from the recurring schedules
+- [x] `RPT-5` Projected balance per account from the recurring schedules (`Projection` in the service: for each asset and liability account its balance today and, for each day up to a date, what the schedules move it by and the balance after; a date nobody answered counts today; the screen is `TFC-4`, and `thaler cli forecast` shows it)
 - [ ] `RPT-6` The day a balance would fall below a chosen amount
 - [ ] `RPT-7` Any report as CSV
 
