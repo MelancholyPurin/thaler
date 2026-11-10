@@ -1654,6 +1654,35 @@ func (s *Local) Due(ctx context.Context, upTo string) ([]Occurrence, error) {
 	return out, nil
 }
 
+// UnskipOccurrence makes a skipped occurrence due again.
+func (s *Local) UnskipOccurrence(ctx context.Context, id int64, date string) error {
+	d, err := ledger.ParseDate(date)
+	if err != nil {
+		return err
+	}
+	date = d.Format(ledger.DateLayout)
+	return s.repo.inTx(ctx, func(q queries) error {
+		all, err := q.schedules(ctx)
+		if err != nil {
+			return err
+		}
+		for _, sch := range all {
+			if sch.ID != id {
+				continue
+			}
+			found, err := q.deleteSkip(ctx, handled{id, date})
+			if err != nil {
+				return err
+			}
+			if !found {
+				return coded.New("occurrence_not_skipped", map[string]any{"Name": sch.Name, "Date": date})
+			}
+			return nil
+		}
+		return coded.New("schedule_not_found", map[string]any{"ID": id})
+	})
+}
+
 // scheduleDates is the dates of sch up to and including end, as stored: not past
 // the schedule's own end, and not the ones that fell in a pause.
 func scheduleDates(sch Schedule, end time.Time) ([]string, error) {

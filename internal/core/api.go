@@ -148,6 +148,10 @@ type Service interface {
 	// SkipOccurrence passes on the occurrence: nothing is booked, and it is not
 	// listed as due again.
 	SkipOccurrence(ctx context.Context, id int64, date string) error
+	// UnskipOccurrence takes a skip back: the occurrence is due again. One that was
+	// confirmed, or not answered, is an error; deleting what it booked is how a
+	// confirm is taken back.
+	UnskipOccurrence(ctx context.Context, id int64, date string) error
 
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
