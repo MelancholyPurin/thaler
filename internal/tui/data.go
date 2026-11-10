@@ -136,7 +136,10 @@ func (m *Model) reload() error {
 		return err
 	}
 	m.thisMonth, err = m.svc.MonthBudget(m.ctx, core.MonthBudgetRequest{Month: m.now().Format(monthLayout), RateDate: m.now().Format(ledger.DateLayout)})
-	return err
+	if err != nil {
+		return err
+	}
+	return m.refreshSchedules()
 }
 
 func (m *Model) uncategorizedCount() int {

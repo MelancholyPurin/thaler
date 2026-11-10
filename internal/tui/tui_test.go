@@ -618,10 +618,10 @@ func Test_Update_screenKeys(t *testing.T) {
 		m, _ := newModel(t)
 
 		// when
-		press(m, "F")
+		press(m, "R")
 
 		// then
-		checkView(t, m.View(), []string{"Not built yet", "Forecast"}, nil)
+		checkView(t, m.View(), []string{"Not built yet", "Reports"}, nil)
 	})
 }
 
