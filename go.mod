@@ -16,7 +16,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/text v0.43.0
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
