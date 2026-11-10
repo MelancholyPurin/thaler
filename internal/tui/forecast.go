@@ -97,7 +97,8 @@ func (m *Model) scheduleLines(iw int) (lines []string, sel span) {
 				amount = "~" + amount
 			}
 		}
-		next, late := "", s.Overdue > 0
+		var next string
+		late := s.Overdue > 0
 		switch {
 		case s.Next != "":
 			next = m.loc.StoredDate(s.Next)
@@ -121,9 +122,7 @@ func (m *Model) scheduleLines(iw int) (lines []string, sel span) {
 			line = leftRight(name, right, iw)
 		}
 		lines = append(lines, line)
-		for _, l := range wrapped("  "+strings.Join(m.scheduleNote(s), " · "), iw, dim) {
-			lines = append(lines, l)
-		}
+		lines = append(lines, wrapped("  "+strings.Join(m.scheduleNote(s), " · "), iw, dim)...)
 		if i == m.sched.cursor {
 			sel = span{first, len(lines)}
 		}

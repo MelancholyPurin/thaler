@@ -112,17 +112,16 @@ func (m *Model) budgetBody(l layout) string {
 // plannedLines say what a screen that is not built yet will hold.
 func (m *Model) plannedLines(s screen) []string {
 	const bullet = "  • "
-	switch s {
-	case screenReports:
-		return []string{
-			m.loc.T("planned_reports_title", nil),
-			"",
-			bullet + m.loc.T("planned_reports_categories", nil),
-			bullet + m.loc.T("planned_reports_net_worth", nil),
-			bullet + m.loc.T("planned_reports_income", nil),
-		}
+	if s != screenReports {
+		return nil
 	}
-	return nil
+	return []string{
+		m.loc.T("planned_reports_title", nil),
+		"",
+		bullet + m.loc.T("planned_reports_categories", nil),
+		bullet + m.loc.T("planned_reports_net_worth", nil),
+		bullet + m.loc.T("planned_reports_income", nil),
+	}
 }
 
 func (m *Model) placeholderBody(l layout) string {
