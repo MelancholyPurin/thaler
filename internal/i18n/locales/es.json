@@ -357,10 +357,6 @@
   "position_of": "{{.N}} de {{.Total}}",
   "this_month": "este mes",
   "not_built_yet": "Aún no está hecho.",
-  "planned_forecast_title": "Hacia dónde va el saldo.",
-  "planned_forecast_recurring": "ingresos y facturas recurrentes (alquiler, nómina, suscripciones)",
-  "planned_forecast_projected": "saldo previsto por cuenta, semana a semana",
-  "planned_forecast_dip": "el día en que bajarías de una cantidad elegida",
   "planned_reports_title": "A dónde fue el dinero, a lo largo del tiempo.",
   "planned_reports_categories": "gastos por categoría a lo largo de los meses",
   "planned_reports_net_worth": "evolución del patrimonio neto",
@@ -622,5 +618,31 @@
   "hint_category": "↑/↓ categoría",
   "hint_esc_all": "esc mostrar todo",
   "help_budget_tab": "Presupuesto: pasar de los meses a las categorías; enter en una categoría muestra sus transacciones",
-  "label_left_month": "Queda este mes"
+  "label_left_month": "Queda este mes",
+  "panel_schedules": "Programaciones",
+  "schedules_empty": "Aún no hay programaciones. Hasta que esta pantalla pueda crearlas, usa: thaler cli schedule add",
+  "schedules_waiting": {
+    "one": "{{.Count}} fecha espera una respuesta: thaler cli schedule due",
+    "other": "{{.Count}} fechas esperan una respuesta: thaler cli schedule due"
+  },
+  "schedule_paused": "en pausa",
+  "schedule_ended": "terminada",
+  "every_week": {
+    "one": "cada semana",
+    "other": "cada {{.Count}} semanas"
+  },
+  "every_month": {
+    "one": "cada mes",
+    "other": "cada {{.Count}} meses"
+  },
+  "every_year": {
+    "one": "cada año",
+    "other": "cada {{.Count}} años"
+  },
+  "schedule_transfer_to": "transferencia a {{.Account}}",
+  "schedule_ends": "termina el {{.Date}}",
+  "schedule_estimate": "estimación ±{{.Percent}}%",
+  "label_next": "Próxima",
+  "hint_schedule": "↑/↓ programación",
+  "help_forecast": "Previsión: las programaciones y cuándo vence la siguiente de cada una (! marca fechas que esperan respuesta)"
 }

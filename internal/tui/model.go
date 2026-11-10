@@ -124,12 +124,15 @@ type Model struct {
 	period       string   // "2026-10", or "" for all time; scopes every screen
 	months       []string // months that have transactions, plus the current one, newest first
 	budget       core.BudgetReport
-	monthly      core.MonthBudget // the month's spending against its targets; empty for all time
-	thisMonth    core.MonthBudget // the same for the current month, which the Home shows whichever month is on show
-	budgetTop    listState        // scroll position of the months list on the Budget screen
-	budgetCats   bool             // the categories of the Budget have the focus, not the months
-	budgetSel    string           // the category selected there
-	budgetScroll int              // first line of the categories pane shown, when it has the focus
+	monthly      core.MonthBudget      // the month's spending against its targets; empty for all time
+	thisMonth    core.MonthBudget      // the same for the current month, which the Home shows whichever month is on show
+	budgetTop    listState             // scroll position of the months list on the Budget screen
+	budgetCats   bool                  // the categories of the Budget have the focus, not the months
+	budgetSel    string                // the category selected there
+	budgetScroll int                   // first line of the categories pane shown, when it has the focus
+	schedules    []core.ScheduleStatus // the Forecast's schedules, the soonest first
+	sched        listState             // the schedule selected there
+	schedScroll  int                   // first line of them shown
 	now          func() time.Time
 	focus        pane
 	accts        listState // index 0 is "All accounts", then m.accounts
@@ -281,6 +284,7 @@ func (m *Model) clampAll() {
 	l := m.layout()
 	m.accts.clamp(len(m.accounts)+1, l.acctLines)
 	m.txs.clamp(len(m.view), l.txLines)
+	m.sched.clamp(len(m.schedules), len(m.schedules))
 }
 
 func (m *Model) setFocus(p pane) {
@@ -443,6 +447,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateLedger(key)
 	case screenBudget:
 		return m, m.updateBudget(key)
+	case screenForecast:
+		return m, m.updateForecast(key)
 	}
 	return m, nil
 }

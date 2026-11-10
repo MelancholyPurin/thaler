@@ -239,6 +239,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget, nothing to copy", keys: "B c c"},
 		{name: "budget, no targets to copy", keys: "B [ c"},
 		{name: "forecast", keys: "F"},
+		{name: "forecast, the last schedule", keys: "F G"},
 		{name: "reports", keys: "R"},
 		{name: "language", keys: "ctrl+l"},
 	}
@@ -252,6 +253,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			if tc.salary { // not in the others: the picker shows the stored name, Income:Salary, in English
 				book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
 			}
+			testSchedules(t, st, "Assets:Dollars")
 			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {
 				t.Fatal(err)
 			}

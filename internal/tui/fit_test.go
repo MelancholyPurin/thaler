@@ -64,6 +64,7 @@ func fitModel(t *testing.T, tag language.Tag) *Model {
 	book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 	book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
 	book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
+	testSchedules(t, st, "Assets:USD")
 	keep := 1
 	m, err := newWithClock(t.Context(), st, Options{
 		LoadConfig:     func() (*config.Config, error) { return &config.Config{KeepBackups: &keep}, nil },
@@ -165,6 +166,7 @@ func Test_View_fits(t *testing.T) {
 		{name: "target, income", keys: "B e down"},
 		{name: "target, income with a plan", keys: "B e down text:80"},
 		{name: "forecast", keys: "F"},
+		{name: "forecast, the last schedule", keys: "F G"},
 		{name: "reports", keys: "R"},
 		{name: "search", keys: "tab tab /"},
 

@@ -136,6 +136,10 @@ type Service interface {
 	// on the same day. It only proposes: nothing is posted. An occurrence that was
 	// confirmed or skipped is not listed again.
 	Due(ctx context.Context, upTo string) ([]Occurrence, error)
+	// ScheduleStatuses lists the schedules with when each is next due, as of asOf
+	// (YYYY-MM-DD, today): the soonest first, a name breaking a tie, and the ones
+	// with nothing coming (paused, or past their end) last.
+	ScheduleStatuses(ctx context.Context, asOf string) ([]ScheduleStatus, error)
 	// ConfirmOccurrence books the occurrence of schedule id on date as a transaction
 	// dated that day, and returns it. postings, when given, replace the template's
 	// (to change an amount); they must balance. Only a date Due lists today can be
@@ -560,6 +564,17 @@ type SchedulePause struct {
 // Paused says whether the schedule is paused now.
 func (s Schedule) Paused() bool {
 	return len(s.Pauses) > 0 && s.Pauses[len(s.Pauses)-1].To == ""
+}
+
+// ScheduleStatus is a schedule and when it is next due.
+type ScheduleStatus struct {
+	Schedule
+	// Next is the earliest date nobody has answered yet: in the past when
+	// something is waiting, else the next one to come. It is empty for a paused
+	// schedule with nothing waiting, and for one that has run out.
+	Next string
+	// Overdue counts the dates up to the day asked that nobody has answered.
+	Overdue int
 }
 
 // Occurrence is one date a schedule falls on.

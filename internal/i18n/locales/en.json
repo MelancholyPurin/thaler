@@ -357,10 +357,6 @@
   "position_of": "{{.N}} of {{.Total}}",
   "this_month": "this month",
   "not_built_yet": "Not built yet.",
-  "planned_forecast_title": "Where the balance is heading.",
-  "planned_forecast_recurring": "recurring income and bills (rent, salary, subscriptions)",
-  "planned_forecast_projected": "projected balance per account, week by week",
-  "planned_forecast_dip": "the day you would dip below a chosen amount",
   "planned_reports_title": "Where the money went, over time.",
   "planned_reports_categories": "spending by category across months",
   "planned_reports_net_worth": "net worth history",
@@ -622,5 +618,31 @@
   "hint_category": "↑/↓ category",
   "hint_esc_all": "esc show all",
   "help_budget_tab": "Budget: move between the months and the categories; enter on a category shows its transactions",
-  "label_left_month": "Left this month"
+  "label_left_month": "Left this month",
+  "panel_schedules": "Schedules",
+  "schedules_empty": "No schedules yet. Until this screen can create them, use: thaler cli schedule add",
+  "schedules_waiting": {
+    "one": "{{.Count}} date is waiting for an answer: thaler cli schedule due",
+    "other": "{{.Count}} dates are waiting for an answer: thaler cli schedule due"
+  },
+  "schedule_paused": "paused",
+  "schedule_ended": "ended",
+  "every_week": {
+    "one": "every week",
+    "other": "every {{.Count}} weeks"
+  },
+  "every_month": {
+    "one": "every month",
+    "other": "every {{.Count}} months"
+  },
+  "every_year": {
+    "one": "every year",
+    "other": "every {{.Count}} years"
+  },
+  "schedule_transfer_to": "transfer to {{.Account}}",
+  "schedule_ends": "ends {{.Date}}",
+  "schedule_estimate": "estimate ±{{.Percent}}%",
+  "label_next": "Next",
+  "hint_schedule": "↑/↓ schedule",
+  "help_forecast": "Forecast: the schedules and when each is next due (! marks dates waiting for an answer)"
 }
