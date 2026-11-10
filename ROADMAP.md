@@ -146,7 +146,7 @@ Things that happen on a schedule. Thaler **asks first**: it proposes an occurren
 - [x] `REC-3` Confirm, edit the amount, or skip a due occurrence; nothing is ever posted without that (`ConfirmOccurrence` books the template, or other postings, on the occurrence's own date and only for a date that is due today; `SkipOccurrence` books nothing; either takes the date off `Due`, and deleting the booked transaction puts it back; the screens are `TFC-3` and `CLI-13`)
 - [x] `REC-4` An imported bank row settles the occurrence it corresponds to (same account, exactly the schedule's amount, within three days of an unanswered date, the nearest first; the row is booked to the schedule's category unless a rule chose one, and `ImportResult.Settled` lists them; `thaler cli import` says so; the import popup does not mention it yet)
 - [ ] `REC-5` An estimate with a tolerance for bills that change (electricity)
-- [ ] `REC-6` Pause a schedule, give it an end date, skip a single occurrence
+- [x] `REC-6` Pause a schedule, give it an end date, skip a single occurrence (an end is the last day a date may fall on; a pause keeps its span, so the dates that fell in it are dropped on resume instead of coming back, and a bank row does not settle them; skipping one date was `REC-3`; `thaler cli schedule pause`, `resume` and `--end`; the interface's screens are `TFC-2`)
 - [ ] `REC-7` Scheduled transfers, such as a monthly saving
 
 ### RPT: Reports and projections
