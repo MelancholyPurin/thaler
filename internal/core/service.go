@@ -29,13 +29,24 @@ var _ Service = (*Local)(nil)
 
 // Open opens (creating if needed) the database at path and applies pending
 // migrations. Use ":memory:" for a throwaway database in tests.
-func Open(ctx context.Context, path string) (*Local, error) {
+func Open(ctx context.Context, path string, opts ...Option) (*Local, error) {
 	repo, err := openRepository(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	return &Local{repo: repo, now: time.Now}, nil
+	s := &Local{repo: repo, now: time.Now}
+	for _, o := range opts {
+		o(s)
+	}
+	return s, nil
 }
+
+// Option changes how Open sets the service up.
+type Option func(*Local)
+
+// WithClock makes now the service's "today", for a caller that has its own clock
+// (the command line's tests) and wants both to agree.
+func WithClock(now func() time.Time) Option { return func(s *Local) { s.now = now } }
 
 // Close releases the database.
 func (s *Local) Close() error { return s.repo.close() }

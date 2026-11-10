@@ -153,6 +153,13 @@ type Service interface {
 	// confirm is taken back.
 	UnskipOccurrence(ctx context.Context, id int64, date string) error
 
+	// Projection works out what each asset and liability account would hold on
+	// the coming days if every schedule were answered with a yes: the balance
+	// today, and for each day up to upTo (YYYY-MM-DD, not before today) the
+	// moves of the schedules and the balance after them. It reads the ledger and
+	// writes nothing.
+	Projection(ctx context.Context, upTo string) (Projection, error)
+
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
 	Check(ctx context.Context) ([]string, error)
@@ -694,4 +701,54 @@ type BudgetReport struct {
 	Income, Expenses          []BudgetLine // largest first
 	IncomeTotal, ExpenseTotal ledger.Money
 	Missing                   []ledger.Currency // no exchange rate, so left out
+}
+
+// ---- projection ------------------------------------------------------------
+
+// Projection is what the schedules would do to the balances: for each asset and
+// liability account, what it holds today and the days on which a schedule moves
+// it. It counts only the schedules, so a purchase you have not made yet, and a
+// transaction already booked with a date to come, are not in it.
+type Projection struct {
+	From, To string // today and the last day looked at, both included
+	Accounts []ProjectedAccount
+}
+
+// ProjectedAccount is one account, in its own currency.
+type ProjectedAccount struct {
+	Name  string
+	Type  ledger.AccountType
+	Start ledger.Money   // the balance today, with everything booked up to today
+	Days  []ProjectedDay // oldest first; only the days a schedule moves it
+}
+
+// ProjectedDay is one day on which schedules move an account.
+type ProjectedDay struct {
+	Date    string
+	Change  ledger.Money // the sum of Moves
+	Balance ledger.Money // what the account holds at the end of the day
+	Moves   []ProjectedMove
+}
+
+// ProjectedMove is what one schedule does to an account on a day.
+type ProjectedMove struct {
+	ScheduleID int64
+	Schedule   string
+	Amount     ledger.Money // negative takes money out of the account
+	// Overdue marks a date before today that nobody has answered. It is expected
+	// to be answered today, so it is placed on today.
+	Overdue bool
+}
+
+// BalanceOn is what the account holds at the end of day: the balance after the
+// last day that moves it on or before day, else what it holds today.
+func (a ProjectedAccount) BalanceOn(day string) ledger.Money {
+	out := a.Start
+	for _, d := range a.Days {
+		if d.Date > day {
+			break
+		}
+		out = d.Balance
+	}
+	return out
 }
