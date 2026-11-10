@@ -1443,6 +1443,9 @@ func (ns *NewSchedule) validate() error {
 	case ns.Unit != EveryWeek && ns.Unit != EveryMonth && ns.Unit != EveryYear:
 		return coded.New("schedule_unit_invalid", map[string]any{"Unit": string(ns.Unit)})
 	}
+	if !ns.End.IsZero() && ns.End.Before(ns.Start) {
+		return coded.New("schedule_end_before_start", map[string]any{"Start": ns.Start.Format(ledger.DateLayout), "End": ns.End.Format(ledger.DateLayout)})
+	}
 	// The template is a transaction that has not happened: the same rules apply.
 	return NewTransaction{Date: ns.Start, Postings: ns.Postings}.validate()
 }
@@ -1590,17 +1593,59 @@ func (s *Local) Due(ctx context.Context, upTo string) ([]Occurrence, error) {
 	return out, nil
 }
 
-// scheduleDates is the dates of sch up to and including end, as stored.
+// scheduleDates is the dates of sch up to and including end, as stored: not past
+// the schedule's own end, and not the ones that fell in a pause.
 func scheduleDates(sch Schedule, end time.Time) ([]string, error) {
 	start, err := ledger.ParseDate(sch.Start)
 	if err != nil {
 		return nil, err
 	}
 	var out []string
+dates:
 	for _, d := range occurrencesUpTo(start, sch.Every, sch.Unit, end) {
-		out = append(out, d.Format(ledger.DateLayout))
+		day := d.Format(ledger.DateLayout)
+		if sch.End != "" && day > sch.End {
+			break
+		}
+		for _, z := range sch.Pauses {
+			if day >= z.From && (z.To == "" || day < z.To) {
+				continue dates
+			}
+		}
+		out = append(out, day)
 	}
 	return out, nil
+}
+
+// PauseSchedule pauses schedule id from today.
+func (s *Local) PauseSchedule(ctx context.Context, id int64) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		if err := scheduleMustExist(ctx, q, id); err != nil {
+			return err
+		}
+		return q.pauseSchedule(ctx, id, s.today())
+	})
+}
+
+// ResumeSchedule resumes schedule id from today.
+func (s *Local) ResumeSchedule(ctx context.Context, id int64) error {
+	return s.repo.inTx(ctx, func(q queries) error {
+		if err := scheduleMustExist(ctx, q, id); err != nil {
+			return err
+		}
+		return q.resumeSchedule(ctx, id, s.today())
+	})
+}
+
+func scheduleMustExist(ctx context.Context, q queries, id int64) error {
+	found, err := q.scheduleExists(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return coded.New("schedule_not_found", map[string]any{"ID": id})
+	}
+	return nil
 }
 
 // answerable finds the occurrence of schedule id on date and checks that it can

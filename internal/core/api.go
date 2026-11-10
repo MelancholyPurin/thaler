@@ -123,6 +123,12 @@ type Service interface {
 	ReplaceSchedule(ctx context.Context, id int64, ns NewSchedule) error
 	// DeleteSchedule removes a schedule; the transactions it was confirmed into stay.
 	DeleteSchedule(ctx context.Context, id int64) error
+	// PauseSchedule stops the schedule proposing anything from today on, and
+	// ResumeSchedule starts it again from today. The dates in between are dropped,
+	// not held back; the ones before the pause that nobody answered stay due.
+	// Pausing a paused schedule, or resuming one that runs, leaves it as it is.
+	PauseSchedule(ctx context.Context, id int64) error
+	ResumeSchedule(ctx context.Context, id int64) error
 	// Schedules lists them by name.
 	Schedules(ctx context.Context) ([]Schedule, error)
 	// Due lists the occurrences of every schedule from its start date up to and
@@ -495,12 +501,14 @@ const (
 // NewSchedule is the input for defining a schedule: the transaction that repeats
 // (Payee, Description and Postings, as for NewTransaction) every Every Units,
 // the first time on Start. A monthly or yearly schedule keeps Start's day of the
-// month, and falls on the last day of a month that is shorter.
+// month, and falls on the last day of a month that is shorter. End, when set, is
+// the last day it may fall on.
 type NewSchedule struct {
 	Name        string // unique, whatever the case
 	Every       int    // 1 or more: 2 with EveryWeek is every other week
 	Unit        ScheduleUnit
 	Start       time.Time
+	End         time.Time // zero: no end
 	Payee       string
 	Description string
 	Postings    []ledger.Posting
@@ -513,9 +521,23 @@ type Schedule struct {
 	Every       int
 	Unit        ScheduleUnit
 	Start       string // YYYY-MM-DD
+	End         string // YYYY-MM-DD, the last day it may fall on; empty: no end
 	Payee       string
 	Description string
 	Postings    []PostingView
+	Pauses      []SchedulePause // oldest first
+}
+
+// SchedulePause is a span in which a schedule proposed nothing: from the day it
+// was paused up to, not including, the day it was resumed. To is empty while it
+// is still paused.
+type SchedulePause struct {
+	From, To string // YYYY-MM-DD
+}
+
+// Paused says whether the schedule is paused now.
+func (s Schedule) Paused() bool {
+	return len(s.Pauses) > 0 && s.Pauses[len(s.Pauses)-1].To == ""
 }
 
 // Occurrence is one date a schedule falls on.

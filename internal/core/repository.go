@@ -963,10 +963,18 @@ func (q queries) scheduleExists(ctx context.Context, id int64) (bool, error) {
 	return n > 0, err
 }
 
+// endDate is the end of ns for the database: NULL when it has none.
+func endDate(ns NewSchedule) any {
+	if ns.End.IsZero() {
+		return nil
+	}
+	return ns.End.Format(ledger.DateLayout)
+}
+
 func (q queries) insertSchedule(ctx context.Context, ns NewSchedule) (int64, error) {
 	res, err := q.db.ExecContext(ctx,
-		`INSERT INTO schedules (name, every, unit, start_date, payee, description) VALUES (?, ?, ?, ?, ?, ?)`,
-		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), ns.Payee, ns.Description)
+		`INSERT INTO schedules (name, every, unit, start_date, end_date, payee, description) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Payee, ns.Description)
 	if err != nil {
 		return 0, err
 	}
@@ -975,8 +983,8 @@ func (q queries) insertSchedule(ctx context.Context, ns NewSchedule) (int64, err
 
 func (q queries) updateSchedule(ctx context.Context, id int64, ns NewSchedule) error {
 	_, err := q.db.ExecContext(ctx,
-		`UPDATE schedules SET name = ?, every = ?, unit = ?, start_date = ?, payee = ?, description = ? WHERE id = ?`,
-		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), ns.Payee, ns.Description, id)
+		`UPDATE schedules SET name = ?, every = ?, unit = ?, start_date = ?, end_date = ?, payee = ?, description = ? WHERE id = ?`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Payee, ns.Description, id)
 	return err
 }
 
@@ -1010,7 +1018,7 @@ func (q queries) deleteSchedule(ctx context.Context, id int64) (bool, error) {
 
 func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 	rows, err := q.db.QueryContext(ctx,
-		`SELECT id, name, every, unit, start_date, payee, description FROM schedules ORDER BY name`)
+		`SELECT id, name, every, unit, start_date, COALESCE(end_date, ''), payee, description FROM schedules ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -1022,7 +1030,7 @@ func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 			s    Schedule
 			unit string
 		)
-		if err := rows.Scan(&s.ID, &s.Name, &s.Every, &unit, &s.Start, &s.Payee, &s.Description); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Every, &unit, &s.Start, &s.End, &s.Payee, &s.Description); err != nil {
 			return nil, err
 		}
 		s.Unit = ScheduleUnit(unit)
@@ -1053,7 +1061,45 @@ func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 		i := byID[id]
 		out[i].Postings = append(out[i].Postings, p)
 	}
-	return out, prows.Err()
+	if err := prows.Err(); err != nil {
+		return nil, err
+	}
+	zrows, err := q.db.QueryContext(ctx,
+		`SELECT schedule_id, from_date, COALESCE(to_date, '') FROM schedule_pauses ORDER BY schedule_id, from_date`)
+	if err != nil {
+		return nil, err
+	}
+	defer zrows.Close()
+	for zrows.Next() {
+		var (
+			id int64
+			z  SchedulePause
+		)
+		if err := zrows.Scan(&id, &z.From, &z.To); err != nil {
+			return nil, err
+		}
+		out[byID[id]].Pauses = append(out[byID[id]].Pauses, z)
+	}
+	return out, zrows.Err()
+}
+
+// pauseSchedule starts a pause on day unless one is open.
+func (q queries) pauseSchedule(ctx context.Context, id int64, day string) error {
+	var open int
+	if err := q.db.QueryRowContext(ctx, `SELECT count(*) FROM schedule_pauses WHERE schedule_id = ? AND to_date IS NULL`, id).Scan(&open); err != nil || open > 0 {
+		return err
+	}
+	// Pausing again on a day it was resumed reopens that span instead of adding one.
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO schedule_pauses (schedule_id, from_date) VALUES (?, ?)
+		 ON CONFLICT (schedule_id, from_date) DO UPDATE SET to_date = NULL`, id, day)
+	return err
+}
+
+// resumeSchedule ends the open pause on day, if there is one.
+func (q queries) resumeSchedule(ctx context.Context, id int64, day string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE schedule_pauses SET to_date = ? WHERE schedule_id = ? AND to_date IS NULL`, day, id)
+	return err
 }
 
 // handledOccurrences is the set of occurrences confirmed or skipped, keyed by

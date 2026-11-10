@@ -267,3 +267,44 @@ func Test_Import_settlingAndWhatHappensToIt(t *testing.T) {
 		})
 	}
 }
+
+func Test_Import_settlingSkipsWhatIsNotProposed(t *testing.T) {
+	tcs := []struct {
+		name  string
+		setup []given
+		want  []SettledOccurrence
+	}{
+		{name: "running", want: []SettledOccurrence{{1, "Rent", "2026-11-28", 1}}},
+		{name: "paused", setup: []given{today("2026-11-20"), func(t *testing.T, st *Local) { check(t, st.PauseSchedule(t.Context(), 1)) }}},
+		{
+			name: "paused before and resumed after: the row is just a payment",
+			setup: []given{
+				today("2026-11-20"), func(t *testing.T, st *Local) { check(t, st.PauseSchedule(t.Context(), 1)) },
+				today("2026-12-20"), func(t *testing.T, st *Local) { check(t, st.ResumeSchedule(t.Context(), 1)) },
+			},
+		},
+		{
+			name: "ended before the date it would settle",
+			setup: []given{func(t *testing.T, st *Local) {
+				ns := rent()
+				ns.Start, ns.End = day("2026-10-28"), day("2026-11-20")
+				check(t, st.ReplaceSchedule(t.Context(), 1, ns))
+			}},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR"), schedule(rent())}, tc.setup...)...)
+
+			// when
+			got, err := st.Import(t.Context(), ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{row(2, "2026-11-28", "LANDLORD GMBH", "Miete", eur(-90000))}})
+
+			// then
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got.Settled, equalEmpty); diff != "" {
+				t.Errorf("settled mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
