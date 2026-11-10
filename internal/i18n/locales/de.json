@@ -357,10 +357,6 @@
   "position_of": "{{.N}} von {{.Total}}",
   "this_month": "dieser Monat",
   "not_built_yet": "Noch nicht gebaut.",
-  "planned_forecast_title": "Wohin sich der Kontostand entwickelt.",
-  "planned_forecast_recurring": "wiederkehrende Einnahmen und Rechnungen (Miete, Gehalt, Abos)",
-  "planned_forecast_projected": "voraussichtlicher Kontostand pro Konto, Woche für Woche",
-  "planned_forecast_dip": "der Tag, an dem du unter einen gewählten Betrag fallen würdest",
   "planned_reports_title": "Wohin das Geld ging, im Lauf der Zeit.",
   "planned_reports_categories": "Ausgaben je Kategorie über die Monate",
   "planned_reports_net_worth": "Verlauf des Nettovermögens",
@@ -622,5 +618,31 @@
   "hint_category": "↑/↓ Kategorie",
   "hint_esc_all": "esc alle zeigen",
   "help_budget_tab": "Budget: zwischen Monaten und Kategorien wechseln; enter auf einer Kategorie zeigt ihre Transaktionen",
-  "label_left_month": "Übrig im Monat"
+  "label_left_month": "Übrig im Monat",
+  "panel_schedules": "Zeitpläne",
+  "schedules_empty": "Noch keine Zeitpläne. Bis dieser Bildschirm sie anlegen kann, nutze: thaler cli schedule add",
+  "schedules_waiting": {
+    "one": "{{.Count}} Termin wartet auf eine Antwort: thaler cli schedule due",
+    "other": "{{.Count}} Termine warten auf eine Antwort: thaler cli schedule due"
+  },
+  "schedule_paused": "pausiert",
+  "schedule_ended": "beendet",
+  "every_week": {
+    "one": "jede Woche",
+    "other": "alle {{.Count}} Wochen"
+  },
+  "every_month": {
+    "one": "jeden Monat",
+    "other": "alle {{.Count}} Monate"
+  },
+  "every_year": {
+    "one": "jedes Jahr",
+    "other": "alle {{.Count}} Jahre"
+  },
+  "schedule_transfer_to": "Überweisung auf {{.Account}}",
+  "schedule_ends": "endet am {{.Date}}",
+  "schedule_estimate": "Schätzung ±{{.Percent}}%",
+  "label_next": "Nächste",
+  "hint_schedule": "↑/↓ Zeitplan",
+  "help_forecast": "Prognose: die Zeitpläne und wann der nächste Termin fällig ist (! markiert Termine, die auf eine Antwort warten)"
 }
