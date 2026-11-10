@@ -397,26 +397,49 @@ func isClearingAccount(name string) bool {
 // cross-currency transfer is booked through Equity:Conversions so that every
 // currency balances on its own.
 func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResult, error) {
-	q := s.repo.queries()
-	src, err := q.account(ctx, req.From)
+	var res TransferResult
+	err := s.repo.inTx(ctx, func(q queries) error {
+		plan, err := planTransfer(ctx, q, req)
+		if err != nil {
+			return err
+		}
+		res, err = plan.store(ctx, q)
+		return err
+	})
 	if err != nil {
 		return TransferResult{}, err
+	}
+	return res, nil
+}
+
+// transferPlan is a transfer that has been checked and not yet stored: its two
+// halves, each an ordinary transaction on its own account.
+type transferPlan struct {
+	out, in NewTransaction
+	res     TransferResult // what is known before storing: In and CrossCurrency
+}
+
+// planTransfer checks req against the accounts and builds the two halves.
+func planTransfer(ctx context.Context, q queries, req TransferRequest) (transferPlan, error) {
+	src, err := q.account(ctx, req.From)
+	if err != nil {
+		return transferPlan{}, err
 	}
 	dst, err := q.account(ctx, req.To)
 	if err != nil {
-		return TransferResult{}, err
+		return transferPlan{}, err
 	}
 	if src.Currency == "" || dst.Currency == "" {
-		return TransferResult{}, coded.New("transfer_fixed_currency", nil)
+		return transferPlan{}, coded.New("transfer_fixed_currency", nil)
 	}
 	if src.ID == dst.ID {
-		return TransferResult{}, coded.New("transfer_same_account", nil)
+		return transferPlan{}, coded.New("transfer_same_account", nil)
 	}
 	if req.Amount.Currency != src.Currency {
-		return TransferResult{}, coded.New("amount_wrong_currency", map[string]any{"Currency": string(req.Amount.Currency), "Account": src.Name, "Holds": string(src.Currency)})
+		return transferPlan{}, coded.New("amount_wrong_currency", map[string]any{"Currency": string(req.Amount.Currency), "Account": src.Name, "Holds": string(src.Currency)})
 	}
 	if req.Amount.Minor <= 0 {
-		return TransferResult{}, coded.New("amount_not_positive", nil)
+		return transferPlan{}, coded.New("amount_not_positive", nil)
 	}
 
 	// Each side of the transfer is its own transaction on its own account,
@@ -428,43 +451,45 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 	res := TransferResult{In: req.Amount}
 	if src.Currency == dst.Currency {
 		if req.ToAmount != (ledger.Money{}) {
-			return TransferResult{}, coded.New("transfer_same_currency", map[string]any{"Currency": src.Currency})
+			return transferPlan{}, coded.New("transfer_same_currency", map[string]any{"Currency": src.Currency})
 		}
 	} else {
 		if req.ToAmount == (ledger.Money{}) {
-			return TransferResult{}, coded.New("transfer_needs_received", map[string]any{"From": src.Currency, "To": dst.Currency, "Currency": dst.Currency})
+			return transferPlan{}, coded.New("transfer_needs_received", map[string]any{"From": src.Currency, "To": dst.Currency, "Currency": dst.Currency})
 		}
 		if req.ToAmount.Currency != dst.Currency {
-			return TransferResult{}, coded.New("received_wrong_currency", map[string]any{"Currency": string(req.ToAmount.Currency), "Account": dst.Name, "Holds": string(dst.Currency)})
+			return transferPlan{}, coded.New("received_wrong_currency", map[string]any{"Currency": string(req.ToAmount.Currency), "Account": dst.Name, "Holds": string(dst.Currency)})
 		}
 		if req.ToAmount.Minor <= 0 {
-			return TransferResult{}, coded.New("received_not_positive", nil)
+			return transferPlan{}, coded.New("received_not_positive", nil)
 		}
 		clearing, received = ledger.ConversionAccount, req.ToAmount
 		res.In, res.CrossCurrency = req.ToAmount, true
 	}
-	out := NewTransaction{
-		Date: req.Date, Payee: "Transfer to " + shortAccountName(dst.Name), Description: req.Memo,
-		Postings: []ledger.Posting{{Account: src.Name, Amount: req.Amount.Neg()}, {Account: clearing, Amount: req.Amount}},
-	}
-	in := NewTransaction{
-		Date: req.Date, Payee: "Transfer from " + shortAccountName(src.Name), Description: req.Memo,
-		Postings: []ledger.Posting{{Account: dst.Name, Amount: received}, {Account: clearing, Amount: received.Neg()}},
-	}
-	err = s.repo.inTx(ctx, func(q queries) error {
-		var err error
-		if res.ID, err = storeTransaction(ctx, q, out, 0, &res.Created); err != nil {
-			return err
-		}
-		if res.InID, err = storeTransaction(ctx, q, in, 0, &res.Created); err != nil {
-			return err
-		}
-		return q.linkTransfer(ctx, res.ID, res.InID)
-	})
-	if err != nil {
+	return transferPlan{
+		res: res,
+		out: NewTransaction{
+			Date: req.Date, Payee: "Transfer to " + shortAccountName(dst.Name), Description: req.Memo,
+			Postings: []ledger.Posting{{Account: src.Name, Amount: req.Amount.Neg()}, {Account: clearing, Amount: req.Amount}},
+		},
+		in: NewTransaction{
+			Date: req.Date, Payee: "Transfer from " + shortAccountName(src.Name), Description: req.Memo,
+			Postings: []ledger.Posting{{Account: dst.Name, Amount: received}, {Account: clearing, Amount: received.Neg()}},
+		},
+	}, nil
+}
+
+// store writes both halves and links them, inside the caller's transaction.
+func (p transferPlan) store(ctx context.Context, q queries) (TransferResult, error) {
+	res := p.res
+	var err error
+	if res.ID, err = storeTransaction(ctx, q, p.out, 0, &res.Created); err != nil {
 		return TransferResult{}, err
 	}
-	return res, nil
+	if res.InID, err = storeTransaction(ctx, q, p.in, 0, &res.Created); err != nil {
+		return TransferResult{}, err
+	}
+	return res, q.linkTransfer(ctx, res.ID, res.InID)
 }
 
 // shortAccountName drops the type segment: "Assets:Savings" is "Savings".
@@ -700,14 +725,15 @@ func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row
 				}
 			}
 		}
-		if !dup && p.adopts == nil && tx.Postings[1].Account != ledger.TransferAccount && rows[i].Amount.Minor != 0 {
-			p.settles = occurrences.find(acc, rows[i].Amount, rows[i].Date)
+		if !dup && p.adopts == nil && rows[i].Amount.Minor != 0 {
+			// A row a rule marked as a transfer can only be a scheduled transfer.
+			p.settles = occurrences.find(acc, rows[i].Amount, rows[i].Date, tx.Postings[1].Account == ledger.TransferAccount)
 			if p.settles != nil && !ruled[i] {
 				p.tx.Postings = []ledger.Posting{tx.Postings[0], {Account: p.settles.category, Amount: tx.Postings[0].Amount.Neg()}}
 			}
 		}
 		wanted := !ruled[i] || tx.Postings[1].Account == ledger.TransferAccount
-		if !dup && p.adopts == nil && p.settles == nil && wanted && rows[i].Amount.Minor != 0 {
+		if !dup && p.adopts == nil && (p.settles == nil || p.settles.transfer) && wanted && rows[i].Amount.Minor != 0 {
 			candidates, err := q.transferCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, matchWindowDays)
 			if err != nil {
 				return nil, err
@@ -1446,8 +1472,28 @@ func (ns *NewSchedule) validate() error {
 	if !ns.End.IsZero() && ns.End.Before(ns.Start) {
 		return coded.New("schedule_end_before_start", map[string]any{"Start": ns.Start.Format(ledger.DateLayout), "End": ns.End.Format(ledger.DateLayout)})
 	}
+	if ns.Transfer {
+		_, err := transferRequest(*ns)
+		return err
+	}
 	// The template is a transaction that has not happened: the same rules apply.
 	return NewTransaction{Date: ns.Start, Postings: ns.Postings}.validate()
+}
+
+// transferRequest is the transfer a schedule with Transfer set stands for, on
+// ns.Start, or the error that says its postings are not the two of a transfer.
+func transferRequest(ns NewSchedule) (TransferRequest, error) {
+	p := ns.Postings
+	if len(p) != 2 || p[0].Amount.Minor >= 0 || p[1].Amount.Minor <= 0 {
+		return TransferRequest{}, coded.New("schedule_transfer_postings", nil)
+	}
+	req := TransferRequest{From: p[0].Account, To: p[1].Account, Amount: p[0].Amount.Neg(), Date: ns.Start, Memo: ns.Description}
+	if p[0].Amount.Currency != p[1].Amount.Currency {
+		req.ToAmount = p[1].Amount
+	} else if p[1].Amount != req.Amount {
+		return TransferRequest{}, coded.New("schedule_transfer_postings", nil)
+	}
+	return req, nil
 }
 
 // storeSchedule writes ns as schedule id, or as a new one when id is 0.
@@ -1470,6 +1516,15 @@ func storeSchedule(ctx context.Context, q queries, id int64, ns NewSchedule) (in
 	}
 	if taken {
 		return 0, coded.New("schedule_name_taken", map[string]any{"Name": ns.Name})
+	}
+	if ns.Transfer { // the accounts must exist, hold their currency and differ, as for a transfer
+		req, err := transferRequest(ns)
+		if err != nil {
+			return 0, err
+		}
+		if _, err := planTransfer(ctx, q, req); err != nil {
+			return 0, err
+		}
 	}
 	var created []string
 	accountIDs, err := resolvePostings(ctx, q, NewTransaction{Postings: ns.Postings}, &created)
@@ -1689,8 +1744,8 @@ func (s *Local) answerable(ctx context.Context, q queries, id int64, date string
 }
 
 // ConfirmOccurrence books one occurrence.
-func (s *Local) ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (AddResult, error) {
-	var res AddResult
+func (s *Local) ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (ConfirmResult, error) {
+	var res ConfirmResult
 	err := s.repo.inTx(ctx, func(q queries) error {
 		sch, date, err := s.answerable(ctx, q, id, date)
 		if err != nil {
@@ -1705,6 +1760,22 @@ func (s *Local) ConfirmOccurrence(ctx context.Context, id int64, date string, po
 				postings = append(postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
 			}
 		}
+		if sch.Transfer {
+			req, err := transferRequest(NewSchedule{Start: when, Description: sch.Description, Postings: postings})
+			if err != nil {
+				return err
+			}
+			plan, err := planTransfer(ctx, q, req)
+			if err != nil {
+				return err
+			}
+			stored, err := plan.store(ctx, q)
+			if err != nil {
+				return err
+			}
+			res.AddResult, res.InID = stored.AddResult, stored.InID
+			return q.putOccurrence(ctx, handled{id, date}, res.ID)
+		}
 		nt := NewTransaction{Date: when, Payee: sch.Payee, Description: sch.Description, Postings: postings}
 		if res.ID, err = storeTransaction(ctx, q, nt, 0, &res.Created); err != nil {
 			return err
@@ -1712,7 +1783,7 @@ func (s *Local) ConfirmOccurrence(ctx context.Context, id int64, date string, po
 		return q.putOccurrence(ctx, handled{id, date}, res.ID)
 	})
 	if err != nil {
-		return AddResult{}, err
+		return ConfirmResult{}, err
 	}
 	return res, nil
 }
@@ -1736,6 +1807,7 @@ type occurrenceMatch struct {
 	name       string
 	date       string
 	category   string // the schedule's, for the row to be booked to
+	transfer   bool   // a scheduled transfer: the row may still be paired with its other half
 }
 
 func (m occurrenceMatch) settled(txID int64) SettledOccurrence {
@@ -1762,17 +1834,40 @@ func newOccurrenceMatcher(ctx context.Context, q queries) (*occurrenceMatcher, e
 	return &occurrenceMatcher{schedules: schedules, done: done}, nil
 }
 
+// bookedTo is the account a bank row of amount on account is booked to when it is
+// the booking of an occurrence of s: the category of an ordinary schedule, or the
+// clearing account of a scheduled transfer, which the row may be either half of.
+func (s Schedule) bookedTo(account string, amount ledger.Money) (string, bool) {
+	if !s.Transfer {
+		src, cat, ok := (TxView{Postings: s.Postings}).Legs()
+		return cat.Account, ok && src.Account == account && src.Amount == amount
+	}
+	if len(s.Postings) != 2 {
+		return "", false
+	}
+	clearing := ledger.TransferAccount
+	if s.Postings[0].Amount.Currency != s.Postings[1].Amount.Currency {
+		clearing = ledger.ConversionAccount
+	}
+	for _, p := range s.Postings {
+		if p.Account == account && p.Amount == amount {
+			return clearing, true
+		}
+	}
+	return "", false
+}
+
 // find is the occurrence whose schedule books exactly amount on acc within
 // matchWindowDays of date, the nearest first and then the earliest, or nil. A
 // bill whose amount changes is no match: an estimate with a tolerance is REC-5.
 // The occurrence need not be due yet: money that moved is news enough.
-func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Time) *occurrenceMatch {
+func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Time, transfersOnly bool) *occurrenceMatch {
 	var best *occurrenceMatch
 	bestDistance := 0
 	from := date.AddDate(0, 0, -matchWindowDays).Format(ledger.DateLayout)
 	for _, sch := range m.schedules {
-		src, cat, ok := (TxView{Postings: sch.Postings}).Legs()
-		if !ok || src.Account != acc.Name || src.Amount != amount {
+		category, ok := sch.bookedTo(acc.Name, amount)
+		if !ok || (transfersOnly && !sch.Transfer) {
 			continue
 		}
 		dates, err := scheduleDates(sch, date.AddDate(0, 0, matchWindowDays))
@@ -1789,7 +1884,7 @@ func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Tim
 			}
 			distance := int(math.Abs(date.Sub(when).Hours() / 24))
 			if best == nil || distance < bestDistance || (distance == bestDistance && d < best.date) {
-				best, bestDistance = &occurrenceMatch{scheduleID: sch.ID, name: sch.Name, date: d, category: cat.Account}, distance
+				best, bestDistance = &occurrenceMatch{scheduleID: sch.ID, name: sch.Name, date: d, category: category, transfer: sch.Transfer}, distance
 			}
 		}
 	}

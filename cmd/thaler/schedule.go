@@ -75,15 +75,55 @@ func repeats(s core.Schedule) string {
 // amountOf is the amount on the account of a schedule, or "split" for one with
 // more than two postings.
 func amountOf(s core.Schedule) string {
+	if s.Transfer && len(s.Postings) == 2 {
+		return s.Postings[0].Amount.String()
+	}
 	if src, _, ok := (core.TxView{Postings: s.Postings}).Legs(); ok {
 		return src.Amount.String()
 	}
 	return "split"
 }
 
+// transferPostings are the postings of a scheduled transfer of amount (its sign
+// does not matter) from source to dest, with what arrives in toAmount when the two
+// accounts hold different currencies.
+func transferPostings(cmd *cobra.Command, svc core.Service, source string, amount ledger.Money, dest, toAmount string) ([]ledger.Posting, error) {
+	dst, err := svc.GetAccount(cmd.Context(), dest)
+	if err != nil {
+		return nil, err
+	}
+	out := ledger.Money{Minor: amount.Minor, Currency: amount.Currency}
+	if out.Minor > 0 {
+		out = out.Neg()
+	}
+	in := out.Neg()
+	if dst.Currency != "" && dst.Currency != out.Currency {
+		if toAmount == "" {
+			return nil, fmt.Errorf("%s holds %s, not %s: say how much arrives with --to-amount", dest, dst.Currency, out.Currency)
+		}
+		if in, err = ledger.ParseAmount(toAmount, dst.Currency, 0); err != nil {
+			return nil, fmt.Errorf("--to-amount: %w", err)
+		}
+		if in.Minor < 0 {
+			in = in.Neg()
+		}
+	} else if toAmount != "" {
+		return nil, errors.New("both accounts hold the same currency: there is no separate --to-amount")
+	}
+	return []ledger.Posting{{Account: source, Amount: out}, {Account: dest, Amount: in}}, nil
+}
+
+// arrives says what arrives when a scheduled transfer changes currency.
+func arrives(p []ledger.Posting) string {
+	if len(p) == 2 && p[0].Amount.Currency != p[1].Amount.Currency {
+		return " (arrives " + p[1].Amount.String() + ")"
+	}
+	return ""
+}
+
 func (a *app) scheduleAddCmd() *cobra.Command {
 	var every int
-	var unit, start, end, account, amount, to, payee, memo, currency string
+	var unit, start, end, account, amount, toAmount, to, payee, memo, currency string
 	cmd := &cobra.Command{
 		Use:   "add NAME",
 		Short: "Define a schedule, e.g. Rent, monthly",
@@ -91,7 +131,14 @@ func (a *app) scheduleAddCmd() *cobra.Command {
 --every weeks, months or years (--unit) from --start. A monthly schedule keeps
 the day of its start, and falls on the last day of a month that is shorter. The
 schedule books nothing by itself; see "thaler cli schedule due". --end is the last
-day it may fall on.`,
+day it may fall on.
+
+When --to is one of your own accounts (Assets or Liabilities) the schedule is a
+transfer, like "thaler cli transfer": -a is the account the money leaves, --to the
+one it arrives in, and the amount is how much leaves (its sign does not matter).
+Between accounts in different currencies --to-amount says how much arrives:
+
+  thaler cli schedule add Saving --unit month -a Assets:Bank --amount 200 --to Assets:Savings --start 2026-11-01`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -135,10 +182,22 @@ day it may fall on.`,
 					counter = ledger.UncategorizedIncome
 				}
 			}
-			id, err := svc.CreateSchedule(ctx, core.NewSchedule{
-				Name: args[0], Every: every, Unit: u, Start: when, End: last, Payee: payee, Description: memo,
-				Postings: []ledger.Posting{{Account: acc.Name, Amount: amt}, {Account: counter, Amount: amt.Neg()}},
-			})
+			ns := core.NewSchedule{Name: args[0], Every: every, Unit: u, Start: when, End: last, Payee: payee, Description: memo}
+			transfer := false
+			if typ, err := ledger.TypeOf(counter); err == nil && typ.NeedsCurrency() {
+				transfer = true
+				if ns.Postings, err = transferPostings(cmd, svc, acc.Name, amt, counter, toAmount); err != nil {
+					return err
+				}
+				ns.Transfer = true
+				ns.Payee = "" // the transfer names its own halves
+			} else {
+				if cmd.Flags().Changed("to-amount") {
+					return errors.New("--to-amount is for a transfer between your own accounts")
+				}
+				ns.Postings = []ledger.Posting{{Account: acc.Name, Amount: amt}, {Account: counter, Amount: amt.Neg()}}
+			}
+			id, err := svc.CreateSchedule(ctx, ns)
 			if err != nil {
 				return err
 			}
@@ -146,6 +205,11 @@ day it may fall on.`,
 			until := ""
 			if !last.IsZero() {
 				until = " until " + last.Format(ledger.DateLayout)
+			}
+			if transfer {
+				fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s%s, transfer %s  %s -> %s%s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), until,
+					ns.Postings[0].Amount.Neg(), acc.Name, counter, arrives(ns.Postings))
+				return nil
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s%s, %s  %s -> %s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), until, signed(amt), acc.Name, counter)
 			return nil
@@ -155,6 +219,7 @@ day it may fall on.`,
 	cmd.Flags().StringVar(&unit, "unit", "", "week, month or year (required)")
 	cmd.Flags().StringVarP(&start, "start", "d", "", "the first date, YYYY-MM-DD or DD.MM.YYYY (default: today)")
 	cmd.Flags().StringVar(&end, "end", "", "the last date it may fall on, YYYY-MM-DD or DD.MM.YYYY (default: no end)")
+	cmd.Flags().StringVar(&toAmount, "to-amount", "", "a transfer between currencies: how much arrives")
 	cmd.Flags().StringVarP(&account, "account", "a", "", "account the money moves in or out of, e.g. Assets:Sparkasse (required)")
 	cmd.Flags().StringVar(&amount, "amount", "", "signed amount, e.g. -900 or 2450,00 (required)")
 	cmd.Flags().StringVarP(&to, "to", "t", "", "category or other account on the other side (default: Expenses:Uncategorized / Income:Uncategorized)")
@@ -214,6 +279,9 @@ func scheduleNote(s core.Schedule) string {
 	if s.End != "" {
 		notes = append(notes, "ends "+s.End)
 	}
+	if s.Transfer && len(s.Postings) == 2 {
+		notes = append(notes, "transfer to "+s.Postings[1].Account)
+	}
 	return strings.Join(notes, ", ")
 }
 
@@ -232,7 +300,7 @@ func scheduleNamed(cmd *cobra.Command, svc core.Service, id int64) (core.Schedul
 }
 
 func (a *app) scheduleEditCmd() *cobra.Command {
-	var name, unit, start, end, amount, payee, memo string
+	var name, unit, start, end, amount, toAmount, payee, memo string
 	var every int
 	cmd := &cobra.Command{
 		Use:   "edit ID",
@@ -257,7 +325,7 @@ Pauses are not changed here; see "schedule pause".`,
 			if !ok {
 				return fmt.Errorf("no schedule number %d; see thaler cli schedule", id)
 			}
-			ns := core.NewSchedule{Name: cur.Name, Every: cur.Every, Unit: cur.Unit, Payee: cur.Payee, Description: cur.Description}
+			ns := core.NewSchedule{Name: cur.Name, Every: cur.Every, Unit: cur.Unit, Payee: cur.Payee, Description: cur.Description, Transfer: cur.Transfer}
 			if ns.Start, err = ledger.ParseDate(cur.Start); err != nil {
 				return err
 			}
@@ -271,13 +339,13 @@ Pauses are not changed here; see "schedule pause".`,
 			}
 			f := cmd.Flags()
 			changes := 0
-			for _, flag := range []string{"name", "every", "unit", "start", "end", "amount", "payee", "memo"} {
+			for _, flag := range []string{"name", "every", "unit", "start", "end", "amount", "to-amount", "payee", "memo"} {
 				if f.Changed(flag) {
 					changes++
 				}
 			}
 			if changes == 0 {
-				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --payee, --memo")
+				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --payee, --memo")
 			}
 			if f.Changed("name") {
 				ns.Name = name
@@ -309,8 +377,8 @@ Pauses are not changed here; see "schedule pause".`,
 			if f.Changed("memo") {
 				ns.Description = memo
 			}
-			if f.Changed("amount") {
-				if ns.Postings, err = withAmount(cur, amount); err != nil {
+			if f.Changed("amount") || f.Changed("to-amount") {
+				if ns.Postings, err = withAmount(cur, amount, toAmount); err != nil {
 					return err
 				}
 			}
@@ -326,7 +394,8 @@ Pauses are not changed here; see "schedule pause".`,
 	cmd.Flags().StringVar(&unit, "unit", "", "week, month or year")
 	cmd.Flags().StringVarP(&start, "start", "d", "", "a new first date, YYYY-MM-DD or DD.MM.YYYY")
 	cmd.Flags().StringVar(&end, "end", "", "a new last date, or none for no end")
-	cmd.Flags().StringVar(&amount, "amount", "", "a new signed amount on the account")
+	cmd.Flags().StringVar(&amount, "amount", "", "a new signed amount on the account (for a transfer: how much leaves)")
+	cmd.Flags().StringVar(&toAmount, "to-amount", "", "a transfer between currencies: how much arrives")
 	cmd.Flags().StringVarP(&payee, "payee", "p", "", "a new payee")
 	cmd.Flags().StringVarP(&memo, "memo", "m", "", "a new description")
 	return cmd
@@ -334,7 +403,16 @@ Pauses are not changed here; see "schedule pause".`,
 
 // withAmount is the postings of s with the amount on its account changed to the
 // one typed; the category side follows. It needs one account and one category.
-func withAmount(s core.Schedule, typed string) ([]ledger.Posting, error) {
+// For a scheduled transfer the amount typed is how much leaves (its sign does not
+// matter) and typedTo how much arrives, which only a transfer between currencies
+// has: either may be left empty to keep what the schedule has.
+func withAmount(s core.Schedule, typed, typedTo string) ([]ledger.Posting, error) {
+	if s.Transfer {
+		return withTransferAmount(s, typed, typedTo)
+	}
+	if typedTo != "" {
+		return nil, errors.New("--to-amount is for a transfer between your own accounts")
+	}
 	src, _, ok := (core.TxView{Postings: s.Postings}).Legs()
 	if !ok {
 		return nil, errors.New("--amount works on a schedule with one account and one category; delete this one and add it again")
@@ -355,6 +433,46 @@ func withAmount(s core.Schedule, typed string) ([]ledger.Posting, error) {
 		}
 	}
 	return out, nil
+}
+
+func withTransferAmount(s core.Schedule, typed, typedTo string) ([]ledger.Posting, error) {
+	out, in := s.Postings[0], s.Postings[1]
+	cross := out.Amount.Currency != in.Amount.Currency
+	if typed != "" {
+		amt, err := ledger.ParseAmount(typed, out.Amount.Currency, 0)
+		if err != nil {
+			return nil, err
+		}
+		if amt.IsZero() {
+			return nil, errors.New("amount must not be zero")
+		}
+		if amt.Minor > 0 {
+			amt = amt.Neg()
+		}
+		out.Amount = amt
+		if cross && typedTo == "" {
+			return nil, fmt.Errorf("%s holds %s, not %s: say how much arrives with --to-amount", in.Account, in.Amount.Currency, out.Amount.Currency)
+		}
+	}
+	switch {
+	case typedTo != "" && !cross:
+		return nil, errors.New("both accounts hold the same currency: there is no separate --to-amount")
+	case typedTo != "":
+		amt, err := ledger.ParseAmount(typedTo, in.Amount.Currency, 0)
+		if err != nil {
+			return nil, fmt.Errorf("--to-amount: %w", err)
+		}
+		if amt.IsZero() {
+			return nil, errors.New("amount must not be zero")
+		}
+		if amt.Minor < 0 {
+			amt = amt.Neg()
+		}
+		in.Amount = amt
+	case !cross:
+		in.Amount = out.Amount.Neg()
+	}
+	return []ledger.Posting{{Account: out.Account, Amount: out.Amount}, {Account: in.Account, Amount: in.Amount}}, nil
 }
 
 func (a *app) scheduleDeleteCmd() *cobra.Command {
@@ -480,13 +598,15 @@ or "schedule skip".`,
 }
 
 func (a *app) scheduleConfirmCmd() *cobra.Command {
-	var amount string
+	var amount, toAmount string
 	cmd := &cobra.Command{
 		Use:   "confirm ID DATE",
 		Short: "Book one due occurrence, as it is or for another amount",
 		Long: `Book the occurrence of schedule ID on DATE (a date "schedule due" lists) as a
 transaction dated that day. --amount books another amount than the schedule's,
-signed as in "thaler cli add", for a schedule with one account and one category.`,
+signed as in "thaler cli add", for a schedule with one account and one category.
+A scheduled transfer is booked as a transfer; --amount is then how much leaves
+and, between currencies, --to-amount how much arrives.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -499,12 +619,12 @@ signed as in "thaler cli add", for a schedule with one account and one category.
 				return err
 			}
 			var postings []ledger.Posting
-			if cmd.Flags().Changed("amount") {
+			if cmd.Flags().Changed("amount") || cmd.Flags().Changed("to-amount") {
 				s, ok := scheduleNamed(cmd, svc, id)
 				if !ok {
 					return fmt.Errorf("no schedule number %d; see thaler cli schedule", id)
 				}
-				if postings, err = withAmount(s, amount); err != nil {
+				if postings, err = withAmount(s, amount, toAmount); err != nil {
 					return err
 				}
 			}
@@ -517,7 +637,13 @@ signed as in "thaler cli add", for a schedule with one account and one category.
 				return err
 			}
 			out := cmd.OutOrStdout()
-			if src, cat, ok := tx.Legs(); ok {
+			if res.InID != 0 {
+				in, err := svc.GetTransaction(ctx, res.InID)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "Transferred #%d and #%d  %s  %s  %s -> %s%s\n", tx.ID, in.ID, tx.Date, tx.Postings[0].Amount.Neg(), tx.Postings[0].Account, in.Postings[0].Account, arrives([]ledger.Posting{{Amount: tx.Postings[0].Amount}, {Amount: in.Postings[0].Amount}}))
+			} else if src, cat, ok := tx.Legs(); ok {
 				fmt.Fprintf(out, "Booked #%d  %s  %s  %s -> %s\n", tx.ID, tx.Date, signed(src.Amount), src.Account, cat.Account)
 			} else {
 				fmt.Fprintf(out, "Booked #%d  %s\n", tx.ID, tx.Date)
@@ -528,7 +654,8 @@ signed as in "thaler cli add", for a schedule with one account and one category.
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&amount, "amount", "", "another signed amount on the account")
+	cmd.Flags().StringVar(&amount, "amount", "", "another signed amount on the account (for a transfer: how much leaves)")
+	cmd.Flags().StringVar(&toAmount, "to-amount", "", "a transfer between currencies: how much arrives")
 	return cmd
 }
 

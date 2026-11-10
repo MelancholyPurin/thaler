@@ -925,3 +925,206 @@ func Test_Schedule_Paused(t *testing.T) {
 		})
 	}
 }
+
+// saving is a scheduled transfer of 200.00 from the bank to the savings.
+func saving() NewSchedule {
+	return NewSchedule{
+		Name: "Saving", Every: 1, Unit: EveryMonth, Start: day("2026-11-01"), Transfer: true, Description: "monthly saving",
+		Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-20000)}, {Account: "Assets:Savings", Amount: eur(20000)}},
+	}
+}
+
+func Test_CreateSchedule_transfer(t *testing.T) {
+	tcs := []struct {
+		name    string
+		edit    func(*NewSchedule)
+		want    []PostingView
+		wantErr string
+	}{
+		{name: "between two accounts", want: []PostingView{{"Assets:Bank", eur(-20000)}, {"Assets:Savings", eur(20000)}}},
+		{
+			name: "across currencies, with what arrives",
+			edit: func(ns *NewSchedule) { ns.Postings[1] = ledger.Posting{Account: "Assets:Dollars", Amount: usd(21500)} },
+			want: []PostingView{{"Assets:Bank", eur(-20000)}, {"Assets:Dollars", usd(21500)}},
+		},
+		{
+			name: "both postings arriving",
+			edit: func(ns *NewSchedule) {
+				ns.Postings[0] = ledger.Posting{Account: "Assets:Bank", Amount: eur(20000)}
+				ns.Postings[1] = ledger.Posting{Account: "Assets:Dollars", Amount: usd(21500)}
+			},
+			wantErr: "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another",
+		},
+		{name: "one posting", edit: func(ns *NewSchedule) { ns.Postings = ns.Postings[:1] }, wantErr: "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another"},
+		{name: "three postings", edit: func(ns *NewSchedule) { ns.Postings = append(ns.Postings, ns.Postings[1]) }, wantErr: "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another"},
+		{
+			name:    "it must leave first",
+			edit:    func(ns *NewSchedule) { ns.Postings[0], ns.Postings[1] = ns.Postings[1], ns.Postings[0] },
+			wantErr: "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another",
+		},
+		{
+			name:    "within one currency what arrives is what leaves",
+			edit:    func(ns *NewSchedule) { ns.Postings[1].Amount = eur(19000) },
+			wantErr: "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another",
+		},
+		{name: "the same account twice", edit: func(ns *NewSchedule) { ns.Postings[1].Account = "Assets:Bank" }, wantErr: "source and destination are the same account"},
+		{name: "a category is not an account of yours", edit: func(ns *NewSchedule) { ns.Postings[1].Account = "Expenses:Food" }, wantErr: "transfers work between accounts with a fixed currency (Assets or Liabilities)"},
+		{name: "an account that does not exist", edit: func(ns *NewSchedule) { ns.Postings[1].Account = "Assets:Nope" }, wantErr: "account does not exist: Assets:Nope"},
+		{
+			name:    "an amount in the wrong currency",
+			edit:    func(ns *NewSchedule) { ns.Postings[0].Amount = usd(-20000) },
+			wantErr: "amount is in USD, but Assets:Bank holds EUR",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Savings EUR", "Assets:Dollars USD", "Expenses:Food"))
+			ns := saving()
+			if tc.edit != nil {
+				tc.edit(&ns)
+			}
+
+			// when
+			_, err := st.CreateSchedule(t.Context(), ns)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			got, lerr := st.Schedules(t.Context())
+			check(t, lerr)
+			if tc.wantErr != "" {
+				if diff := cmp.Diff([]Schedule(nil), got, equalEmpty); diff != "" {
+					t.Errorf("nothing should be stored (-want +got):\n%s", diff)
+				}
+				return
+			}
+			want := []Schedule{{ID: 1, Name: "Saving", Every: 1, Unit: EveryMonth, Start: "2026-11-01", Transfer: true, Description: "monthly saving", Postings: tc.want}}
+			if diff := cmp.Diff(want, got, equalEmpty); diff != "" {
+				t.Errorf("schedules mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ConfirmOccurrence_transfer(t *testing.T) {
+	tcs := []struct {
+		name     string
+		setup    []given
+		postings []ledger.Posting
+		want     []TxView
+		wantDue  []string // up to 2026-12-31
+		wantErr  string
+	}{
+		{
+			name: "two linked halves on the day it falls",
+			want: []TxView{
+				linked(tv(1, "2026-11-01", "Transfer to Savings", "monthly saving", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000)), 2),
+				linked(tv(2, "2026-11-01", "Transfer from Bank", "monthly saving", pe("Assets:Savings", 20000), pe(ledger.TransferAccount, -20000)), 1),
+			},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:     "another amount",
+			postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-25000)}, {Account: "Assets:Savings", Amount: eur(25000)}},
+			want: []TxView{
+				linked(tv(1, "2026-11-01", "Transfer to Savings", "monthly saving", pe("Assets:Bank", -25000), pe(ledger.TransferAccount, 25000)), 2),
+				linked(tv(2, "2026-11-01", "Transfer from Bank", "monthly saving", pe("Assets:Savings", 25000), pe(ledger.TransferAccount, -25000)), 1),
+			},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:     "the postings of a transfer or nothing",
+			postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-25000)}, {Account: "Expenses:Food", Amount: eur(25000)}},
+			wantDue:  []string{"2026-11-01 Saving", "2026-12-01 Saving"},
+			wantErr:  "transfers work between accounts with a fixed currency (Assets or Liabilities)",
+		},
+		{
+			name:     "an amount that does not add up",
+			postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-25000)}, {Account: "Assets:Savings", Amount: eur(24000)}},
+			wantDue:  []string{"2026-11-01 Saving", "2026-12-01 Saving"},
+			wantErr:  "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR", "Assets:Savings EUR", "Expenses:Food"), schedule(saving()), today("2026-12-01")}, tc.setup...)...)
+
+			// when
+			res, err := st.ConfirmOccurrence(t.Context(), 1, "2026-11-01", tc.postings)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			txs, lerr := st.ListTransactions(t.Context(), TxFilter{})
+			check(t, lerr)
+			if diff := cmp.Diff(tc.want, txs, equalEmpty); diff != "" {
+				t.Errorf("transactions mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2026-12-31"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			if err == nil && (res.ID != 1 || res.InID != 2) {
+				t.Errorf("ids = %d and %d, want 1 and 2", res.ID, res.InID)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func Test_ConfirmOccurrence_transferAcrossCurrencies(t *testing.T) {
+	tcs := []struct {
+		name string
+		want []TxView
+	}{
+		{
+			name: "through Equity:Conversions, with the amount that arrives",
+			want: []TxView{
+				linked(TxView{ID: 1, Date: "2026-11-01", Payee: "Transfer to Dollars", Description: "monthly saving", Postings: []PostingView{{"Assets:Bank", eur(-20000)}, {ledger.ConversionAccount, eur(20000)}}}, 2),
+				linked(TxView{ID: 2, Date: "2026-11-01", Payee: "Transfer from Bank", Description: "monthly saving", Postings: []PostingView{{"Assets:Dollars", usd(21500)}, {ledger.ConversionAccount, usd(-21500)}}}, 1),
+			},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			ns := saving()
+			ns.Postings[1] = ledger.Posting{Account: "Assets:Dollars", Amount: usd(21500)}
+			st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Dollars USD"), schedule(ns), today("2026-11-02"))
+
+			// when
+			_, err := st.ConfirmOccurrence(t.Context(), 1, "2026-11-01", nil)
+
+			// then
+			check(t, err)
+			txs, lerr := st.ListTransactions(t.Context(), TxFilter{})
+			check(t, lerr)
+			if diff := cmp.Diff(tc.want, txs, equalEmpty); diff != "" {
+				t.Errorf("transactions mismatch (-want +got):\n%s", diff)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func Test_SkipOccurrence_transfer(t *testing.T) {
+	tcs := []struct {
+		name string
+	}{{name: "books nothing, as for any schedule"}}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Savings EUR"), schedule(saving()), today("2026-11-02"))
+
+			// when
+			err := st.SkipOccurrence(t.Context(), 1, "2026-11-01")
+
+			// then
+			check(t, err)
+			txs, lerr := st.ListTransactions(t.Context(), TxFilter{})
+			check(t, lerr)
+			if diff := cmp.Diff([]TxView(nil), txs, equalEmpty); diff != "" {
+				t.Errorf("transactions mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

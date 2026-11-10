@@ -250,7 +250,7 @@ func Test_schedule_edit(t *testing.T) {
 		{
 			name:    "nothing asked",
 			args:    []string{"cli", "schedule", "edit", "1"},
-			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --payee, --memo",
+			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --payee, --memo",
 			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
 		},
 		{
@@ -376,6 +376,132 @@ func Test_schedule_importSettles(t *testing.T) {
 			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
 				"Created new account Expenses:Uncategorized\n" +
 				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+var (
+	addSaving   = []string{"cli", "schedule", "add", "Saving", "--unit", "month", "-a", "Assets:Bank", "--amount", "200", "--to", "Assets:Savings", "--start", "2026-08-01"}
+	addDollarly = []string{"cli", "schedule", "add", "Dollars", "--unit", "month", "-a", "Assets:Bank", "--amount=-200", "--to", "Assets:Dollars", "--to-amount", "215", "--start", "2026-08-01"}
+)
+
+func Test_schedule_transfers(t *testing.T) {
+	tcs := []cliCase{
+		{
+			name:  "a transfer between two accounts",
+			setup: [][]string{addBank, addSavings},
+			args:  addSaving,
+			want:  "Schedule #1 Saving: every month from 2026-08-01, transfer 200.00 EUR  Assets:Bank -> Assets:Savings\n",
+		},
+		{
+			name:  "the sign of the amount does not matter",
+			setup: [][]string{addBank, addSavings},
+			args:  []string{"cli", "schedule", "add", "Saving", "--unit", "month", "-a", "Assets:Bank", "--amount=-200", "--to", "Assets:Savings", "--start", "2026-08-01"},
+			want:  "Schedule #1 Saving: every month from 2026-08-01, transfer 200.00 EUR  Assets:Bank -> Assets:Savings\n",
+		},
+		{
+			name:  "between currencies, with what arrives",
+			setup: [][]string{addBank, addDollars},
+			args:  addDollarly,
+			want:  "Schedule #1 Dollars: every month from 2026-08-01, transfer 200.00 EUR  Assets:Bank -> Assets:Dollars (arrives 215.00 USD)\n",
+		},
+		{
+			name:    "between currencies without what arrives",
+			setup:   [][]string{addBank, addDollars},
+			args:    []string{"cli", "schedule", "add", "Dollars", "--unit", "month", "-a", "Assets:Bank", "--amount", "200", "--to", "Assets:Dollars"},
+			wantErr: "Assets:Dollars holds USD, not EUR: say how much arrives with --to-amount",
+		},
+		{
+			name:    "what arrives within one currency",
+			setup:   [][]string{addBank, addSavings},
+			args:    append(append([]string{}, addSaving...), "--to-amount", "200"),
+			wantErr: "both accounts hold the same currency: there is no separate --to-amount",
+		},
+		{
+			name:    "what arrives for something that is not a transfer",
+			setup:   [][]string{addBank},
+			args:    append(append([]string{}, addRent...), "--to-amount", "5"),
+			wantErr: "--to-amount is for a transfer between your own accounts",
+		},
+		{
+			name:    "an account that does not exist",
+			setup:   [][]string{addBank},
+			args:    []string{"cli", "schedule", "add", "Saving", "--unit", "month", "-a", "Assets:Bank", "--amount", "200", "--to", "Assets:Nope"},
+			wantErr: "account does not exist: Assets:Nope",
+		},
+		{
+			name:    "the same account twice",
+			setup:   [][]string{addBank},
+			args:    []string{"cli", "schedule", "add", "Saving", "--unit", "month", "-a", "Assets:Bank", "--amount", "200", "--to", "Assets:Bank"},
+			wantErr: "source and destination are the same account",
+		},
+		{
+			name:  "the list says where it goes",
+			setup: [][]string{addBank, addSavings, addSaving},
+			args:  []string{"cli", "schedule"},
+			want: "Schedule  ID      Repeats       Start       Amount                        Note\n" +
+				"Saving     1  every month  2026-08-01  -200.00 EUR  transfer to Assets:Savings\n",
+		},
+		{
+			name:  "what is due",
+			setup: [][]string{addBank, addSavings, addSaving},
+			args:  []string{"cli", "schedule", "due", "--until", "2026-09-30"},
+			want: "Date        ID       Amount  Schedule\n" +
+				"2026-08-01   1  -200.00 EUR    Saving\n" +
+				"2026-09-01   1  -200.00 EUR    Saving\n" +
+				"\nAnswer each with: thaler cli schedule confirm ID DATE [--amount=N], or thaler cli schedule skip ID DATE\n",
+		},
+		{
+			name:  "confirming books a transfer",
+			setup: [][]string{addBank, addSavings, addSaving},
+			args:  []string{"cli", "schedule", "confirm", "1", "2026-08-01"},
+			want:  "Transferred #1 and #2  2026-08-01  200.00 EUR  Assets:Bank -> Assets:Savings\nCreated new account Equity:Transfers\n",
+		},
+		{
+			name:  "confirming for another amount",
+			setup: [][]string{addBank, addSavings, addSaving},
+			args:  []string{"cli", "schedule", "confirm", "1", "2026-08-01", "--amount", "250"},
+			want:  "Transferred #1 and #2  2026-08-01  250.00 EUR  Assets:Bank -> Assets:Savings\nCreated new account Equity:Transfers\n",
+		},
+		{
+			name:  "confirming between currencies",
+			setup: [][]string{addBank, addDollars, addDollarly},
+			args:  []string{"cli", "schedule", "confirm", "1", "2026-08-01", "--to-amount", "220"},
+			want:  "Transferred #1 and #2  2026-08-01  200.00 EUR  Assets:Bank -> Assets:Dollars (arrives 220.00 USD)\nCreated new account Equity:Conversions\n",
+		},
+		{
+			name:    "another amount between currencies needs what arrives",
+			setup:   [][]string{addBank, addDollars, addDollarly},
+			args:    []string{"cli", "schedule", "confirm", "1", "2026-08-01", "--amount", "250"},
+			wantErr: "Assets:Dollars holds USD, not EUR: say how much arrives with --to-amount",
+		},
+		{
+			name:  "the ledger holds the two halves, linked",
+			setup: [][]string{addBank, addSavings, addSaving, {"cli", "schedule", "confirm", "1", "2026-08-01"}},
+			args:  []string{"cli", "list"},
+			want: "2026-08-01  #1     Transfer to Savings\n    Assets:Bank       -200.00 EUR\n    Equity:Transfers  +200.00 EUR\n" +
+				"2026-08-01  #2     Transfer from Bank\n    Assets:Savings    +200.00 EUR\n    Equity:Transfers  -200.00 EUR\n",
+		},
+		{
+			name:  "editing the amount keeps it a transfer",
+			setup: [][]string{addBank, addSavings, addSaving, {"cli", "schedule", "edit", "1", "--amount", "250"}},
+			args:  []string{"cli", "schedule", "confirm", "1", "2026-08-01"},
+			want:  "Transferred #1 and #2  2026-08-01  250.00 EUR  Assets:Bank -> Assets:Savings\nCreated new account Equity:Transfers\n",
+		},
+		{
+			name:    "editing what arrives within one currency",
+			setup:   [][]string{addBank, addSavings, addSaving},
+			args:    []string{"cli", "schedule", "edit", "1", "--to-amount", "250"},
+			wantErr: "both accounts hold the same currency: there is no separate --to-amount",
 		},
 	}
 	for _, tc := range tcs {
