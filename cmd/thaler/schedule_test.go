@@ -279,3 +279,48 @@ func Test_schedule_confirmedTransactions(t *testing.T) {
 		})
 	}
 }
+
+const rentCSV = csvHeader + `"29.08.26";"DAUERAUFTRAG";"Miete";"Landlord";"-900,00";"EUR";"Umsatz gebucht"` + "\n"
+
+func Test_schedule_importSettles(t *testing.T) {
+	files := map[string]string{"bank.csv": rentCSV}
+	imp := func(extra ...string) []string {
+		return append([]string{"cli", "import", "{dir}/bank.csv", "-a", "Assets:Bank"}, extra...)
+	}
+	tcs := []cliCase{
+		{
+			name: "previewed", files: files, setup: [][]string{addBank, addRent},
+			args: imp("--dry-run"),
+			want: "new  2026-08-29  Expenses:Rent                 Landlord  -900.00 EUR\n\n" +
+				"Dry run: 1 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"1 row(s) are the bank's booking of a scheduled transaction and would answer it (see thaler cli schedule due).\n",
+		},
+		{
+			name: "imported", files: files, setup: [][]string{addBank, addRent},
+			args: imp(),
+			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Settled 2026-08-28 of the schedule Rent (#1).\n",
+		},
+		{
+			name: "the occurrence is no longer due", files: files, setup: [][]string{addBank, addRent, imp()},
+			args: []string{"cli", "schedule", "due", "--until", "2026-08-31"},
+			want: "Nothing is due up to 2026-08-31.\n",
+		},
+		{
+			name: "no schedule, no mention", files: files, setup: [][]string{addBank},
+			args: imp(),
+			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}

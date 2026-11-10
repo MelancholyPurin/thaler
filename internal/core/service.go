@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -555,10 +556,15 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 					res.Transfers++
 				}
 			}
-			if !ruled[i] && p.partner == nil && p.adopts == nil {
+			if p.uncategorized(ruled[i]) {
 				res.Uncategorized++
 			}
 			row := ImportedRow{Row: rows[i], Category: p.tx.Postings[1].Account, Duplicate: p.duplicate}
+			if p.settles != nil {
+				settled := p.settles.settled(0)
+				row.Settles = &settled
+				res.Settled = append(res.Settled, settled)
+			}
 			if p.partner != nil {
 				row.Transfer = &TransferMatch{ID: p.partner.id, Account: p.partner.account, Date: p.partner.date, Was: p.partner.category}
 			}
@@ -579,7 +585,7 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			return err
 		}
 		for i, p := range plan {
-			if !ruled[i] && p.partner == nil && p.adopts == nil {
+			if p.uncategorized(ruled[i]) {
 				res.Uncategorized++
 			}
 			if p.duplicate {
@@ -604,6 +610,12 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			}
 			res.Inserted++
 			res.IDs = append(res.IDs, id)
+			if p.settles != nil {
+				if err := q.putOccurrence(ctx, handled{p.settles.scheduleID, p.settles.date}, id); err != nil {
+					return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
+				}
+				res.Settled = append(res.Settled, p.settles.settled(id))
+			}
 			if p.partner == nil {
 				continue
 			}
@@ -637,7 +649,18 @@ type plannedRow struct {
 	tx        NewTransaction
 	duplicate bool
 	adopts    *adoptionCandidate // the hand-entered transaction this row is the bank's record of, if any
+	settles   *occurrenceMatch   // the occurrence of a schedule this row is the bank's booking of, if any
 	partner   *transferCandidate // the stored half this row completes, if any
+}
+
+// uncategorized says whether the row ends up in an Uncategorized account for want
+// of anyone choosing a category: no rule, no transfer, no hand-entered entry, and
+// no schedule that names one.
+func (p plannedRow) uncategorized(ruled bool) bool {
+	if ruled || p.partner != nil || p.adopts != nil {
+		return false
+	}
+	return p.settles == nil || p.settles.category == ledger.UncategorizedExpense || p.settles.category == ledger.UncategorizedIncome
 }
 
 // planImport decides, for each parsed row, whether it is already stored, whether
@@ -652,6 +675,10 @@ func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row
 	plan := make([]plannedRow, len(rows))
 	taken := map[int64]bool{}
 	adopted := map[int64]bool{}
+	occurrences, err := newOccurrenceMatcher(ctx, q)
+	if err != nil {
+		return nil, err
+	}
 	for i, tx := range txs {
 		p := plannedRow{tx: tx}
 		dup, err := q.importHashExists(ctx, tx.ImportHash)
@@ -673,8 +700,14 @@ func planImport(ctx context.Context, q queries, acc Account, rows []importer.Row
 				}
 			}
 		}
+		if !dup && p.adopts == nil && tx.Postings[1].Account != ledger.TransferAccount && rows[i].Amount.Minor != 0 {
+			p.settles = occurrences.find(acc, rows[i].Amount, rows[i].Date)
+			if p.settles != nil && !ruled[i] {
+				p.tx.Postings = []ledger.Posting{tx.Postings[0], {Account: p.settles.category, Amount: tx.Postings[0].Amount.Neg()}}
+			}
+		}
 		wanted := !ruled[i] || tx.Postings[1].Account == ledger.TransferAccount
-		if !dup && p.adopts == nil && wanted && rows[i].Amount.Minor != 0 {
+		if !dup && p.adopts == nil && p.settles == nil && wanted && rows[i].Amount.Minor != 0 {
 			candidates, err := q.transferCandidates(ctx, acc.ID, rows[i].Amount, rows[i].Date, matchWindowDays)
 			if err != nil {
 				return nil, err
@@ -1648,4 +1681,75 @@ func (s *Local) SkipOccurrence(ctx context.Context, id int64, date string) error
 		}
 		return q.putOccurrence(ctx, handled{id, date}, 0)
 	})
+}
+
+// ---- schedules and imported rows -------------------------------------------
+
+// occurrenceMatch is the occurrence of a schedule that a bank row stands for.
+type occurrenceMatch struct {
+	scheduleID int64
+	name       string
+	date       string
+	category   string // the schedule's, for the row to be booked to
+}
+
+func (m occurrenceMatch) settled(txID int64) SettledOccurrence {
+	return SettledOccurrence{ScheduleID: m.scheduleID, Schedule: m.name, Date: m.date, TransactionID: txID}
+}
+
+// occurrenceMatcher finds, for a bank row, the occurrence nobody answered yet. It
+// reads the schedules once and remembers the occurrences it handed out, so that
+// each is settled by one row only.
+type occurrenceMatcher struct {
+	schedules []Schedule
+	done      map[handled]bool
+}
+
+func newOccurrenceMatcher(ctx context.Context, q queries) (*occurrenceMatcher, error) {
+	schedules, err := q.schedules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	done, err := q.handledOccurrences(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &occurrenceMatcher{schedules: schedules, done: done}, nil
+}
+
+// find is the occurrence whose schedule books exactly amount on acc within
+// matchWindowDays of date, the nearest first and then the earliest, or nil. A
+// bill whose amount changes is no match: an estimate with a tolerance is REC-5.
+// The occurrence need not be due yet: money that moved is news enough.
+func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Time) *occurrenceMatch {
+	var best *occurrenceMatch
+	bestDistance := 0
+	from := date.AddDate(0, 0, -matchWindowDays).Format(ledger.DateLayout)
+	for _, sch := range m.schedules {
+		src, cat, ok := (TxView{Postings: sch.Postings}).Legs()
+		if !ok || src.Account != acc.Name || src.Amount != amount {
+			continue
+		}
+		dates, err := scheduleDates(sch, date.AddDate(0, 0, matchWindowDays))
+		if err != nil {
+			continue
+		}
+		for _, d := range dates {
+			if d < from || m.done[handled{sch.ID, d}] {
+				continue
+			}
+			when, err := ledger.ParseDate(d)
+			if err != nil {
+				continue
+			}
+			distance := int(math.Abs(date.Sub(when).Hours() / 24))
+			if best == nil || distance < bestDistance || (distance == bestDistance && d < best.date) {
+				best, bestDistance = &occurrenceMatch{scheduleID: sch.ID, name: sch.Name, date: d, category: cat.Account}, distance
+			}
+		}
+	}
+	if best != nil {
+		m.done[handled{best.scheduleID, best.date}] = true
+	}
+	return best
 }

@@ -130,6 +130,9 @@ Use --dry-run first to see what would happen without writing anything.`,
 				if res.Adopted > 0 {
 					fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
 				}
+				if len(res.Settled) > 0 {
+					fmt.Fprintf(out, "%d row(s) are the bank's booking of a scheduled transaction and would answer it (see thaler cli schedule due).\n", len(res.Settled))
+				}
 				if res.Transfers > 0 {
 					fmt.Fprintf(out, "%d new row(s) would be paired as the other half of a transfer with a transaction on another account.\n", res.Transfers)
 				}
@@ -143,6 +146,9 @@ Use --dry-run first to see what would happen without writing anything.`,
 			}
 			if res.Adopted > 0 {
 				fmt.Fprintf(out, "%d row(s) matched a transaction you entered by hand; it now stands for the bank row and nothing was added twice.\n", res.Adopted)
+			}
+			for _, o := range res.Settled {
+				fmt.Fprintf(out, "Settled %s of the schedule %s (#%d).\n", o.Date, o.Schedule, o.TransactionID)
 			}
 			if res.Transfers > 0 {
 				fmt.Fprintf(out, "%d row(s) were paired as the other half of a transfer with a transaction on another account (%s).\n",
