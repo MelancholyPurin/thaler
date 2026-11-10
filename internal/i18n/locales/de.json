@@ -554,6 +554,7 @@
   "schedule_name_taken": "Es gibt bereits einen Zeitplan namens \"{{.Name}}\"",
   "schedule_every_invalid": "Ein Zeitplan wiederholt sich alle 1 oder mehr Wochen, Monate oder Jahre, nicht alle {{.Every}}",
   "schedule_unit_invalid": "Ein Zeitplan wiederholt sich jede Woche, jeden Monat oder jedes Jahr, nicht in der Einheit \"{{.Unit}}\"",
+  "schedule_end_before_start": "Das Ende eines Zeitplans ({{.End}}) darf nicht vor seinem Beginn ({{.Start}}) liegen",
   "occurrence_not_on_schedule": "\"{{.Name}}\" fällt nicht auf den {{.Date}}",
   "occurrence_not_due": "Der {{.Date}} von \"{{.Name}}\" ist noch nicht fällig",
   "occurrence_done": "Der {{.Date}} von \"{{.Name}}\" wurde bereits bestätigt oder übersprungen",

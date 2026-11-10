@@ -554,6 +554,7 @@
   "schedule_name_taken": "ya hay una programación llamada \"{{.Name}}\"",
   "schedule_every_invalid": "una programación se repite cada 1 o más semanas, meses o años, no cada {{.Every}}",
   "schedule_unit_invalid": "una programación se repite cada semana, mes o año, no cada \"{{.Unit}}\"",
+  "schedule_end_before_start": "el fin de una programación ({{.End}}) no puede ser anterior a su inicio ({{.Start}})",
   "occurrence_not_on_schedule": "\"{{.Name}}\" no cae el {{.Date}}",
   "occurrence_not_due": "el {{.Date}} de \"{{.Name}}\" aún no vence",
   "occurrence_done": "el {{.Date}} de \"{{.Name}}\" ya se confirmó o se omitió",
