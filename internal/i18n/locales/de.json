@@ -557,6 +557,7 @@
   "occurrence_not_on_schedule": "\"{{.Name}}\" fällt nicht auf den {{.Date}}",
   "occurrence_not_due": "Der {{.Date}} von \"{{.Name}}\" ist noch nicht fällig",
   "occurrence_done": "Der {{.Date}} von \"{{.Name}}\" wurde bereits bestätigt oder übersprungen",
+  "occurrence_not_skipped": "Der {{.Date}} von \"{{.Name}}\" wurde nicht übersprungen",
   "budget_target": "Ziel",
   "budget_left": "Übrig",
   "budget_section_targets": "Ziele",
@@ -675,5 +676,26 @@
   "schedule_hint_period": "Woche, Monat oder Jahr; ein monatlicher behält den Tag seines Beginns",
   "schedule_hint_start": "das erste Datum, auf das er fällt",
   "schedule_hint_end": "der letzte Tag, auf den er fallen darf; leer = ohne Ende",
-  "schedule_hint_tolerance": "Prozent, um die eine Bankzeile vom Betrag abweichen und trotzdem gelten darf; leer = genau"
+  "schedule_hint_tolerance": "Prozent, um die eine Bankzeile vom Betrag abweichen und trotzdem gelten darf; leer = genau",
+  "due_title": "Was fällig ist",
+  "due_today": "heute",
+  "due_days_ago": {
+    "one": "vor {{.Count}} Tag",
+    "other": "vor {{.Count}} Tagen"
+  },
+  "due_key_book": "enter buchen",
+  "due_key_change": "e Betrag ändern",
+  "due_key_skip": "s überspringen",
+  "due_key_move": "↑/↓ anderer Termin",
+  "due_key_stop": "esc beenden",
+  "due_nothing": "Nichts ist fällig.",
+  "due_booked": "{{.Name}} am {{.Date}} gebucht: {{.Amount}}",
+  "due_skipped": "{{.Name}} {{.Date}} übersprungen",
+  "due_all_done": "alles beantwortet",
+  "undid_due_booked": "Buchung von {{.Name}} am {{.Date}} rückgängig gemacht",
+  "undid_due_skipped": "{{.Name}} {{.Date}} ist wieder fällig",
+  "footer_due_edit": "enter buchen · esc zurück",
+  "due_estimate": "eine Schätzung (±{{.Percent}}%): mit e eintragen, was es wirklich war",
+  "hint_answer": "enter beantworten",
+  "help_due": "Prognose: durchgehen, was fällig ist, das Älteste zuerst: enter bucht einen Termin so wie er ist, e mit anderem Betrag, s überspringt ihn"
 }

@@ -557,6 +557,7 @@
   "occurrence_not_on_schedule": "\"{{.Name}}\" no cae el {{.Date}}",
   "occurrence_not_due": "el {{.Date}} de \"{{.Name}}\" aún no vence",
   "occurrence_done": "el {{.Date}} de \"{{.Name}}\" ya se confirmó o se omitió",
+  "occurrence_not_skipped": "el {{.Date}} de \"{{.Name}}\" no se omitió",
   "budget_target": "Objetivo",
   "budget_left": "Queda",
   "budget_section_targets": "Objetivos",
@@ -675,5 +676,26 @@
   "schedule_hint_period": "semana, mes o año; una mensual conserva el día de su inicio",
   "schedule_hint_start": "la primera fecha en que cae",
   "schedule_hint_end": "el último día en que puede caer; vacío = sin fin",
-  "schedule_hint_tolerance": "porcentaje en que un movimiento del banco puede diferir del importe y valer como él; vacío = exacto"
+  "schedule_hint_tolerance": "porcentaje en que un movimiento del banco puede diferir del importe y valer como él; vacío = exacto",
+  "due_title": "Qué vence",
+  "due_today": "hoy",
+  "due_days_ago": {
+    "one": "hace {{.Count}} día",
+    "other": "hace {{.Count}} días"
+  },
+  "due_key_book": "enter apuntarlo",
+  "due_key_change": "e cambiar el importe",
+  "due_key_skip": "s omitir",
+  "due_key_move": "↑/↓ otra fecha",
+  "due_key_stop": "esc dejarlo",
+  "due_nothing": "No hay nada pendiente.",
+  "due_booked": "{{.Name}} apuntada el {{.Date}}: {{.Amount}}",
+  "due_skipped": "{{.Name}} {{.Date}} omitida",
+  "due_all_done": "todo respondido",
+  "undid_due_booked": "Se deshizo el apunte de {{.Name}} del {{.Date}}",
+  "undid_due_skipped": "{{.Name}} {{.Date}} vuelve a estar pendiente",
+  "footer_due_edit": "enter apuntarlo · esc volver",
+  "due_estimate": "una estimación (±{{.Percent}}%): pulsa e para poner lo que fue de verdad",
+  "hint_answer": "enter responder",
+  "help_due": "Previsión: repasar lo que vence, lo más antiguo primero: enter apunta una fecha tal cual, e con otro importe, s la omite"
 }
