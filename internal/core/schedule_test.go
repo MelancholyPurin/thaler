@@ -1128,3 +1128,124 @@ func Test_SkipOccurrence_transfer(t *testing.T) {
 		})
 	}
 }
+
+func Test_withinTolerance(t *testing.T) {
+	type result struct {
+		Gap int64
+		OK  bool
+	}
+	tcs := []struct {
+		name     string
+		estimate ledger.Money
+		amount   ledger.Money
+		percent  int
+		want     result
+	}{
+		{name: "exactly the estimate", estimate: eur(-8000), amount: eur(-8000), percent: 25, want: result{0, true}},
+		{name: "on the edge above", estimate: eur(-8000), amount: eur(-10000), percent: 25, want: result{2000, true}},
+		{name: "on the edge below", estimate: eur(-8000), amount: eur(-6000), percent: 25, want: result{2000, true}},
+		{name: "a cent past the edge above", estimate: eur(-8000), amount: eur(-10001), percent: 25, want: result{2001, false}},
+		{name: "a cent past the edge below", estimate: eur(-8000), amount: eur(-5999), percent: 25, want: result{2001, false}},
+		{name: "no tolerance, a cent off", estimate: eur(-8000), amount: eur(-8001), percent: 0, want: result{1, false}},
+		{name: "no tolerance, exact", estimate: eur(-8000), amount: eur(-8000), percent: 0, want: result{0, true}},
+		{name: "income works the same way", estimate: eur(300000), amount: eur(316000), percent: 5, want: result{16000, false}},
+		{name: "income within it", estimate: eur(300000), amount: eur(315000), percent: 5, want: result{15000, true}},
+		{name: "the other direction is no match", estimate: eur(-8000), amount: eur(8000), percent: 100, want: result{0, false}},
+		{name: "another currency is no match", estimate: eur(-8000), amount: usd(-8000), percent: 100, want: result{0, false}},
+		{name: "a zero amount is no match", estimate: eur(-8000), amount: eur(0), percent: 100, want: result{0, false}},
+		{name: "a zero estimate is no match", estimate: eur(0), amount: eur(-5), percent: 100, want: result{0, false}},
+		{name: "a percentage that does not divide the estimate", estimate: eur(-999), amount: eur(-1198), percent: 20, want: result{199, true}},
+		{name: "and one cent more", estimate: eur(-999), amount: eur(-1199), percent: 20, want: result{200, false}},
+		{name: "a very large estimate does not overflow", estimate: eur(-9000000000000000000), amount: eur(-9000000000000000000), percent: 100, want: result{0, true}},
+		{name: "100 percent reaches double", estimate: eur(-1000), amount: eur(-2000), percent: 100, want: result{1000, true}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			gap, ok := withinTolerance(tc.estimate, tc.amount, tc.percent)
+
+			// then
+			if diff := cmp.Diff(tc.want, result{gap, ok}); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_CreateSchedule_tolerance(t *testing.T) {
+	tcs := []struct {
+		name    string
+		edit    func(*NewSchedule)
+		want    int
+		wantErr string
+	}{
+		{name: "none is exact", want: 0},
+		{name: "a percentage", edit: func(ns *NewSchedule) { ns.Tolerance = 25 }, want: 25},
+		{name: "all of it", edit: func(ns *NewSchedule) { ns.Tolerance = 100 }, want: 100},
+		{name: "negative", edit: func(ns *NewSchedule) { ns.Tolerance = -1 }, wantErr: "a tolerance is a percentage from 0 to 100, not -1"},
+		{name: "past all of it", edit: func(ns *NewSchedule) { ns.Tolerance = 101 }, wantErr: "a tolerance is a percentage from 0 to 100, not 101"},
+		{
+			name:    "a transfer is exact",
+			edit:    func(ns *NewSchedule) { *ns = saving(); ns.Tolerance = 10 },
+			wantErr: "a scheduled transfer moves an exact amount: it has no tolerance",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR", "Assets:Savings EUR"))
+			ns := rent()
+			if tc.edit != nil {
+				tc.edit(&ns)
+			}
+
+			// when
+			_, err := st.CreateSchedule(t.Context(), ns)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			got, lerr := st.Schedules(t.Context())
+			check(t, lerr)
+			if tc.wantErr != "" {
+				if diff := cmp.Diff([]Schedule(nil), got, equalEmpty); diff != "" {
+					t.Errorf("nothing should be stored (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if diff := cmp.Diff(tc.want, got[0].Tolerance); diff != "" {
+				t.Errorf("tolerance mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ReplaceSchedule_tolerance(t *testing.T) {
+	tcs := []struct {
+		name string
+		edit func(*NewSchedule)
+		want int
+	}{
+		{name: "it can be set", edit: func(ns *NewSchedule) { ns.Tolerance = 30 }, want: 30},
+		{name: "and taken away", edit: func(ns *NewSchedule) { ns.Tolerance = 0 }, want: 0},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			first := rent()
+			first.Tolerance = 10
+			st := newLedger(t, accounts("Assets:Bank EUR"), schedule(first))
+			ns := rent()
+			tc.edit(&ns)
+
+			// when
+			check(t, st.ReplaceSchedule(t.Context(), 1, ns))
+
+			// then
+			got, err := st.Schedules(t.Context())
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got[0].Tolerance); diff != "" {
+				t.Errorf("tolerance mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

@@ -516,6 +516,11 @@ const (
 // Postings are then the amount that leaves one (negative) and the amount that
 // arrives in the other (positive, in that account's currency; equal to the first
 // when both hold the same one), and Description is the memo.
+//
+// Tolerance makes the amount an estimate: a bank row whose amount is within that
+// many percent of it, on either side and in the same direction, still counts as
+// the schedule's occurrence (see ImportRequest). 0 is an exact amount. A transfer
+// has no tolerance.
 type NewSchedule struct {
 	Name        string // unique, whatever the case
 	Every       int    // 1 or more: 2 with EveryWeek is every other week
@@ -523,6 +528,7 @@ type NewSchedule struct {
 	Start       time.Time
 	End         time.Time // zero: no end
 	Transfer    bool
+	Tolerance   int // percent of the amount, 0 to 100
 	Payee       string
 	Description string
 	Postings    []ledger.Posting
@@ -537,6 +543,7 @@ type Schedule struct {
 	Start       string // YYYY-MM-DD
 	End         string // YYYY-MM-DD, the last day it may fall on; empty: no end
 	Transfer    bool   // moves money between two of your accounts, see NewSchedule
+	Tolerance   int    // percent the amount may differ and still match a bank row; 0: exact
 	Payee       string
 	Description string
 	Postings    []PostingView

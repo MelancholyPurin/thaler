@@ -463,3 +463,96 @@ func Test_Import_settlingIgnoresRuleTransfersOfOrdinarySchedules(t *testing.T) {
 		})
 	}
 }
+
+func Test_Import_settlingWithATolerance(t *testing.T) {
+	// The electricity: about 80.00 a month on the 15th, give or take a quarter.
+	power := func(name string, percent int, minor int64) given {
+		ns := rent()
+		ns.Name, ns.Tolerance, ns.Start = name, percent, day("2026-11-15")
+		ns.Postings = []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-minor)}, {Account: "Expenses:Power", Amount: eur(minor)}}
+		return schedule(ns)
+	}
+	bill := func(date string, minor int64) []importer.Row {
+		return []importer.Row{row(2, date, "STADTWERKE", "Strom", eur(minor))}
+	}
+	tcs := []struct {
+		name  string
+		setup []given
+		rows  []importer.Row
+		want  []SettledOccurrence
+	}{
+		{name: "the estimate itself", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-15", -8000), want: []SettledOccurrence{{1, "Power", "2026-11-15", 1}}},
+		{name: "more than usual", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-16", -9875), want: []SettledOccurrence{{1, "Power", "2026-11-15", 1}}},
+		{name: "on the edge above", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-15", -10000), want: []SettledOccurrence{{1, "Power", "2026-11-15", 1}}},
+		{name: "past the edge above", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-15", -10001)},
+		{name: "on the edge below", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-15", -6000), want: []SettledOccurrence{{1, "Power", "2026-11-15", 1}}},
+		{name: "past the edge below", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-15", -5999)},
+		{name: "no tolerance is exact, as it was", setup: []given{power("Power", 0, 8000)}, rows: bill("2026-11-15", -8001)},
+		{name: "a refund is not the bill", setup: []given{power("Power", 100, 8000)}, rows: bill("2026-11-15", 8000)},
+		{name: "four days late is another payment", setup: []given{power("Power", 25, 8000)}, rows: bill("2026-11-19", -8000)},
+		{
+			name: "two schedules that fit: the nearer in days wins",
+			setup: []given{power("Gas", 50, 8000), func(t *testing.T, st *Local) { // 20.11 for the second
+				ns := rent()
+				ns.Name, ns.Tolerance, ns.Start = "Power", 50, day("2026-11-12")
+				ns.Postings = []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-8000)}, {Account: "Expenses:Power", Amount: eur(8000)}}
+				check(t, func() error { _, err := st.CreateSchedule(t.Context(), ns); return err }())
+			}},
+			rows: bill("2026-11-13", -8000),
+			want: []SettledOccurrence{{2, "Power", "2026-11-12", 1}},
+		},
+		{
+			name:  "two that fit on the same day: the amount nearer to the estimate wins",
+			setup: []given{power("Gas", 50, 6000), power("Power", 50, 8500)},
+			rows:  bill("2026-11-15", -8000),
+			want:  []SettledOccurrence{{2, "Power", "2026-11-15", 1}},
+		},
+		{
+			name:  "an exact schedule beats an estimate that is further off",
+			setup: []given{power("Estimate", 50, 9000), power("Exact", 0, 8000)},
+			rows:  bill("2026-11-15", -8000),
+			want:  []SettledOccurrence{{2, "Exact", "2026-11-15", 1}},
+		},
+		{
+			name:  "equally near: the first by name",
+			setup: []given{power("Gas", 50, 8000), power("Power", 50, 8000)},
+			rows:  bill("2026-11-15", -8000),
+			want:  []SettledOccurrence{{1, "Gas", "2026-11-15", 1}},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR")}, tc.setup...)...)
+
+			// when
+			got, err := st.Import(t.Context(), ImportRequest{Account: "Assets:Bank", Rows: tc.rows})
+
+			// then
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got.Settled, equalEmpty); diff != "" {
+				t.Errorf("settled mismatch (-want +got):\n%s", diff)
+			}
+			txs, err := st.ListTransactions(t.Context(), TxFilter{})
+			check(t, err)
+			if len(txs) != 1 {
+				t.Fatalf("stored %d transactions, want 1", len(txs))
+			}
+			// What is booked is what the bank says, not the estimate.
+			wantAmount := tc.rows[0].Amount
+			if diff := cmp.Diff(wantAmount, txs[0].Postings[0].Amount); diff != "" {
+				t.Errorf("amount mismatch (-want +got):\n%s", diff)
+			}
+			wantCategory := ledger.UncategorizedExpense
+			if len(tc.want) > 0 {
+				wantCategory = "Expenses:Power"
+			}
+			if wantAmount.Minor > 0 {
+				wantCategory = ledger.UncategorizedIncome
+			}
+			if diff := cmp.Diff(wantCategory, txs[0].Postings[1].Account); diff != "" {
+				t.Errorf("category mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
