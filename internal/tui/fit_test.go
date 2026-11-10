@@ -179,6 +179,12 @@ func Test_View_fits(t *testing.T) {
 		{name: "schedule, edited", keys: "F e"},
 		{name: "schedule, saved and undone", keys: "F e ctrl+s z"},
 		{name: "schedule, paused", keys: "F p"},
+		{name: "due", keys: "F enter"},
+		{name: "due, the amount", keys: "F enter e"},
+		{name: "due, an error", keys: "F enter e ctrl+u text:0 enter"},
+		{name: "due, booked", keys: "F enter enter"},
+		{name: "due, skipped", keys: "F enter s"},
+		{name: "due, nothing", keys: "F enter enter z esc"},
 		{name: "reports", keys: "R"},
 		{name: "search", keys: "tab tab /"},
 
