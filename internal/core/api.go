@@ -561,6 +561,29 @@ type SchedulePause struct {
 	From, To string // YYYY-MM-DD
 }
 
+// NewSchedule converts a stored schedule back into input, for editing it or for
+// putting it back as it was. Pauses are not part of it: they belong to the stored
+// schedule and survive an edit.
+func (s Schedule) NewSchedule() (NewSchedule, error) {
+	start, err := ledger.ParseDate(s.Start)
+	if err != nil {
+		return NewSchedule{}, err
+	}
+	ns := NewSchedule{
+		Name: s.Name, Every: s.Every, Unit: s.Unit, Start: start, Transfer: s.Transfer, Tolerance: s.Tolerance,
+		Payee: s.Payee, Description: s.Description,
+	}
+	if s.End != "" {
+		if ns.End, err = ledger.ParseDate(s.End); err != nil {
+			return NewSchedule{}, err
+		}
+	}
+	for _, p := range s.Postings {
+		ns.Postings = append(ns.Postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
+	}
+	return ns, nil
+}
+
 // Paused says whether the schedule is paused now.
 func (s Schedule) Paused() bool {
 	return len(s.Pauses) > 0 && s.Pauses[len(s.Pauses)-1].To == ""
