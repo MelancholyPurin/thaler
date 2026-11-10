@@ -147,7 +147,7 @@ Things that happen on a schedule. Thaler **asks first**: it proposes an occurren
 - [x] `REC-4` An imported bank row settles the occurrence it corresponds to (same account, exactly the schedule's amount, within three days of an unanswered date, the nearest first; the row is booked to the schedule's category unless a rule chose one, and `ImportResult.Settled` lists them; `thaler cli import` says so; the import popup does not mention it yet)
 - [ ] `REC-5` An estimate with a tolerance for bills that change (electricity)
 - [x] `REC-6` Pause a schedule, give it an end date, skip a single occurrence (an end is the last day a date may fall on; a pause keeps its span, so the dates that fell in it are dropped on resume instead of coming back, and a bank row does not settle them; skipping one date was `REC-3`; `thaler cli schedule pause`, `resume` and `--end`; the interface's screens are `TFC-2`)
-- [ ] `REC-7` Scheduled transfers, such as a monthly saving
+- [x] `REC-7` Scheduled transfers, such as a monthly saving (a schedule with `Transfer` moves money between two of your own accounts, across currencies with what arrives; confirming books a transfer, two linked transactions; a bank row on either account settles the date and is still paired with the other half; `thaler cli schedule add --to ACCOUNT`; across currencies the other statement's row is not paired, as for any imported conversion)
 
 ### RPT: Reports and projections
 
