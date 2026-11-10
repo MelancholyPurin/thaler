@@ -695,3 +695,233 @@ func skipped(id int64, date string) given {
 		check(t, st.SkipOccurrence(t.Context(), id, date))
 	}
 }
+
+func Test_CreateSchedule_end(t *testing.T) {
+	tcs := []struct {
+		name    string
+		end     string
+		want    string // the end stored
+		wantDue []string
+		wantErr string
+	}{
+		{name: "none", want: "", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"}},
+		{name: "after the second date", end: "2026-12-30", want: "2026-12-30", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent"}},
+		{name: "on a date it falls on: that one still counts", end: "2026-12-28", want: "2026-12-28", wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent"}},
+		{name: "the day before a date it falls on", end: "2026-12-27", want: "2026-12-27", wantDue: []string{"2026-11-28 Rent"}},
+		{name: "on the start day", end: "2026-11-28", want: "2026-11-28", wantDue: []string{"2026-11-28 Rent"}},
+		{name: "before the start", end: "2026-11-27", wantErr: "the end of a schedule (2026-11-27) cannot be before its start (2026-11-28)"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR"))
+			ns := rent()
+			if tc.end != "" {
+				ns.End = day(tc.end)
+			}
+
+			// when
+			_, err := st.CreateSchedule(t.Context(), ns)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if tc.wantErr != "" {
+				return
+			}
+			got, lerr := st.Schedules(t.Context())
+			check(t, lerr)
+			if diff := cmp.Diff(tc.want, got[0].End); diff != "" {
+				t.Errorf("end mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2027-02-28")); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ReplaceSchedule_end(t *testing.T) {
+	tcs := []struct {
+		name string
+		edit func(*NewSchedule)
+		want string
+	}{
+		{name: "an end can be set", edit: func(ns *NewSchedule) { ns.End = day("2027-06-01") }, want: "2027-06-01"},
+		{name: "and cleared", edit: func(ns *NewSchedule) { ns.End = time.Time{} }, want: ""},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			first := rent()
+			first.End = day("2027-01-01")
+			st := newLedger(t, accounts("Assets:Bank EUR"), schedule(first))
+			ns := rent()
+			tc.edit(&ns)
+
+			// when
+			check(t, st.ReplaceSchedule(t.Context(), 1, ns))
+
+			// then
+			got, err := st.Schedules(t.Context())
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got[0].End); diff != "" {
+				t.Errorf("end mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_PauseSchedule(t *testing.T) {
+	// Rent falls on the 28th. Pausing and resuming are dated by the clock.
+	pausedOn := func(date string) given {
+		return func(t *testing.T, st *Local) {
+			t.Helper()
+			today(date)(t, st)
+			check(t, st.PauseSchedule(t.Context(), 1))
+		}
+	}
+	resumedOn := func(date string) given {
+		return func(t *testing.T, st *Local) {
+			t.Helper()
+			today(date)(t, st)
+			check(t, st.ResumeSchedule(t.Context(), 1))
+		}
+	}
+	tcs := []struct {
+		name       string
+		setup      []given
+		act        func(t *testing.T, st *Local) error
+		wantDue    []string // up to 2027-02-28
+		wantPauses []SchedulePause
+		wantErr    string
+	}{
+		{
+			name:       "a paused schedule proposes nothing from the day it was paused",
+			setup:      []given{pausedOn("2026-12-10")},
+			wantDue:    []string{"2026-11-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-10"}},
+		},
+		{
+			name:       "the dates of the pause are dropped, not held back",
+			setup:      []given{pausedOn("2026-12-10"), resumedOn("2027-01-15")},
+			wantDue:    []string{"2026-11-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-10", To: "2027-01-15"}},
+		},
+		{
+			name:       "paused on the day itself, the day is dropped",
+			setup:      []given{pausedOn("2026-12-28"), resumedOn("2027-01-29")},
+			wantDue:    []string{"2026-11-28 Rent", "2027-02-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-28", To: "2027-01-29"}},
+		},
+		{
+			name:       "resumed on the day itself, the day is proposed",
+			setup:      []given{pausedOn("2026-12-10"), resumedOn("2027-01-28")},
+			wantDue:    []string{"2026-11-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-10", To: "2027-01-28"}},
+		},
+		{
+			name:       "two pauses",
+			setup:      []given{pausedOn("2026-11-29"), resumedOn("2026-12-29"), pausedOn("2027-02-01"), resumedOn("2027-03-01")},
+			wantDue:    []string{"2026-11-28 Rent", "2027-01-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-11-29", To: "2026-12-29"}, {From: "2027-02-01", To: "2027-03-01"}},
+		},
+		{
+			name:       "pausing a paused schedule changes nothing",
+			setup:      []given{pausedOn("2026-12-10"), pausedOn("2026-12-20")},
+			wantDue:    []string{"2026-11-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-10"}},
+		},
+		{
+			name:       "resuming one that runs changes nothing",
+			setup:      []given{resumedOn("2026-12-10")},
+			wantDue:    []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"},
+			wantPauses: nil,
+		},
+		{
+			name:       "paused and resumed on the same day, then paused again",
+			setup:      []given{pausedOn("2026-12-10"), resumedOn("2026-12-10"), pausedOn("2026-12-10")},
+			wantDue:    []string{"2026-11-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-12-10"}},
+		},
+		{
+			name:       "an answer before the pause stays an answer",
+			setup:      []given{today("2026-12-01"), skipped(1, "2026-11-28"), pausedOn("2026-12-10")},
+			wantDue:    nil,
+			wantPauses: []SchedulePause{{From: "2026-12-10"}},
+		},
+		{
+			name:  "a date in a pause cannot be confirmed",
+			setup: []given{pausedOn("2026-11-01"), resumedOn("2026-12-30")},
+			act: func(t *testing.T, st *Local) error {
+				_, err := st.ConfirmOccurrence(t.Context(), 1, "2026-12-28", nil)
+				return err
+			},
+			wantDue:    []string{"2027-01-28 Rent", "2027-02-28 Rent"},
+			wantPauses: []SchedulePause{{From: "2026-11-01", To: "2026-12-30"}},
+			wantErr:    `"Rent" does not fall on 2026-12-28`,
+		},
+		{
+			name:    "a schedule that does not exist",
+			act:     func(t *testing.T, st *Local) error { return st.PauseSchedule(t.Context(), 9) },
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"},
+			wantErr: "schedule 9 does not exist",
+		},
+		{
+			name:    "resuming one that does not exist",
+			act:     func(t *testing.T, st *Local) error { return st.ResumeSchedule(t.Context(), 9) },
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent", "2027-02-28 Rent"},
+			wantErr: "schedule 9 does not exist",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR"), schedule(rent()), today("2026-11-20")}, tc.setup...)...)
+
+			// when
+			var err error
+			if tc.act != nil {
+				err = tc.act(t, st)
+			}
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2027-02-28"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			got, lerr := st.Schedules(t.Context())
+			check(t, lerr)
+			if diff := cmp.Diff(tc.wantPauses, got[0].Pauses, equalEmpty); diff != "" {
+				t.Errorf("pauses mismatch (-want +got):\n%s", diff)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func Test_Schedule_Paused(t *testing.T) {
+	tcs := []struct {
+		name   string
+		pauses []SchedulePause
+		want   bool
+	}{
+		{name: "never paused"},
+		{name: "paused now", pauses: []SchedulePause{{From: "2026-12-10"}}, want: true},
+		{name: "resumed", pauses: []SchedulePause{{From: "2026-12-10", To: "2026-12-20"}}},
+		{name: "paused again", pauses: []SchedulePause{{From: "2026-12-10", To: "2026-12-20"}, {From: "2027-01-01"}}, want: true},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			s := Schedule{Pauses: tc.pauses}
+
+			// when
+			got := s.Paused()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("paused mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

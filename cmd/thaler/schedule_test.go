@@ -28,6 +28,50 @@ func Test_schedule(t *testing.T) {
 			want:  "Schedule #1 Rent: every month from 2026-08-28, -900.00 EUR  Assets:Bank -> Expenses:Rent\n",
 		},
 		{
+			name:  "adding one that ends",
+			setup: [][]string{addBank},
+			args:  append(append([]string{}, addRent...), "--end", "2027-06-28"),
+			want:  "Schedule #1 Rent: every month from 2026-08-28 until 2027-06-28, -900.00 EUR  Assets:Bank -> Expenses:Rent\n",
+		},
+		{
+			name:    "an end before the start",
+			setup:   [][]string{addBank},
+			args:    append(append([]string{}, addRent...), "--end", "2026-08-27"),
+			wantErr: "the end of a schedule (2026-08-27) cannot be before its start (2026-08-28)",
+		},
+		{
+			name:  "pausing",
+			setup: [][]string{addBank, addRent},
+			args:  []string{"cli", "schedule", "pause", "1"},
+			want:  "Paused schedule #1 Rent: nothing is proposed until it is resumed\n",
+		},
+		{
+			name:  "the list says what is paused and what ends",
+			setup: [][]string{addBank, addRent, addSalary, {"cli", "schedule", "pause", "1"}, {"cli", "schedule", "edit", "1", "--end", "2027-06-28"}, {"cli", "schedule", "edit", "2", "--end", "2027-01-25"}},
+			args:  []string{"cli", "schedule"},
+			want: "Schedule  ID      Repeats       Start       Amount                     Note\n" +
+				"Rent       1  every month  2026-08-28  -900.00 EUR  paused, ends 2027-06-28\n" +
+				"Salary     2  every month  2026-09-25  3000.00 EUR          ends 2027-01-25\n",
+		},
+		{
+			name:  "resuming takes the note away",
+			setup: [][]string{addBank, addRent, {"cli", "schedule", "pause", "1"}},
+			args:  []string{"cli", "schedule", "resume", "1"},
+			want:  "Resumed schedule #1 Rent\n",
+		},
+		{
+			name:  "resumed: no note column",
+			setup: [][]string{addBank, addRent, {"cli", "schedule", "pause", "1"}, {"cli", "schedule", "resume", "1"}},
+			args:  []string{"cli", "schedule"},
+			want:  "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
+		},
+		{
+			name:    "pausing one that does not exist",
+			setup:   [][]string{addBank},
+			args:    []string{"cli", "schedule", "pause", "3"},
+			wantErr: "schedule 3 does not exist",
+		},
+		{
 			name:  "every other week, income by its sign",
 			setup: [][]string{addBank},
 			args:  []string{"cli", "schedule", "add", "Pay", "--every", "2", "--unit", "week", "-a", "Assets:Bank", "--amount", "500", "-d", "01.09.2026"},
@@ -184,9 +228,29 @@ func Test_schedule_edit(t *testing.T) {
 			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-09-01  -900.00 EUR\n",
 		},
 		{
+			name: "an end", args: []string{"cli", "schedule", "edit", "1", "--end", "2027-06-28"}, want: "Changed schedule #1 Rent\n",
+			wantNow: "Schedule  ID      Repeats       Start       Amount             Note\nRent       1  every month  2026-08-28  -900.00 EUR  ends 2027-06-28\n",
+		},
+		{
+			name: "changing something else keeps the end", setup: [][]string{{"cli", "schedule", "edit", "1", "--end", "2027-06-28"}},
+			args: []string{"cli", "schedule", "edit", "1", "--amount=-950"}, want: "Changed schedule #1 Rent\n",
+			wantNow: "Schedule  ID      Repeats       Start       Amount             Note\nRent       1  every month  2026-08-28  -950.00 EUR  ends 2027-06-28\n",
+		},
+		{
+			name: "none takes the end away", setup: [][]string{{"cli", "schedule", "edit", "1", "--end", "2027-06-28"}},
+			args: []string{"cli", "schedule", "edit", "1", "--end", "none"}, want: "Changed schedule #1 Rent\n",
+			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
+		},
+		{
+			name:    "an end before the start",
+			args:    []string{"cli", "schedule", "edit", "1", "--end", "2026-08-01"},
+			wantErr: "the end of a schedule (2026-08-01) cannot be before its start (2026-08-28)",
+			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
+		},
+		{
 			name:    "nothing asked",
 			args:    []string{"cli", "schedule", "edit", "1"},
-			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --amount, --payee, --memo",
+			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --payee, --memo",
 			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
 		},
 		{
@@ -211,7 +275,7 @@ func Test_schedule_edit(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			e := newCLIEnv(t, nil, addBank, addRent)
+			e := newCLIEnv(t, nil, append([][]string{addBank, addRent}, tc.setup...)...)
 
 			// when
 			got, err := e.run(tc.args...)
