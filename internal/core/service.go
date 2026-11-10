@@ -1662,19 +1662,83 @@ func scheduleDates(sch Schedule, end time.Time) ([]string, error) {
 		return nil, err
 	}
 	var out []string
-dates:
 	for _, d := range occurrencesUpTo(start, sch.Every, sch.Unit, end) {
 		day := d.Format(ledger.DateLayout)
 		if sch.End != "" && day > sch.End {
 			break
 		}
-		for _, z := range sch.Pauses {
-			if day >= z.From && (z.To == "" || day < z.To) {
-				continue dates
+		if paused, _ := sch.pausedOn(day); !paused {
+			out = append(out, day)
+		}
+	}
+	return out, nil
+}
+
+// pausedOn says whether day fell in a pause of s, and whether that pause is still
+// open, in which case every later day does too.
+func (s Schedule) pausedOn(day string) (paused, open bool) {
+	for _, z := range s.Pauses {
+		if day >= z.From && (z.To == "" || day < z.To) {
+			return true, z.To == ""
+		}
+	}
+	return false, false
+}
+
+// ScheduleStatuses lists the schedules and when each is next due.
+func (s *Local) ScheduleStatuses(ctx context.Context, asOf string) ([]ScheduleStatus, error) {
+	when, err := ledger.ParseDate(asOf)
+	if err != nil {
+		return nil, err
+	}
+	q := s.repo.queries()
+	schedules, err := q.schedules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	done, err := q.handledOccurrences(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ScheduleStatus, 0, len(schedules))
+	for _, sch := range schedules {
+		st := ScheduleStatus{Schedule: sch}
+		start, err := ledger.ParseDate(sch.Start)
+		if err != nil {
+			return nil, err
+		}
+		for k := 0; ; k++ {
+			d := occurrenceOn(start, sch.Every, sch.Unit, k)
+			day := d.Format(ledger.DateLayout)
+			if sch.End != "" && day > sch.End {
+				break
+			}
+			paused, open := sch.pausedOn(day)
+			if d.After(when) {
+				switch {
+				case open: // nothing more is proposed
+				case paused:
+					continue
+				case st.Next == "":
+					st.Next = day
+				}
+				break
+			}
+			if paused || done[handled{sch.ID, day}] {
+				continue
+			}
+			st.Overdue++
+			if st.Next == "" {
+				st.Next = day
 			}
 		}
-		out = append(out, day)
+		out = append(out, st)
 	}
+	// By name already; the sort is stable, so a tie on the date keeps that.
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].Next, out[j].Next
+		return a != "" && (b == "" || a < b)
+	})
 	return out, nil
 }
 

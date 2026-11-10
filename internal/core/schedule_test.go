@@ -1249,3 +1249,128 @@ func Test_ReplaceSchedule_tolerance(t *testing.T) {
 		})
 	}
 }
+
+func Test_ScheduleStatuses(t *testing.T) {
+	type status struct {
+		Name    string
+		Next    string
+		Overdue int
+		Paused  bool
+	}
+	pause := func(date string) given {
+		return func(t *testing.T, st *Local) {
+			t.Helper()
+			today(date)(t, st)
+			check(t, st.PauseSchedule(t.Context(), 1))
+		}
+	}
+	resume := func(date string) given {
+		return func(t *testing.T, st *Local) {
+			t.Helper()
+			today(date)(t, st)
+			check(t, st.ResumeSchedule(t.Context(), 1))
+		}
+	}
+	ending := func(end string) given {
+		return func(t *testing.T, st *Local) {
+			t.Helper()
+			ns := rent()
+			ns.End = day(end)
+			check(t, st.ReplaceSchedule(t.Context(), 1, ns))
+		}
+	}
+	other := func(name, start string, unit ScheduleUnit) given {
+		ns := rent()
+		ns.Name, ns.Start, ns.Unit = name, day(start), unit
+		return schedule(ns)
+	}
+	tcs := []struct {
+		name    string
+		noRent  bool // the ledger has the schedules of setup only
+		setup   []given
+		asOf    string
+		want    []status
+		wantErr string
+	}{
+		{name: "no schedules", noRent: true, asOf: "2026-12-01"},
+		{name: "one that has not started: its first date", asOf: "2026-11-10", want: []status{{"Rent", "2026-11-28", 0, false}}},
+		{name: "the day it falls is due, not yet overdue past the day", asOf: "2026-11-28", want: []status{{"Rent", "2026-11-28", 1, false}}},
+		{name: "unanswered dates are overdue, the oldest is next", asOf: "2026-12-30", want: []status{{"Rent", "2026-11-28", 2, false}}},
+		{
+			name: "an answered date is not next", setup: []given{today("2026-12-01"), confirmed(1, "2026-11-28")},
+			asOf: "2026-12-01", want: []status{{"Rent", "2026-12-28", 0, false}},
+		},
+		{
+			name: "confirmed and skipped: the next to come", setup: []given{today("2026-12-30"), confirmed(1, "2026-11-28"), skipped(1, "2026-12-28")},
+			asOf: "2026-12-30", want: []status{{"Rent", "2027-01-28", 0, false}},
+		},
+		{
+			name: "answered out of order", setup: []given{today("2026-12-30"), skipped(1, "2026-12-28")},
+			asOf: "2026-12-30", want: []status{{"Rent", "2026-11-28", 1, false}},
+		},
+		{
+			name: "paused with something waiting", setup: []given{pause("2026-12-01")},
+			asOf: "2026-12-01", want: []status{{"Rent", "2026-11-28", 1, true}},
+		},
+		{
+			name: "paused with nothing waiting: nothing is next", setup: []given{today("2026-12-01"), confirmed(1, "2026-11-28"), pause("2026-12-01")},
+			asOf: "2026-12-01", want: []status{{"Rent", "", 0, true}},
+		},
+		{
+			name: "resumed: the dates of the pause are gone", setup: []given{pause("2026-12-10"), resume("2027-01-15"), func(t *testing.T, st *Local) { skipped(1, "2026-11-28")(t, st) }},
+			asOf: "2027-01-20", want: []status{{"Rent", "2027-01-28", 0, false}},
+		},
+		{
+			name:  "asked about a day before a pause that has been and gone: its dates are skipped over",
+			setup: []given{today("2026-12-01"), confirmed(1, "2026-11-28"), pause("2026-12-10"), resume("2027-01-15")},
+			asOf:  "2026-12-01", want: []status{{"Rent", "2027-01-28", 0, false}},
+		},
+		{
+			name: "past its end with nothing waiting", setup: []given{today("2026-12-30"), confirmed(1, "2026-11-28"), confirmed(1, "2026-12-28"), ending("2026-12-30")},
+			asOf: "2027-03-01", want: []status{{"Rent", "", 0, false}},
+		},
+		{
+			name: "past its end with something waiting", setup: []given{ending("2026-12-30")},
+			asOf: "2027-03-01", want: []status{{"Rent", "2026-11-28", 2, false}},
+		},
+		{
+			name: "its last date is still to come", setup: []given{today("2026-12-01"), confirmed(1, "2026-11-28"), ending("2026-12-28")},
+			asOf: "2026-12-01", want: []status{{"Rent", "2026-12-28", 0, false}},
+		},
+		{
+			name:  "the soonest first, a tie by name, and what has nothing coming last",
+			setup: []given{other("Zoo", "2026-11-28", EveryMonth), other("Bike", "2026-12-05", EveryYear), other("Gym", "2026-12-03", EveryWeek), today("2026-11-28"), skipped(1, "2026-11-28"), pause("2026-11-28")},
+			asOf:  "2026-11-25",
+			want: []status{
+				{"Zoo", "2026-11-28", 0, false},
+				{"Gym", "2026-12-03", 0, false},
+				{"Bike", "2026-12-05", 0, false},
+				{"Rent", "", 0, true},
+			},
+		},
+		{name: "a date that is not one", asOf: "soon", wantErr: `invalid date "soon": use YYYY-MM-DD or DD.MM.YYYY`},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			steps := []given{accounts("Assets:Bank EUR")}
+			if !tc.noRent {
+				steps = append(steps, schedule(rent()))
+			}
+			st := newLedger(t, append(steps, tc.setup...)...)
+
+			// when
+			got, err := st.ScheduleStatuses(t.Context(), tc.asOf)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			var statuses []status
+			for _, s := range got {
+				statuses = append(statuses, status{s.Name, s.Next, s.Overdue, s.Paused()})
+			}
+			if diff := cmp.Diff(tc.want, statuses, equalEmpty); diff != "" {
+				t.Errorf("statuses mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
