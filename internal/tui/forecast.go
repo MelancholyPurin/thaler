@@ -32,8 +32,20 @@ func (m *Model) overdue() int {
 }
 
 // updateForecast handles the keys of the Forecast screen: moving through the
-// schedules.
+// schedules, making a new one or changing the selected one, and pausing it.
 func (m *Model) updateForecast(key string) tea.Cmd {
+	switch key {
+	case "n":
+		return m.openSchedule(false)
+	case "e":
+		return m.openSchedule(true)
+	case "p":
+		m.toggleSchedulePause()
+		return nil
+	case "z":
+		m.undoLast()
+		return nil
+	}
 	m.sched.navigate(key, len(m.schedules), max(1, m.layout().avail/2))
 	return nil
 }

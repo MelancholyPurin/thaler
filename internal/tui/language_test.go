@@ -240,6 +240,12 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget, no targets to copy", keys: "B [ c"},
 		{name: "forecast", keys: "F"},
 		{name: "forecast, the last schedule", keys: "F G"},
+		{name: "schedule, new", keys: "F n"},
+		{name: "schedule, what it goes to", keys: "F n tab tab tab"},
+		{name: "schedule, a transfer between currencies", keys: "F n tab tab tab text:Dollars tab"},
+		{name: "schedule, an error", keys: "F n ctrl+s"},
+		{name: "schedule, edited", keys: "F e"},
+		{name: "schedule, paused", keys: "F p"},
 		{name: "reports", keys: "R"},
 		{name: "language", keys: "ctrl+l"},
 	}
@@ -284,6 +290,10 @@ func Test_View_translated(t *testing.T) {
 		shows []string
 		hides []string
 	}{
+		{name: "Spanish, the schedule popup", tag: language.Spanish, keys: "F n", shows: []string{"Nueva programación", "Nombre", "Importe", "Desde", "Cada", "Periodo", "Inicio", "Fin", "Tolerancia", "cómo llamarla", "enter siguiente"}, hides: []string{"New schedule", "Tolerance"}},
+		{name: "German, the schedule popup", tag: language.German, keys: "F n", shows: []string{"Neuer Zeitplan", "Name", "Betrag", "Von", "Alle", "Beginn", "Ende", "Toleranz", "wie er heißen soll", "enter weiter"}, hides: []string{"New schedule", "Tolerance", "Start"}},
+		{name: "Spanish, a schedule paused", tag: language.Spanish, keys: "F p", shows: []string{"Miete está en pausa · z deshace"}, hides: []string{"is paused"}},
+		{name: "German, a schedule paused", tag: language.German, keys: "F p", shows: []string{"Miete ist pausiert · z macht rückgängig"}, hides: []string{"is paused"}},
 		{name: "Spanish, the tabs and panels", tag: language.Spanish, keys: "", shows: []string{"Libro", "Presupuesto", "Previsión", "Informes", "[2] Cuentas", "Todas las cuentas"}, hides: []string{"Ledger", "Accounts"}},
 		{name: "German, the tabs and panels", tag: language.German, keys: "", shows: []string{"Transaktionen", "Prognose", "Berichte", "[2] Konten", "Alle Konten"}, hides: []string{"Forecast", "Accounts"}},
 		{name: "Spanish, the add form", tag: language.Spanish, keys: "a", shows: []string{"Añadir transacción", "Importe", "Destinatario", "Categoría", "enter sig."}, hides: []string{"Add transaction", "Payee"}},
@@ -326,6 +336,7 @@ func Test_View_translated(t *testing.T) {
 			openAccounts(t, st, "Assets:Bank EUR", "Assets:Dollars USD")
 			book(t, st, "2026-10-01", "REWE", "Assets:Bank", "Expenses:Uncategorized", -1000)
 			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -1000)
+			testSchedules(t, st, "Assets:Dollars")
 			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {
 				t.Fatal(err)
 			}
