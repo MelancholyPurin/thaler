@@ -292,7 +292,7 @@ Getting every transaction into the right category with as little typing as possi
 
 - [x] `TFC-1` See all schedules and when each is next due (the Forecast screen lists them, the soonest first, with amount, rhythm, transfer, estimate, end and pause; `!` marks a date nobody answered, and the count is said above; `ScheduleStatuses` in the service works out the next date as of a day; the keys to create, edit and answer are `TFC-2` and `TFC-3`)
 - [x] `TFC-2` Create, edit, pause and end a schedule (on the Forecast: `n` new and `e` edit in a popup with name, amount, account, what it goes to (a category, or one of your accounts for a transfer), rhythm, start, end and tolerance; `p` pauses or resumes; `z` undoes each; deleting a schedule and one with several postings stay with the service and the command line)
-- [ ] `TFC-3` Go through what is due and confirm, change or skip each
+- [x] `TFC-3` Go through what is due and confirm, change or skip each (`enter` on the Forecast opens a popup that goes through the dates oldest first: `enter` books as it is, `e` for another amount (and what arrives, for a transfer between currencies), `s` skips; `z` takes the last answer back; the service gained `UnskipOccurrence` for it)
 - [ ] `TFC-4` Projected balance per account, week by week
 - [ ] `TFC-5` Warn about the day a balance would dip below your chosen amount
 - [ ] `TFC-6` Look at one account or all of them

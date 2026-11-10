@@ -246,6 +246,11 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "schedule, an error", keys: "F n ctrl+s"},
 		{name: "schedule, edited", keys: "F e"},
 		{name: "schedule, paused", keys: "F p"},
+		{name: "due", keys: "F enter"},
+		{name: "due, the amount", keys: "F enter e"},
+		{name: "due, an error", keys: "F enter e ctrl+u text:0 enter"},
+		{name: "due, booked", keys: "F enter enter"},
+		{name: "due, skipped", keys: "F enter s"},
 		{name: "reports", keys: "R"},
 		{name: "language", keys: "ctrl+l"},
 	}
@@ -292,6 +297,10 @@ func Test_View_translated(t *testing.T) {
 	}{
 		{name: "Spanish, the schedule popup", tag: language.Spanish, keys: "F n", shows: []string{"Nueva programación", "Nombre", "Importe", "Desde", "Cada", "Periodo", "Inicio", "Fin", "Tolerancia", "cómo llamarla", "enter siguiente"}, hides: []string{"New schedule", "Tolerance"}},
 		{name: "German, the schedule popup", tag: language.German, keys: "F n", shows: []string{"Neuer Zeitplan", "Name", "Betrag", "Von", "Alle", "Beginn", "Ende", "Toleranz", "wie er heißen soll", "enter weiter"}, hides: []string{"New schedule", "Tolerance", "Start"}},
+		{name: "Spanish, what is due", tag: language.Spanish, keys: "F enter", shows: []string{"Qué vence", "Miete", "28/09/2026", "hace 24 días", "enter apuntarlo", "e cambiar el importe", "s omitir", "esc dejarlo"}, hides: []string{"What is due", "days ago", "book it"}},
+		{name: "German, what is due", tag: language.German, keys: "F enter", shows: []string{"Was fällig ist", "Miete", "28.09.2026", "vor 24 Tagen", "enter buchen", "e Betrag ändern", "s überspringen", "esc beenden"}, hides: []string{"What is due", "days ago", "book it"}},
+		{name: "Spanish, a date booked", tag: language.Spanish, keys: "F enter enter", shows: []string{"Miete apuntada el 28/09/2026: -900,00 EUR", "todo respondido", "z deshace"}, hides: []string{"booked"}},
+		{name: "German, a date skipped", tag: language.German, keys: "F enter s", shows: []string{"Miete 28.09.2026 übersprungen", "alles beantwortet", "z macht rückgängig"}, hides: []string{"skipped"}},
 		{name: "Spanish, a schedule paused", tag: language.Spanish, keys: "F p", shows: []string{"Miete está en pausa · z deshace"}, hides: []string{"is paused"}},
 		{name: "German, a schedule paused", tag: language.German, keys: "F p", shows: []string{"Miete ist pausiert · z macht rückgängig"}, hides: []string{"is paused"}},
 		{name: "Spanish, the tabs and panels", tag: language.Spanish, keys: "", shows: []string{"Libro", "Presupuesto", "Previsión", "Informes", "[2] Cuentas", "Todas las cuentas"}, hides: []string{"Ledger", "Accounts"}},

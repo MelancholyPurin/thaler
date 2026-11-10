@@ -1121,6 +1121,16 @@ func (q queries) handledOccurrences(ctx context.Context) (map[handled]bool, erro
 	return out, rows.Err()
 }
 
+// deleteSkip removes the record of a skip, and says whether there was one.
+func (q queries) deleteSkip(ctx context.Context, h handled) (bool, error) {
+	res, err := q.db.ExecContext(ctx, `DELETE FROM schedule_occurrences WHERE schedule_id = ? AND date = ? AND status = 'skipped'`, h.schedule, h.date)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // handled names an occurrence.
 type handled struct {
 	schedule int64

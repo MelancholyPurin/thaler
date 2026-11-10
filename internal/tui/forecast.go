@@ -35,6 +35,8 @@ func (m *Model) overdue() int {
 // schedules, making a new one or changing the selected one, and pausing it.
 func (m *Model) updateForecast(key string) tea.Cmd {
 	switch key {
+	case "enter":
+		return m.openDue()
 	case "n":
 		return m.openSchedule(false)
 	case "e":

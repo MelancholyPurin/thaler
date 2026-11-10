@@ -557,6 +557,7 @@
   "occurrence_not_on_schedule": "\"{{.Name}}\" does not fall on {{.Date}}",
   "occurrence_not_due": "{{.Date}} of \"{{.Name}}\" is not due yet",
   "occurrence_done": "{{.Date}} of \"{{.Name}}\" was already confirmed or skipped",
+  "occurrence_not_skipped": "{{.Date}} of \"{{.Name}}\" was not skipped",
   "budget_target": "Target",
   "budget_left": "Left",
   "budget_section_targets": "Targets",
@@ -675,5 +676,26 @@
   "schedule_hint_period": "week, month or year; a monthly schedule keeps the day of its start",
   "schedule_hint_start": "the first date it falls on",
   "schedule_hint_end": "the last day it may fall on; empty = no end",
-  "schedule_hint_tolerance": "percent a bank row may differ from the amount and still count as it; empty = exact"
+  "schedule_hint_tolerance": "percent a bank row may differ from the amount and still count as it; empty = exact",
+  "due_title": "What is due",
+  "due_today": "today",
+  "due_days_ago": {
+    "one": "{{.Count}} day ago",
+    "other": "{{.Count}} days ago"
+  },
+  "due_key_book": "enter book it",
+  "due_key_change": "e change the amount",
+  "due_key_skip": "s skip",
+  "due_key_move": "↑/↓ another date",
+  "due_key_stop": "esc stop",
+  "due_nothing": "Nothing is due.",
+  "due_booked": "{{.Name}} booked on {{.Date}}: {{.Amount}}",
+  "due_skipped": "{{.Name}} {{.Date}} skipped",
+  "due_all_done": "all answered",
+  "undid_due_booked": "Undid booking {{.Name}} on {{.Date}}",
+  "undid_due_skipped": "{{.Name}} {{.Date}} is due again",
+  "footer_due_edit": "enter book it · esc back",
+  "due_estimate": "an estimate (±{{.Percent}}%): press e to enter what it really was",
+  "hint_answer": "enter answer",
+  "help_due": "Forecast: go through what is due, oldest first: enter books a date as it is, e books it for another amount, s skips it"
 }

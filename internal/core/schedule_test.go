@@ -1415,3 +1415,62 @@ func Test_Schedule_NewSchedule(t *testing.T) {
 		checkErr(t, err, `invalid date "soon": use YYYY-MM-DD or DD.MM.YYYY`, nil)
 	})
 }
+
+func Test_UnskipOccurrence(t *testing.T) {
+	tcs := []struct {
+		name    string
+		setup   []given
+		id      int64
+		date    string
+		wantDue []string // up to 2027-01-31
+		wantErr string
+	}{
+		{
+			name: "a skipped date is due again", setup: []given{skipped(1, "2026-11-28")}, id: 1, date: "2026-11-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "the date typed the German way", setup: []given{skipped(1, "2026-11-28")}, id: 1, date: "28.11.2026",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "only that one", setup: []given{today("2026-12-30"), skipped(1, "2026-11-28"), skipped(1, "2026-12-28")}, id: 1, date: "2026-12-28",
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+		},
+		{
+			name: "a date that was confirmed is not undone this way", setup: []given{confirmed(1, "2026-11-28")}, id: 1, date: "2026-11-28",
+			wantDue: []string{"2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `2026-11-28 of "Rent" was not skipped`,
+		},
+		{
+			name: "a date nobody answered", id: 1, date: "2026-11-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `2026-11-28 of "Rent" was not skipped`,
+		},
+		{
+			name: "a schedule that does not exist", id: 9, date: "2026-11-28",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: "schedule 9 does not exist",
+		},
+		{
+			name: "a date that is not one", id: 1, date: "soon",
+			wantDue: []string{"2026-11-28 Rent", "2026-12-28 Rent", "2027-01-28 Rent"},
+			wantErr: `invalid date "soon": use YYYY-MM-DD or DD.MM.YYYY`,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR"), schedule(rent()), today("2026-12-01")}, tc.setup...)...)
+
+			// when
+			err := st.UnskipOccurrence(t.Context(), tc.id, tc.date)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2027-01-31"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
