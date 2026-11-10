@@ -140,7 +140,7 @@ type Service interface {
 	// dated that day, and returns it. postings, when given, replace the template's
 	// (to change an amount); they must balance. Only a date Due lists today can be
 	// confirmed. Deleting the transaction later makes the occurrence due again.
-	ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (AddResult, error)
+	ConfirmOccurrence(ctx context.Context, id int64, date string, postings []ledger.Posting) (ConfirmResult, error)
 	// SkipOccurrence passes on the occurrence: nothing is booked, and it is not
 	// listed as due again.
 	SkipOccurrence(ctx context.Context, id int64, date string) error
@@ -346,6 +346,14 @@ type ImportedRow struct {
 	Settles *SettledOccurrence
 }
 
+// ConfirmResult is what confirming an occurrence booked. ID is the transaction;
+// for a scheduled transfer it is the half that leaves, and InID the half that
+// arrives (0 for anything else).
+type ConfirmResult struct {
+	AddResult
+	InID int64
+}
+
 // SettledOccurrence is the occurrence of a schedule that an imported row stands
 // for.
 type SettledOccurrence struct {
@@ -503,12 +511,18 @@ const (
 // the first time on Start. A monthly or yearly schedule keeps Start's day of the
 // month, and falls on the last day of a month that is shorter. End, when set, is
 // the last day it may fall on.
+//
+// With Transfer set the schedule moves money between two of your own accounts:
+// Postings are then the amount that leaves one (negative) and the amount that
+// arrives in the other (positive, in that account's currency; equal to the first
+// when both hold the same one), and Description is the memo.
 type NewSchedule struct {
 	Name        string // unique, whatever the case
 	Every       int    // 1 or more: 2 with EveryWeek is every other week
 	Unit        ScheduleUnit
 	Start       time.Time
 	End         time.Time // zero: no end
+	Transfer    bool
 	Payee       string
 	Description string
 	Postings    []ledger.Posting
@@ -522,6 +536,7 @@ type Schedule struct {
 	Unit        ScheduleUnit
 	Start       string // YYYY-MM-DD
 	End         string // YYYY-MM-DD, the last day it may fall on; empty: no end
+	Transfer    bool   // moves money between two of your accounts, see NewSchedule
 	Payee       string
 	Description string
 	Postings    []PostingView

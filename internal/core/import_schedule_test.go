@@ -308,3 +308,158 @@ func Test_Import_settlingSkipsWhatIsNotProposed(t *testing.T) {
 		})
 	}
 }
+
+func Test_Import_settlingScheduledTransfers(t *testing.T) {
+	accts := accounts("Assets:Bank EUR", "Assets:Savings EUR")
+	out := row(2, "2026-11-01", "Dauerauftrag", "Sparen", eur(-20000))
+	in := row(2, "2026-11-02", "Sparen", "", eur(20000))
+	settled := func(id int64) []SettledOccurrence {
+		return []SettledOccurrence{{ScheduleID: 1, Schedule: "Saving", Date: "2026-11-01", TransactionID: id}}
+	}
+	tcs := []struct {
+		name            string
+		scheduleInSetup bool // the saving is defined by setup, after what it lists
+		setup           []given
+		req             ImportRequest
+		want            ImportResult
+		wantTxs         []TxView
+		wantDue         []string // up to 2026-12-31
+	}{
+		{
+			name:    "the row on the account it leaves answers the occurrence and is booked to Equity:Transfers",
+			req:     ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{out}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Settled: settled(1), Created: []string{ledger.TransferAccount}},
+			wantTxs: []TxView{tv(1, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000))},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:    "so does the row on the account it arrives in",
+			req:     ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Settled: settled(1), Created: []string{ledger.TransferAccount}},
+			wantTxs: []TxView{tv(1, "2026-11-02", "Sparen", "", pe("Assets:Savings", 20000), pe(ledger.TransferAccount, -20000))},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:  "the other statement pairs with it and settles nothing twice",
+			setup: []given{importing("Assets:Bank", nil, out)},
+			req:   ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}},
+			want: ImportResult{
+				Inserted: 1, IDs: []int64{2}, Transfers: 1,
+				Linked: []TransferLink{{ID: 2, OtherID: 1, OtherWas: ledger.TransferAccount}},
+			},
+			wantTxs: []TxView{
+				linked(tv(1, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000)), 2),
+				linked(tv(2, "2026-11-02", "Sparen", "", pe("Assets:Savings", 20000), pe(ledger.TransferAccount, -20000)), 1),
+			},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name: "a half stored before the schedule existed is paired by the row that settles", scheduleInSetup: true,
+			setup: []given{importing("Assets:Savings", nil, in), schedule(saving())},
+			req:   ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{out}},
+			want: ImportResult{
+				Inserted: 1, IDs: []int64{2}, Transfers: 1, Settled: settled(2), Created: []string{ledger.TransferAccount},
+				Linked: []TransferLink{{ID: 2, OtherID: 1, OtherWas: ledger.UncategorizedIncome}},
+			},
+			wantTxs: []TxView{ // by date
+				linked(tv(2, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000)), 1),
+				linked(tv(1, "2026-11-02", "Sparen", "", pe("Assets:Savings", 20000), pe(ledger.TransferAccount, -20000)), 2),
+			},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:  "the row that arrives first, then the one that leaves: still paired",
+			setup: []given{importing("Assets:Savings", nil, in)},
+			req:   ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{out}},
+			want: ImportResult{
+				Inserted: 1, IDs: []int64{2}, Transfers: 1,
+				Linked: []TransferLink{{ID: 2, OtherID: 1, OtherWas: ledger.TransferAccount}},
+			},
+			wantTxs: []TxView{
+				linked(tv(2, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000)), 1),
+				linked(tv(1, "2026-11-02", "Sparen", "", pe("Assets:Savings", 20000), pe(ledger.TransferAccount, -20000)), 2),
+			},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:    "a rule that calls the row a transfer still settles it",
+			req:     ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{out}, Rules: []importer.Rule{{Contains: "sparen", Category: ledger.TransferAccount}}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Settled: settled(1), Created: []string{ledger.TransferAccount}},
+			wantTxs: []TxView{tv(1, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.TransferAccount, 20000))},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name: "across currencies the row is booked to Equity:Conversions", scheduleInSetup: true,
+			setup: []given{accounts("Assets:Dollars USD"), func(t *testing.T, st *Local) {
+				ns := saving()
+				ns.Postings[1] = ledger.Posting{Account: "Assets:Dollars", Amount: usd(21500)}
+				_, err := st.CreateSchedule(t.Context(), ns)
+				check(t, err)
+			}},
+			req:     ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{out}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Settled: settled(1), Created: []string{ledger.ConversionAccount}},
+			wantTxs: []TxView{tv(1, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20000), pe(ledger.ConversionAccount, 20000))},
+			wantDue: []string{"2026-12-01 Saving"},
+		},
+		{
+			name:    "another amount is no match",
+			req:     ImportRequest{Account: "Assets:Bank", Rows: []importer.Row{row(2, "2026-11-01", "Dauerauftrag", "Sparen", eur(-20001))}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Uncategorized: 1, Created: []string{ledger.UncategorizedExpense}},
+			wantTxs: []TxView{tv(1, "2026-11-01", "Dauerauftrag", "Sparen", pe("Assets:Bank", -20001), pe(ledger.UncategorizedExpense, 20001))},
+			wantDue: []string{"2026-11-01 Saving", "2026-12-01 Saving"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			steps := []given{accts}
+			if !tc.scheduleInSetup {
+				steps = append(steps, schedule(saving()))
+			}
+			st := newLedger(t, append(steps, tc.setup...)...)
+
+			// when
+			got, err := st.Import(t.Context(), tc.req)
+
+			// then
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+			txs, err := st.ListTransactions(t.Context(), TxFilter{})
+			check(t, err)
+			if diff := cmp.Diff(tc.wantTxs, txs, equalEmpty, ignoreHashes); diff != "" {
+				t.Errorf("stored transactions mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantDue, dueDates(t, st, "2026-12-31"), equalEmpty); diff != "" {
+				t.Errorf("due mismatch (-want +got):\n%s", diff)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
+func Test_Import_settlingIgnoresRuleTransfersOfOrdinarySchedules(t *testing.T) {
+	tcs := []struct {
+		name string
+		want []SettledOccurrence
+	}{{name: "a row a rule calls a transfer is not the rent"}}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR"), schedule(rent()))
+
+			// when
+			got, err := st.Import(t.Context(), ImportRequest{
+				Account: "Assets:Bank", Rows: []importer.Row{row(2, "2026-11-28", "LANDLORD GMBH", "Miete", eur(-90000))},
+				Rules: []importer.Rule{{Contains: "landlord", Category: ledger.TransferAccount}},
+			})
+
+			// then
+			check(t, err)
+			if diff := cmp.Diff(tc.want, got.Settled, equalEmpty); diff != "" {
+				t.Errorf("settled mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
