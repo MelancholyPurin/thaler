@@ -54,7 +54,11 @@ func (a *app) service(ctx context.Context) (core.Service, error) {
 	if a.svc != nil {
 		return a.svc, nil
 	}
-	svc, err := core.Open(ctx, a.dbPath())
+	var opts []core.Option
+	if a.now != nil {
+		opts = append(opts, core.WithClock(a.now))
+	}
+	svc, err := core.Open(ctx, a.dbPath(), opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +196,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 		a.checkCmd(),
 		a.budgetCmd(),
 		a.scheduleCmd(),
+		a.forecastCmd(),
 	)
 	root.AddCommand(cli)
 	return root
