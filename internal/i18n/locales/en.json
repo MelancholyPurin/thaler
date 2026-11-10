@@ -554,6 +554,8 @@
   "schedule_name_taken": "there is already a schedule called \"{{.Name}}\"",
   "schedule_every_invalid": "a schedule repeats every 1 or more weeks, months or years, not every {{.Every}}",
   "schedule_unit_invalid": "a schedule repeats every week, month or year, not every \"{{.Unit}}\"",
+  "schedule_tolerance_invalid": "a tolerance is a percentage from 0 to 100, not {{.Tolerance}}",
+  "schedule_tolerance_transfer": "a scheduled transfer moves an exact amount: it has no tolerance",
   "schedule_transfer_postings": "a scheduled transfer has two postings: the amount that leaves one account and the amount that arrives in another",
   "schedule_end_before_start": "the end of a schedule ({{.End}}) cannot be before its start ({{.Start}})",
   "occurrence_not_on_schedule": "\"{{.Name}}\" does not fall on {{.Date}}",

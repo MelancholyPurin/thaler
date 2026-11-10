@@ -554,6 +554,8 @@
   "schedule_name_taken": "ya hay una programación llamada \"{{.Name}}\"",
   "schedule_every_invalid": "una programación se repite cada 1 o más semanas, meses o años, no cada {{.Every}}",
   "schedule_unit_invalid": "una programación se repite cada semana, mes o año, no cada \"{{.Unit}}\"",
+  "schedule_tolerance_invalid": "una tolerancia es un porcentaje de 0 a 100, no {{.Tolerance}}",
+  "schedule_tolerance_transfer": "una transferencia programada mueve un importe exacto: no tiene tolerancia",
   "schedule_transfer_postings": "una transferencia programada tiene dos asientos: el importe que sale de una cuenta y el que llega a otra",
   "schedule_end_before_start": "el fin de una programación ({{.End}}) no puede ser anterior a su inicio ({{.Start}})",
   "occurrence_not_on_schedule": "\"{{.Name}}\" no cae el {{.Date}}",
