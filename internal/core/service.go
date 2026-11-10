@@ -1469,6 +1469,12 @@ func (ns *NewSchedule) validate() error {
 	case ns.Unit != EveryWeek && ns.Unit != EveryMonth && ns.Unit != EveryYear:
 		return coded.New("schedule_unit_invalid", map[string]any{"Unit": string(ns.Unit)})
 	}
+	switch {
+	case ns.Tolerance < 0 || ns.Tolerance > 100:
+		return coded.New("schedule_tolerance_invalid", map[string]any{"Tolerance": ns.Tolerance})
+	case ns.Tolerance > 0 && ns.Transfer:
+		return coded.New("schedule_tolerance_transfer", nil)
+	}
 	if !ns.End.IsZero() && ns.End.Before(ns.Start) {
 		return coded.New("schedule_end_before_start", map[string]any{"Start": ns.Start.Format(ledger.DateLayout), "End": ns.End.Format(ledger.DateLayout)})
 	}
@@ -1837,13 +1843,20 @@ func newOccurrenceMatcher(ctx context.Context, q queries) (*occurrenceMatcher, e
 // bookedTo is the account a bank row of amount on account is booked to when it is
 // the booking of an occurrence of s: the category of an ordinary schedule, or the
 // clearing account of a scheduled transfer, which the row may be either half of.
-func (s Schedule) bookedTo(account string, amount ledger.Money) (string, bool) {
+//
+// gap is how far amount is from the schedule's own, for choosing between
+// schedules that both fit.
+func (s Schedule) bookedTo(account string, amount ledger.Money) (category string, gap int64, ok bool) {
 	if !s.Transfer {
 		src, cat, ok := (TxView{Postings: s.Postings}).Legs()
-		return cat.Account, ok && src.Account == account && src.Amount == amount
+		if !ok || src.Account != account {
+			return "", 0, false
+		}
+		gap, ok = withinTolerance(src.Amount, amount, s.Tolerance)
+		return cat.Account, gap, ok
 	}
 	if len(s.Postings) != 2 {
-		return "", false
+		return "", 0, false
 	}
 	clearing := ledger.TransferAccount
 	if s.Postings[0].Amount.Currency != s.Postings[1].Amount.Currency {
@@ -1851,22 +1864,42 @@ func (s Schedule) bookedTo(account string, amount ledger.Money) (string, bool) {
 	}
 	for _, p := range s.Postings {
 		if p.Account == account && p.Amount == amount {
-			return clearing, true
+			return clearing, 0, true
 		}
 	}
-	return "", false
+	return "", 0, false
 }
 
-// find is the occurrence whose schedule books exactly amount on acc within
-// matchWindowDays of date, the nearest first and then the earliest, or nil. A
-// bill whose amount changes is no match: an estimate with a tolerance is REC-5.
+// withinTolerance says whether amount is the estimate, give or take percent of
+// it, and how far off it is. Both must be in one currency and in one direction:
+// a refund is not the bill. The percentage is taken without multiplying the
+// amount first, which could overflow for a very large one.
+func withinTolerance(estimate, amount ledger.Money, percent int) (int64, bool) {
+	if estimate.Currency != amount.Currency || estimate.Minor == 0 || (estimate.Minor > 0) != (amount.Minor > 0) || amount.Minor == 0 {
+		return 0, false
+	}
+	gap := amount.Minor - estimate.Minor
+	if gap < 0 {
+		gap = -gap
+	}
+	size := estimate.Minor
+	if size < 0 {
+		size = -size
+	}
+	p := int64(percent)
+	return gap, gap <= size/100*p+size%100*p/100
+}
+
+// find is the occurrence whose schedule books amount on acc, exactly or within
+// its tolerance, within matchWindowDays of date: the nearest in days first, then
+// the amount nearest the schedule's, then the earliest; or nil.
 // The occurrence need not be due yet: money that moved is news enough.
 func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Time, transfersOnly bool) *occurrenceMatch {
 	var best *occurrenceMatch
-	bestDistance := 0
+	bestDistance, bestGap := 0, int64(0)
 	from := date.AddDate(0, 0, -matchWindowDays).Format(ledger.DateLayout)
 	for _, sch := range m.schedules {
-		category, ok := sch.bookedTo(acc.Name, amount)
+		category, gap, ok := sch.bookedTo(acc.Name, amount)
 		if !ok || (transfersOnly && !sch.Transfer) {
 			continue
 		}
@@ -1883,8 +1916,9 @@ func (m *occurrenceMatcher) find(acc Account, amount ledger.Money, date time.Tim
 				continue
 			}
 			distance := int(math.Abs(date.Sub(when).Hours() / 24))
-			if best == nil || distance < bestDistance || (distance == bestDistance && d < best.date) {
-				best, bestDistance = &occurrenceMatch{scheduleID: sch.ID, name: sch.Name, date: d, category: category, transfer: sch.Transfer}, distance
+			if best == nil || distance < bestDistance || (distance == bestDistance && (gap < bestGap || (gap == bestGap && d < best.date))) {
+				bestDistance, bestGap = distance, gap
+				best = &occurrenceMatch{scheduleID: sch.ID, name: sch.Name, date: d, category: category, transfer: sch.Transfer}
 			}
 		}
 	}

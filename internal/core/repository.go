@@ -973,8 +973,8 @@ func endDate(ns NewSchedule) any {
 
 func (q queries) insertSchedule(ctx context.Context, ns NewSchedule) (int64, error) {
 	res, err := q.db.ExecContext(ctx,
-		`INSERT INTO schedules (name, every, unit, start_date, end_date, transfer, payee, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Transfer, ns.Payee, ns.Description)
+		`INSERT INTO schedules (name, every, unit, start_date, end_date, transfer, tolerance, payee, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Transfer, ns.Tolerance, ns.Payee, ns.Description)
 	if err != nil {
 		return 0, err
 	}
@@ -983,8 +983,8 @@ func (q queries) insertSchedule(ctx context.Context, ns NewSchedule) (int64, err
 
 func (q queries) updateSchedule(ctx context.Context, id int64, ns NewSchedule) error {
 	_, err := q.db.ExecContext(ctx,
-		`UPDATE schedules SET name = ?, every = ?, unit = ?, start_date = ?, end_date = ?, transfer = ?, payee = ?, description = ? WHERE id = ?`,
-		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Transfer, ns.Payee, ns.Description, id)
+		`UPDATE schedules SET name = ?, every = ?, unit = ?, start_date = ?, end_date = ?, transfer = ?, tolerance = ?, payee = ?, description = ? WHERE id = ?`,
+		ns.Name, ns.Every, string(ns.Unit), ns.Start.Format(ledger.DateLayout), endDate(ns), ns.Transfer, ns.Tolerance, ns.Payee, ns.Description, id)
 	return err
 }
 
@@ -1018,7 +1018,7 @@ func (q queries) deleteSchedule(ctx context.Context, id int64) (bool, error) {
 
 func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 	rows, err := q.db.QueryContext(ctx,
-		`SELECT id, name, every, unit, start_date, COALESCE(end_date, ''), transfer, payee, description FROM schedules ORDER BY name`)
+		`SELECT id, name, every, unit, start_date, COALESCE(end_date, ''), transfer, tolerance, payee, description FROM schedules ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -1030,7 +1030,7 @@ func (q queries) schedules(ctx context.Context) ([]Schedule, error) {
 			s    Schedule
 			unit string
 		)
-		if err := rows.Scan(&s.ID, &s.Name, &s.Every, &unit, &s.Start, &s.End, &s.Transfer, &s.Payee, &s.Description); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Every, &unit, &s.Start, &s.End, &s.Transfer, &s.Tolerance, &s.Payee, &s.Description); err != nil {
 			return nil, err
 		}
 		s.Unit = ScheduleUnit(unit)

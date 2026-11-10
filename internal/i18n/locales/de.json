@@ -554,6 +554,8 @@
   "schedule_name_taken": "Es gibt bereits einen Zeitplan namens \"{{.Name}}\"",
   "schedule_every_invalid": "Ein Zeitplan wiederholt sich alle 1 oder mehr Wochen, Monate oder Jahre, nicht alle {{.Every}}",
   "schedule_unit_invalid": "Ein Zeitplan wiederholt sich jede Woche, jeden Monat oder jedes Jahr, nicht in der Einheit \"{{.Unit}}\"",
+  "schedule_tolerance_invalid": "Eine Toleranz ist ein Prozentwert von 0 bis 100, nicht {{.Tolerance}}",
+  "schedule_tolerance_transfer": "Eine geplante Überweisung bewegt einen genauen Betrag: sie hat keine Toleranz",
   "schedule_transfer_postings": "Eine geplante Überweisung hat zwei Buchungen: den Betrag, der ein Konto verlässt, und den, der auf einem anderen ankommt",
   "schedule_end_before_start": "Das Ende eines Zeitplans ({{.End}}) darf nicht vor seinem Beginn ({{.Start}}) liegen",
   "occurrence_not_on_schedule": "\"{{.Name}}\" fällt nicht auf den {{.Date}}",

@@ -79,6 +79,9 @@ func amountOf(s core.Schedule) string {
 		return s.Postings[0].Amount.String()
 	}
 	if src, _, ok := (core.TxView{Postings: s.Postings}).Legs(); ok {
+		if s.Tolerance > 0 {
+			return "~" + src.Amount.String() // an estimate
+		}
 		return src.Amount.String()
 	}
 	return "split"
@@ -122,7 +125,7 @@ func arrives(p []ledger.Posting) string {
 }
 
 func (a *app) scheduleAddCmd() *cobra.Command {
-	var every int
+	var every, tolerance int
 	var unit, start, end, account, amount, toAmount, to, payee, memo, currency string
 	cmd := &cobra.Command{
 		Use:   "add NAME",
@@ -138,7 +141,13 @@ transfer, like "thaler cli transfer": -a is the account the money leaves, --to t
 one it arrives in, and the amount is how much leaves (its sign does not matter).
 Between accounts in different currencies --to-amount says how much arrives:
 
-  thaler cli schedule add Saving --unit month -a Assets:Bank --amount 200 --to Assets:Savings --start 2026-11-01`,
+  thaler cli schedule add Saving --unit month -a Assets:Bank --amount 200 --to Assets:Savings --start 2026-11-01
+
+For a bill that changes (electricity), give the amount it usually is and a
+--tolerance in percent: a bank row within that much of it, on either side, still
+settles the date. Without one the amount has to be exact.
+
+  thaler cli schedule add Electricity --unit month -a Assets:Bank --amount=-80 -t Expenses:Power --tolerance 25`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -182,7 +191,7 @@ Between accounts in different currencies --to-amount says how much arrives:
 					counter = ledger.UncategorizedIncome
 				}
 			}
-			ns := core.NewSchedule{Name: args[0], Every: every, Unit: u, Start: when, End: last, Payee: payee, Description: memo}
+			ns := core.NewSchedule{Name: args[0], Every: every, Unit: u, Start: when, End: last, Tolerance: tolerance, Payee: payee, Description: memo}
 			transfer := false
 			if typ, err := ledger.TypeOf(counter); err == nil && typ.NeedsCurrency() {
 				transfer = true
@@ -211,7 +220,11 @@ Between accounts in different currencies --to-amount says how much arrives:
 					ns.Postings[0].Amount.Neg(), acc.Name, counter, arrives(ns.Postings))
 				return nil
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s%s, %s  %s -> %s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), until, signed(amt), acc.Name, counter)
+			estimate := ""
+			if tolerance > 0 {
+				estimate = fmt.Sprintf(" (an estimate, ±%d%%)", tolerance)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Schedule #%d %s: %s from %s%s, %s%s  %s -> %s\n", id, strings.TrimSpace(args[0]), repeats(s), when.Format(ledger.DateLayout), until, signed(amt), estimate, acc.Name, counter)
 			return nil
 		},
 	}
@@ -220,6 +233,7 @@ Between accounts in different currencies --to-amount says how much arrives:
 	cmd.Flags().StringVarP(&start, "start", "d", "", "the first date, YYYY-MM-DD or DD.MM.YYYY (default: today)")
 	cmd.Flags().StringVar(&end, "end", "", "the last date it may fall on, YYYY-MM-DD or DD.MM.YYYY (default: no end)")
 	cmd.Flags().StringVar(&toAmount, "to-amount", "", "a transfer between currencies: how much arrives")
+	cmd.Flags().IntVar(&tolerance, "tolerance", 0, "percent the amount may differ from a bank row's and still match it, 0 to 100 (default: exact)")
 	cmd.Flags().StringVarP(&account, "account", "a", "", "account the money moves in or out of, e.g. Assets:Sparkasse (required)")
 	cmd.Flags().StringVar(&amount, "amount", "", "signed amount, e.g. -900 or 2450,00 (required)")
 	cmd.Flags().StringVarP(&to, "to", "t", "", "category or other account on the other side (default: Expenses:Uncategorized / Income:Uncategorized)")
@@ -282,6 +296,9 @@ func scheduleNote(s core.Schedule) string {
 	if s.Transfer && len(s.Postings) == 2 {
 		notes = append(notes, "transfer to "+s.Postings[1].Account)
 	}
+	if s.Tolerance > 0 {
+		notes = append(notes, fmt.Sprintf("estimate, ±%d%%", s.Tolerance))
+	}
 	return strings.Join(notes, ", ")
 }
 
@@ -301,7 +318,7 @@ func scheduleNamed(cmd *cobra.Command, svc core.Service, id int64) (core.Schedul
 
 func (a *app) scheduleEditCmd() *cobra.Command {
 	var name, unit, start, end, amount, toAmount, payee, memo string
-	var every int
+	var every, tolerance int
 	cmd := &cobra.Command{
 		Use:   "edit ID",
 		Short: "Change a schedule: only the flags you give are changed",
@@ -325,7 +342,7 @@ Pauses are not changed here; see "schedule pause".`,
 			if !ok {
 				return fmt.Errorf("no schedule number %d; see thaler cli schedule", id)
 			}
-			ns := core.NewSchedule{Name: cur.Name, Every: cur.Every, Unit: cur.Unit, Payee: cur.Payee, Description: cur.Description, Transfer: cur.Transfer}
+			ns := core.NewSchedule{Name: cur.Name, Every: cur.Every, Unit: cur.Unit, Payee: cur.Payee, Description: cur.Description, Transfer: cur.Transfer, Tolerance: cur.Tolerance}
 			if ns.Start, err = ledger.ParseDate(cur.Start); err != nil {
 				return err
 			}
@@ -339,13 +356,13 @@ Pauses are not changed here; see "schedule pause".`,
 			}
 			f := cmd.Flags()
 			changes := 0
-			for _, flag := range []string{"name", "every", "unit", "start", "end", "amount", "to-amount", "payee", "memo"} {
+			for _, flag := range []string{"name", "every", "unit", "start", "end", "amount", "to-amount", "tolerance", "payee", "memo"} {
 				if f.Changed(flag) {
 					changes++
 				}
 			}
 			if changes == 0 {
-				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --payee, --memo")
+				return errors.New("nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --tolerance, --payee, --memo")
 			}
 			if f.Changed("name") {
 				ns.Name = name
@@ -370,6 +387,9 @@ Pauses are not changed here; see "schedule pause".`,
 						return err
 					}
 				}
+			}
+			if f.Changed("tolerance") {
+				ns.Tolerance = tolerance
 			}
 			if f.Changed("payee") {
 				ns.Payee = payee
@@ -396,6 +416,7 @@ Pauses are not changed here; see "schedule pause".`,
 	cmd.Flags().StringVar(&end, "end", "", "a new last date, or none for no end")
 	cmd.Flags().StringVar(&amount, "amount", "", "a new signed amount on the account (for a transfer: how much leaves)")
 	cmd.Flags().StringVar(&toAmount, "to-amount", "", "a transfer between currencies: how much arrives")
+	cmd.Flags().IntVar(&tolerance, "tolerance", 0, "percent the amount may differ from a bank row's and still match it; 0 for exact")
 	cmd.Flags().StringVarP(&payee, "payee", "p", "", "a new payee")
 	cmd.Flags().StringVarP(&memo, "memo", "m", "", "a new description")
 	return cmd
