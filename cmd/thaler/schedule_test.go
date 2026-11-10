@@ -250,7 +250,7 @@ func Test_schedule_edit(t *testing.T) {
 		{
 			name:    "nothing asked",
 			args:    []string{"cli", "schedule", "edit", "1"},
-			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --payee, --memo",
+			wantErr: "nothing to change: give at least one of --name, --every, --unit, --start, --end, --amount, --to-amount, --tolerance, --payee, --memo",
 			wantNow: "Schedule  ID      Repeats       Start       Amount\nRent       1  every month  2026-08-28  -900.00 EUR\n",
 		},
 		{
@@ -502,6 +502,119 @@ func Test_schedule_transfers(t *testing.T) {
 			setup:   [][]string{addBank, addSavings, addSaving},
 			args:    []string{"cli", "schedule", "edit", "1", "--to-amount", "250"},
 			wantErr: "both accounts hold the same currency: there is no separate --to-amount",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+var addPower = []string{"cli", "schedule", "add", "Electricity", "--unit", "month", "-a", "Assets:Bank", "--amount=-80", "-t", "Expenses:Power", "--start", "2026-08-15", "--tolerance", "25"}
+
+func Test_schedule_estimates(t *testing.T) {
+	tcs := []cliCase{
+		{
+			name:  "an estimate with a tolerance",
+			setup: [][]string{addBank},
+			args:  addPower,
+			want:  "Schedule #1 Electricity: every month from 2026-08-15, -80.00 EUR (an estimate, ±25%)  Assets:Bank -> Expenses:Power\n",
+		},
+		{
+			name:    "more than all of it",
+			setup:   [][]string{addBank},
+			args:    append(append([]string{}, addRent...), "--tolerance", "150"),
+			wantErr: "a tolerance is a percentage from 0 to 100, not 150",
+		},
+		{
+			name:    "less than none",
+			setup:   [][]string{addBank},
+			args:    append(append([]string{}, addRent...), "--tolerance=-5"),
+			wantErr: "a tolerance is a percentage from 0 to 100, not -5",
+		},
+		{
+			name:    "a transfer is exact",
+			setup:   [][]string{addBank, addSavings},
+			args:    append(append([]string{}, addSaving...), "--tolerance", "10"),
+			wantErr: "a scheduled transfer moves an exact amount: it has no tolerance",
+		},
+		{
+			name:  "the list marks the estimate",
+			setup: [][]string{addBank, addPower, addRent},
+			args:  []string{"cli", "schedule"},
+			want: "Schedule     ID      Repeats       Start       Amount            Note\n" +
+				"Electricity   1  every month  2026-08-15  ~-80.00 EUR  estimate, ±25%\n" +
+				"Rent          2  every month  2026-08-28  -900.00 EUR\n",
+		},
+		{
+			name:  "so does what is due",
+			setup: [][]string{addBank, addPower},
+			args:  []string{"cli", "schedule", "due", "--until", "2026-08-31"},
+			want: "Date        ID       Amount     Schedule\n" +
+				"2026-08-15   1  ~-80.00 EUR  Electricity\n" +
+				"\nAnswer each with: thaler cli schedule confirm ID DATE [--amount=N], or thaler cli schedule skip ID DATE\n",
+		},
+		{
+			name:  "confirming books what the bill really was",
+			setup: [][]string{addBank, addPower},
+			args:  []string{"cli", "schedule", "confirm", "1", "2026-08-15", "--amount=-93.40"},
+			want:  "Booked #1  2026-08-15  -93.40 EUR  Assets:Bank -> Expenses:Power\n",
+		},
+		{
+			name:  "editing the tolerance",
+			setup: [][]string{addBank, addRent},
+			args:  []string{"cli", "schedule", "edit", "1", "--tolerance", "10"},
+			want:  "Changed schedule #1 Rent\n",
+		},
+		{
+			name:  "the tolerance stays when something else changes",
+			setup: [][]string{addBank, addPower, {"cli", "schedule", "edit", "1", "--amount=-85"}},
+			args:  []string{"cli", "schedule"},
+			want: "Schedule     ID      Repeats       Start       Amount            Note\n" +
+				"Electricity   1  every month  2026-08-15  ~-85.00 EUR  estimate, ±25%\n",
+		},
+		{
+			name:  "0 makes it exact again",
+			setup: [][]string{addBank, addPower, {"cli", "schedule", "edit", "1", "--tolerance", "0"}},
+			args:  []string{"cli", "schedule"},
+			want:  "Schedule     ID      Repeats       Start      Amount\nElectricity   1  every month  2026-08-15  -80.00 EUR\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
+func Test_schedule_importSettlesAnEstimate(t *testing.T) {
+	// The rent is 900.00 and the bank took 950.00 on the 29th.
+	files := map[string]string{"bank.csv": csvHeader + `"29.08.26";"DAUERAUFTRAG";"Miete";"Landlord";"-950,00";"EUR";"Umsatz gebucht"` + "\n"}
+	imp := []string{"cli", "import", "{dir}/bank.csv", "-a", "Assets:Bank"}
+	tcs := []cliCase{
+		{
+			name: "within the tolerance", files: files,
+			setup: [][]string{addBank, addRent, {"cli", "schedule", "edit", "1", "--tolerance", "10"}},
+			args:  imp,
+			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Settled 2026-08-28 of the schedule Rent (#1).\n",
+		},
+		{
+			name: "past it", files: files,
+			setup: [][]string{addBank, addRent, {"cli", "schedule", "edit", "1", "--tolerance", "5"}},
+			args:  imp,
+			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
 		},
 	}
 	for _, tc := range tcs {
