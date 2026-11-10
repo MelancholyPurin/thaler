@@ -546,6 +546,7 @@
   "target_not_category": "{{.Name}} ist keine Income- oder Expenses-Kategorie: nur diese, außer Uncategorized, können ein Ziel haben",
   "target_not_base_currency": "ein Ziel gilt in der Basiswährung ({{.Base}}), nicht in {{.Currency}}",
   "schedule_not_found": "Der Zeitplan {{.ID}} existiert nicht",
+  "projection_before_today": "Die Vorschau beginnt heute ({{.Today}}); {{.Date}} liegt davor",
   "schedule_name_empty": "Ein Zeitplan braucht einen Namen",
   "schedule_name_taken": "Es gibt bereits einen Zeitplan namens \"{{.Name}}\"",
   "schedule_every_invalid": "Ein Zeitplan wiederholt sich alle 1 oder mehr Wochen, Monate oder Jahre, nicht alle {{.Every}}",
