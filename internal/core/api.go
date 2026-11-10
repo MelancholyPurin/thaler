@@ -334,6 +334,19 @@ type ImportedRow struct {
 	// entered by hand: that entry takes over the row instead of a new
 	// transaction being added, and Category is the entry's own category.
 	Adopts *AdoptedEntry
+	// Settles is set when the row is the bank's booking of an occurrence of a
+	// schedule that nobody answered yet: a real import then answers it, and
+	// Category is the schedule's unless a rule chose one.
+	Settles *SettledOccurrence
+}
+
+// SettledOccurrence is the occurrence of a schedule that an imported row stands
+// for.
+type SettledOccurrence struct {
+	ScheduleID    int64
+	Schedule      string // its name
+	Date          string // the occurrence's own date
+	TransactionID int64  // the transaction the row became; 0 in a dry run
 }
 
 // AdoptedEntry is the hand-entered transaction a bank row was matched with.
@@ -370,14 +383,15 @@ type RejectedRow struct {
 
 // ImportResult summarises an import.
 type ImportResult struct {
-	Inserted      int            // new transactions (would be, in a dry run)
-	IDs           []int64        // the new transactions, so the import can be undone; empty in a dry run
-	Transfers     int            // of those, how many were paired with a stored transaction as a transfer
-	Linked        []TransferLink // the pairings made; empty in a dry run
-	Adopted       int            // rows that matched an entry made by hand and were not added again
-	AdoptedIDs    []int64        // those entries, so the import can be undone; empty in a dry run
-	Duplicates    int            // rows already stored
-	Uncategorized int            // rows no rule matched and no transfer explained
+	Inserted      int                 // new transactions (would be, in a dry run)
+	IDs           []int64             // the new transactions, so the import can be undone; empty in a dry run
+	Transfers     int                 // of those, how many were paired with a stored transaction as a transfer
+	Linked        []TransferLink      // the pairings made; empty in a dry run
+	Adopted       int                 // rows that matched an entry made by hand and were not added again
+	AdoptedIDs    []int64             // those entries, so the import can be undone; empty in a dry run
+	Settled       []SettledOccurrence // occurrences answered by a row (would be, in a dry run)
+	Duplicates    int                 // rows already stored
+	Uncategorized int                 // rows no rule matched and no transfer explained
 	Created       []string
 	Rejected      []RejectedRow
 	Rows          []ImportedRow // dry run only
