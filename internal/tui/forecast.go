@@ -21,7 +21,10 @@ func (m *Model) refreshSchedules() (err error) {
 	if m.schedules, err = m.svc.ScheduleStatuses(m.ctx, m.now().Format(ledger.DateLayout)); err != nil {
 		return err
 	}
-	return m.refreshLows()
+	if err = m.refreshLows(); err != nil {
+		return err
+	}
+	return m.refreshProjection()
 }
 
 // overdue is how many dates, of all the schedules, wait for an answer.
@@ -37,6 +40,20 @@ func (m *Model) overdue() int {
 // schedules, making a new one or changing the selected one, and pausing it.
 func (m *Model) updateForecast(key string) tea.Cmd {
 	switch key {
+	case "tab":
+		m.balances = !m.balances
+		return nil
+	case "m":
+		return m.openMinimum()
+	case "z":
+		m.undoLast()
+		return nil
+	}
+	if m.balances {
+		m.updateBalances(key)
+		return nil
+	}
+	switch key {
 	case "enter":
 		return m.openDue()
 	case "n":
@@ -45,11 +62,6 @@ func (m *Model) updateForecast(key string) tea.Cmd {
 		return m.openSchedule(true)
 	case "p":
 		m.toggleSchedulePause()
-		return nil
-	case "m":
-		return m.openMinimum()
-	case "z":
-		m.undoLast()
 		return nil
 	}
 	m.sched.navigate(key, len(m.schedules), max(1, m.layout().avail/2))
@@ -152,6 +164,9 @@ func (m *Model) scheduleLines(iw int) (lines []string, sel span) {
 // first, each with what it moves and when it is next due. What is waiting for an
 // answer is said above them.
 func (m *Model) forecastBody(l layout) string {
+	if m.balances {
+		return m.balancesBody(l)
+	}
 	iw := m.width - 2
 	title := m.loc.T("panel_schedules", nil)
 	lows := m.lowLines(iw)
