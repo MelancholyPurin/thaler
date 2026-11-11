@@ -700,5 +700,20 @@
   "footer_due_edit": "enter buchen · esc zurück",
   "due_estimate": "eine Schätzung (±{{.Percent}}%): mit e eintragen, was es wirklich war",
   "hint_answer": "enter beantworten",
-  "help_due": "Prognose: durchgehen, was fällig ist, das Älteste zuerst: enter bucht einen Termin so wie er ist, e mit anderem Betrag, s überspringt ihn"
+  "help_due": "Prognose: durchgehen, was fällig ist, das Älteste zuerst: enter bucht einen Termin so wie er ist, e mit anderem Betrag, s überspringt ihn",
+  "low_now": "{{.Account}} hat {{.Balance}}, unter dem Mindestbetrag von {{.Minimum}}",
+  "low_on": "{{.Account}} fiele am {{.Date}} auf {{.Balance}}, unter den Mindestbetrag von {{.Minimum}}",
+  "low_on_by": "{{.Account}} fiele am {{.Date}} auf {{.Balance}} ({{.Schedule}} kostet am meisten), unter den Mindestbetrag von {{.Minimum}}",
+  "minimum_title": "Mindestkontostand",
+  "minimum_footer": "↑/↓ · enter speichern · esc abbrechen",
+  "label_minimum": "Minimum",
+  "minimum_placeholder": "Betrag (leer entfernt)",
+  "minimum_hint": "Der niedrigste Stand dieses Kontos, in {{.Currency}}. Ein leerer Betrag entfernt ihn. Die Prognose warnt vor dem Tag, an dem ein Saldo darunter fiele.",
+  "minimum_no_accounts": "noch kein Assets-Konto: lege zuerst eines an",
+  "minimum_type_amount": "gib einen Betrag ein: es gibt kein Minimum zum Entfernen",
+  "minimum_set": "Minimum von {{.Name}}: {{.Amount}}",
+  "minimum_cleared": "Minimum von {{.Name}} entfernt",
+  "undid_minimum": "Änderung des Minimums von {{.Name}} rückgängig gemacht",
+  "hint_minimum": "m Minimum",
+  "help_minimum": "Prognose: m legt den niedrigsten Stand eines Kontos fest; der Bildschirm warnt vor dem Tag, an dem ein Saldo darunter fiele, z macht rückgängig"
 }

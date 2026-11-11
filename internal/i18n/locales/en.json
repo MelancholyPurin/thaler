@@ -700,5 +700,20 @@
   "footer_due_edit": "enter book it · esc back",
   "due_estimate": "an estimate (±{{.Percent}}%): press e to enter what it really was",
   "hint_answer": "enter answer",
-  "help_due": "Forecast: go through what is due, oldest first: enter books a date as it is, e books it for another amount, s skips it"
+  "help_due": "Forecast: go through what is due, oldest first: enter books a date as it is, e books it for another amount, s skips it",
+  "low_now": "{{.Account}} holds {{.Balance}}, below its minimum of {{.Minimum}}",
+  "low_on": "{{.Account}} would fall to {{.Balance}} on {{.Date}}, below its minimum of {{.Minimum}}",
+  "low_on_by": "{{.Account}} would fall to {{.Balance}} on {{.Date}} ({{.Schedule}} takes the most), below its minimum of {{.Minimum}}",
+  "minimum_title": "Minimum balance",
+  "minimum_footer": "↑/↓ · enter save · esc cancel",
+  "label_minimum": "Minimum",
+  "minimum_placeholder": "amount (empty clears)",
+  "minimum_hint": "The lowest this account should fall, in {{.Currency}}. An empty amount clears it. The Forecast warns about the day a balance would go under.",
+  "minimum_no_accounts": "no Assets account yet: create one first",
+  "minimum_type_amount": "type an amount: there is no minimum to clear",
+  "minimum_set": "Minimum of {{.Name}}: {{.Amount}}",
+  "minimum_cleared": "Minimum of {{.Name}} cleared",
+  "undid_minimum": "Minimum of {{.Name}} taken back",
+  "hint_minimum": "m minimum",
+  "help_minimum": "Forecast: m sets the lowest an account should fall; the screen warns about the day a balance would go under, and z undoes"
 }
