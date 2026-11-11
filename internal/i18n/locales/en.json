@@ -715,5 +715,15 @@
   "minimum_cleared": "Minimum of {{.Name}} cleared",
   "undid_minimum": "Minimum of {{.Name}} taken back",
   "hint_minimum": "m minimum",
-  "help_minimum": "Forecast: m sets the lowest an account should fall; the screen warns about the day a balance would go under, and z undoes"
+  "help_minimum": "Forecast: m sets the lowest an account should fall; the screen warns about the day a balance would go under, and z undoes",
+  "panel_balances": "Balances",
+  "label_change": "Change",
+  "balances_today": "Today",
+  "balances_still": "No schedule moves this account.",
+  "balances_empty": "No asset or liability accounts yet.",
+  "balances_footer": "at the end of each week",
+  "hint_tab_balances": "tab balances",
+  "hint_tab_schedules": "tab schedules",
+  "hint_scroll": "↑/↓ scroll",
+  "help_balances": "Forecast: tab switches between the schedules and the balances of each account at the end of each of the next weeks; ↑ ↓ scroll them"
 }

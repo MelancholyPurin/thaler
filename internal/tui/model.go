@@ -141,6 +141,9 @@ type Model struct {
 	minimums     []core.MinimumBalance // the lowest each account should fall
 	lows         []core.LowBalance     // the accounts that would fall under theirs, the soonest first
 	minForm      *minimumForm          // the minimum popup while it is open
+	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
+	balances     bool                  // the Forecast shows the balances, not the schedules
+	balTop       int                   // first line of them shown
 	now          func() time.Time
 	focus        pane
 	accts        listState // index 0 is "All accounts", then m.accounts

@@ -57,7 +57,7 @@ func Test_forecastScreen(t *testing.T) {
 			setup: func(t *testing.T, st *core.Local) {
 				scheduled(t, st, core.NewSchedule{Name: "Rent", Start: startOn("2026-11-28"), Postings: pair("Expenses:Rent", 90000)})
 			},
-			shows: []string{"Schedules", "Rent", "-900.00 EUR", "2026-11-28", "every month", "1 of 1"},
+			shows: []string{"Schedules", "Rent", "-900.00 EUR", "2026-11-28", "every month", "1 of 1", "tab balances"},
 			hides: []string{"waiting", "!"},
 		},
 		{
