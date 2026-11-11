@@ -323,9 +323,9 @@ func (m *Model) hintItems() (hints, tail []string) {
 		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_tab_categories", nil), m.loc.T("hint_target", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
 	case m.screen == screenForecast:
 		if m.balances {
-			return []string{m.loc.T("hint_scroll", nil), m.loc.T("hint_tab_schedules", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
+			return []string{m.loc.T("hint_scroll", nil), m.loc.T("hint_tab_schedules", nil), m.loc.T("hint_account", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
 		}
-		return []string{m.loc.T("hint_schedule", nil), m.loc.T("hint_answer", nil), m.loc.T("hint_tab_balances", nil), m.loc.T("hint_new", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_pause", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
+		return []string{m.loc.T("hint_schedule", nil), m.loc.T("hint_answer", nil), m.loc.T("hint_tab_balances", nil), m.loc.T("hint_new", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_pause", nil), m.loc.T("hint_account", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
 	case m.screen != screenLedger:
 		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
 	}
@@ -451,6 +451,7 @@ func (m *Model) helpPopup() string {
 		{"enter", m.loc.T("help_due", nil)},
 		{"m", m.loc.T("help_minimum", nil)},
 		{"tab", m.loc.T("help_balances", nil)},
+		{"a", m.loc.T("help_scope", nil)},
 		{"?", m.loc.T("help_help", nil)},
 		{"q  ctrl+c", m.loc.T("help_quit", nil)},
 	}

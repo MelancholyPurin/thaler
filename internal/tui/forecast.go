@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,15 +17,82 @@ const (
 	scheduleNextW   = 14
 )
 
-// refreshSchedules loads the schedules with when each is next due, as of today.
-func (m *Model) refreshSchedules() (err error) {
-	if m.schedules, err = m.svc.ScheduleStatuses(m.ctx, m.now().Format(ledger.DateLayout)); err != nil {
+// refreshSchedules loads the schedules with when each is next due, as of today, and
+// the balances and warnings that go with them. When the Forecast is limited to one
+// account, only the schedules that move it are kept.
+func (m *Model) refreshSchedules() error {
+	all, err := m.svc.ScheduleStatuses(m.ctx, m.now().Format(ledger.DateLayout))
+	if err != nil {
 		return err
 	}
 	if err = m.refreshLows(); err != nil {
 		return err
 	}
-	return m.refreshProjection()
+	if err = m.refreshProjection(); err != nil {
+		return err
+	}
+	if m.fcAccount != "" && !slices.Contains(m.scopes(), m.fcAccount) { // renamed or gone
+		m.fcAccount = ""
+	}
+	m.schedules = m.schedules[:0]
+	for _, s := range all {
+		if m.inScope(s.Schedule) {
+			m.schedules = append(m.schedules, s)
+		}
+	}
+	return nil
+}
+
+// inScope says whether a schedule moves the account the Forecast is limited to, or,
+// when it is not limited, always.
+func (m *Model) inScope(s core.Schedule) bool {
+	if m.fcAccount == "" {
+		return true
+	}
+	for _, p := range s.Postings {
+		if p.Account == m.fcAccount {
+			return true
+		}
+	}
+	return false
+}
+
+// scopes are the accounts the Forecast can be limited to: the ones it projects.
+func (m *Model) scopes() []string {
+	names := make([]string, 0, len(m.projection.Accounts))
+	for _, a := range m.projection.Accounts {
+		names = append(names, a.Name)
+	}
+	return names
+}
+
+// nextScope limits the Forecast to the next account, and to all of them again after
+// the last.
+func (m *Model) nextScope() {
+	names := m.scopes()
+	if len(names) == 0 {
+		return
+	}
+	next := ""
+	if m.fcAccount == "" {
+		next = names[0]
+	} else if i := slices.Index(names, m.fcAccount); i >= 0 && i+1 < len(names) {
+		next = names[i+1]
+	}
+	m.fcAccount = next
+	m.sched, m.schedScroll, m.balTop = listState{}, 0, 0
+	if err := m.refreshSchedules(); err != nil {
+		m.setStatus(m.errText(err), true)
+	}
+	m.clampAll()
+}
+
+// scoped is the title of a panel of the Forecast, with the account it is limited to.
+func (m *Model) scoped(title string) string {
+	if m.fcAccount == "" {
+		return title
+	}
+	return m.loc.T("forecast_scope", map[string]any{"Panel": title, "Account": m.loc.ShortName(m.fcAccount)})
 }
 
 // overdue is how many dates, of all the schedules, wait for an answer.
@@ -42,6 +110,9 @@ func (m *Model) updateForecast(key string) tea.Cmd {
 	switch key {
 	case "tab":
 		m.balances = !m.balances
+		return nil
+	case "a":
+		m.nextScope()
 		return nil
 	case "m":
 		return m.openMinimum()
@@ -168,14 +239,14 @@ func (m *Model) forecastBody(l layout) string {
 		return m.balancesBody(l)
 	}
 	iw := m.width - 2
-	title := m.loc.T("panel_schedules", nil)
+	title := m.scoped(m.loc.T("panel_schedules", nil))
 	lows := m.lowLines(iw)
 	if len(lows) > 0 {
 		lows = append(lows, "")
 	}
 	if len(m.schedules) == 0 {
 		lines := lows
-		lines = append(lines, wrapped(" "+m.loc.T("schedules_empty", nil), iw, dim)...)
+		lines = append(lines, wrapped(" "+m.emptySchedules(), iw, dim)...)
 		return box(title, lines, m.width, l.avail, true, "")
 	}
 	head := lows
@@ -209,4 +280,12 @@ func (m *Model) scheduleWindow(lines []string, h int, sel span) []string {
 	}
 	m.schedScroll = max(0, min(off, len(lines)-h))
 	return lines[m.schedScroll : m.schedScroll+h]
+}
+
+// emptySchedules says why there is nothing to list.
+func (m *Model) emptySchedules() string {
+	if m.fcAccount != "" {
+		return m.loc.T("schedules_none_for", map[string]any{"Account": m.loc.ShortName(m.fcAccount)})
+	}
+	return m.loc.T("schedules_empty", nil)
 }
