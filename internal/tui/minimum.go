@@ -221,6 +221,9 @@ func (m *Model) minimumPopup() string {
 func (m *Model) lowLines(iw int) []string {
 	var out []string
 	for _, l := range m.lows {
+		if m.fcAccount != "" && l.Account != m.fcAccount {
+			continue
+		}
 		args := map[string]any{
 			"Account": m.loc.ShortName(l.Account), "Balance": m.loc.Money(l.Balance), "Minimum": m.loc.Money(l.Minimum),
 			"Date": m.loc.StoredDate(l.Date), "Schedule": l.Schedule,

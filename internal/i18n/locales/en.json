@@ -725,5 +725,9 @@
   "hint_tab_balances": "tab balances",
   "hint_tab_schedules": "tab schedules",
   "hint_scroll": "↑/↓ scroll",
-  "help_balances": "Forecast: tab switches between the schedules and the balances of each account at the end of each of the next weeks; ↑ ↓ scroll them"
+  "help_balances": "Forecast: tab switches between the schedules and the balances of each account at the end of each of the next weeks; ↑ ↓ scroll them",
+  "forecast_scope": "{{.Panel}} · {{.Account}}",
+  "schedules_none_for": "No schedule moves {{.Account}}.",
+  "hint_account": "a account",
+  "help_scope": "Forecast: a looks at one account, the next each time, and at all of them again after the last: the schedules that move it, its balances and its warning"
 }

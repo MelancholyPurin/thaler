@@ -106,7 +106,7 @@ func (m *Model) openSchedule(edit bool) tea.Cmd {
 		m.setStatus(m.loc.T("form_no_accounts", nil), true)
 		return nil
 	}
-	f := &scheduleForm{from: m.defaultAccount(), period: core.EveryMonth}
+	f := &scheduleForm{from: m.startAccount(), period: core.EveryMonth}
 	f.name, f.amount, f.received = newInput(""), newInput(""), newInput("")
 	f.every, f.start, f.end, f.tolerance, f.to = newInput("1"), newInput(m.loc.Date(m.now())), newInput(""), newInput(""), newInput("")
 	f.received.Placeholder = m.loc.T("transfer_received_placeholder", nil)
@@ -469,9 +469,19 @@ func (m *Model) saveSchedule() {
 
 // selectSchedule puts the cursor on schedule id, if it is listed.
 func (m *Model) selectSchedule(id int64) {
-	for i, s := range m.schedules {
-		if s.ID == id {
-			m.sched.cursor = i
+	find := func() bool {
+		for i, s := range m.schedules {
+			if s.ID == id {
+				m.sched.cursor = i
+				return true
+			}
+		}
+		return false
+	}
+	if !find() && m.fcAccount != "" { // it no longer moves the account: look at all of them
+		m.fcAccount = ""
+		if err := m.refreshSchedules(); err == nil {
+			find()
 		}
 	}
 	m.clampAll()
@@ -635,4 +645,15 @@ func (m *Model) scheduleBelow(iw int) []string {
 		return wrapped(m.loc.T("schedule_hint_end", nil), iw, dim)
 	}
 	return wrapped(m.loc.T("schedule_hint_tolerance", nil), iw, dim)
+}
+
+// startAccount is the account a new schedule starts on: the one the Forecast is
+// limited to, else the one the other forms start on.
+func (m *Model) startAccount() int {
+	for i, e := range m.accounts {
+		if m.fcAccount != "" && e.account.Name == m.fcAccount {
+			return i
+		}
+	}
+	return m.defaultAccount()
 }

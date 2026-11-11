@@ -74,6 +74,9 @@ func (m *Model) balanceLines(iw int) []string {
 	}
 	var lines []string
 	for _, a := range m.projection.Accounts {
+		if m.fcAccount != "" && a.Name != m.fcAccount {
+			continue
+		}
 		if len(lines) > 0 {
 			lines = append(lines, "")
 		}
@@ -110,14 +113,14 @@ func (m *Model) balancesBody(l layout) string {
 	lines := m.balanceLines(iw)
 	if len(lines) == 0 {
 		lines = wrapped(" "+m.loc.T("balances_empty", nil), iw, dim)
-		return box(m.loc.T("panel_balances", nil), append(head, lines...), m.width, l.avail, true, "")
+		return box(m.scoped(m.loc.T("panel_balances", nil)), append(head, lines...), m.width, l.avail, true, "")
 	}
 	head = append(head, leftRight("", dim.Render(fitRight(m.loc.T("label_change", nil), balanceChangeW)+"  "+fitRight(m.loc.T("label_balance", nil), balanceAmountW)), iw))
 	h := max(1, l.avail-2-len(head))
 	m.balTop = max(0, min(m.balTop, len(lines)-h))
 	shown := lines[m.balTop:min(m.balTop+h, len(lines))]
 	footer := m.loc.T("balances_footer", nil)
-	return box(m.loc.T("panel_balances", nil), append(head, shown...), m.width, l.avail, true, footer)
+	return box(m.scoped(m.loc.T("panel_balances", nil)), append(head, shown...), m.width, l.avail, true, footer)
 }
 
 // updateBalances handles the keys of the balances view: scrolling by line.

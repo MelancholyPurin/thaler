@@ -144,6 +144,7 @@ type Model struct {
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
 	balances     bool                  // the Forecast shows the balances, not the schedules
 	balTop       int                   // first line of them shown
+	fcAccount    string                // the one account the Forecast is limited to, "" for all of them
 	now          func() time.Time
 	focus        pane
 	accts        listState // index 0 is "All accounts", then m.accounts

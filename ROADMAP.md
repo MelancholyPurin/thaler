@@ -295,7 +295,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TFC-3` Go through what is due and confirm, change or skip each (`enter` on the Forecast opens a popup that goes through the dates oldest first: `enter` books as it is, `e` for another amount (and what arrives, for a transfer between currencies), `s` skips; `z` takes the last answer back; the service gained `UnskipOccurrence` for it)
 - [x] `TFC-4` Projected balance per account, week by week (on the Forecast, `tab` switches between the schedules and the balances: each asset and liability account with its balance today and its balance at the end of each of the next 13 weeks, with what the schedules move in the week; a balance under the account's minimum is marked `!`; the figures are `RPT-5`'s `Projection`)
 - [x] `TFC-5` Warn about the day a balance would dip below your chosen amount (on the Forecast, `m` sets or clears the minimum of an Assets account in a popup, `z` undoes it, and the screen says above the schedules which accounts would fall under theirs in the next 90 days, with the first day, the balance and the schedule that takes the most; the figures are `RPT-6`'s `LowBalances`)
-- [ ] `TFC-6` Look at one account or all of them
+- [x] `TFC-6` Look at one account or all of them (on the Forecast, `a` limits the schedules, the balances, the warnings and `enter` to one account, the next each time and all of them after the last; a transfer shows for both its accounts; a new schedule starts on that account)
 
 ### TLC: TUI in three languages
 

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ func (m *Model) openDue() tea.Cmd {
 		m.setStatus(m.errText(err), true)
 		return nil
 	}
+	items = slices.DeleteFunc(items, func(o core.Occurrence) bool { return !m.inScope(o.Schedule) })
 	if len(items) == 0 {
 		m.setStatus(m.loc.T("due_nothing", nil), false)
 		return nil
