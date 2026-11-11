@@ -715,5 +715,15 @@
   "minimum_cleared": "Minimum von {{.Name}} entfernt",
   "undid_minimum": "Änderung des Minimums von {{.Name}} rückgängig gemacht",
   "hint_minimum": "m Minimum",
-  "help_minimum": "Prognose: m legt den niedrigsten Stand eines Kontos fest; der Bildschirm warnt vor dem Tag, an dem ein Saldo darunter fiele, z macht rückgängig"
+  "help_minimum": "Prognose: m legt den niedrigsten Stand eines Kontos fest; der Bildschirm warnt vor dem Tag, an dem ein Saldo darunter fiele, z macht rückgängig",
+  "panel_balances": "Salden",
+  "label_change": "Änderung",
+  "balances_today": "Heute",
+  "balances_still": "Kein Zeitplan bewegt dieses Konto.",
+  "balances_empty": "Noch keine Konten für Vermögen oder Verbindlichkeiten.",
+  "balances_footer": "am Ende jeder Woche",
+  "hint_tab_balances": "tab Salden",
+  "hint_tab_schedules": "tab Zeitpläne",
+  "hint_scroll": "↑/↓ blättern",
+  "help_balances": "Prognose: tab wechselt zwischen den Zeitplänen und den Salden jedes Kontos am Ende der nächsten Wochen; ↑ ↓ blättern darin"
 }

@@ -715,5 +715,15 @@
   "minimum_cleared": "Mínimo de {{.Name}} quitado",
   "undid_minimum": "Se deshizo el cambio del mínimo de {{.Name}}",
   "hint_minimum": "m mínimo",
-  "help_minimum": "Previsión: m fija lo más bajo que debe llegar una cuenta; la pantalla avisa del día en que un saldo bajaría de ahí, y z deshace"
+  "help_minimum": "Previsión: m fija lo más bajo que debe llegar una cuenta; la pantalla avisa del día en que un saldo bajaría de ahí, y z deshace",
+  "panel_balances": "Saldos",
+  "label_change": "Cambio",
+  "balances_today": "Hoy",
+  "balances_still": "Ninguna programación mueve esta cuenta.",
+  "balances_empty": "Aún no hay cuentas de activos ni de pasivos.",
+  "balances_footer": "al final de cada semana",
+  "hint_tab_balances": "tab saldos",
+  "hint_tab_schedules": "tab programaciones",
+  "hint_scroll": "↑/↓ desplazar",
+  "help_balances": "Previsión: tab alterna entre las programaciones y los saldos de cada cuenta al final de cada una de las próximas semanas; ↑ ↓ los desplazan"
 }
