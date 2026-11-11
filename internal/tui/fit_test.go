@@ -185,6 +185,13 @@ func Test_View_fits(t *testing.T) {
 		{name: "due, booked", keys: "F enter enter"},
 		{name: "due, skipped", keys: "F enter s"},
 		{name: "due, nothing", keys: "F enter enter z esc"},
+		{name: "minimum", keys: "F m"},
+		{name: "minimum, set", keys: "F m text:500"},
+		{name: "minimum, a second account", keys: "F m down text:100"},
+		{name: "minimum, the screen under it", keys: "F m text:-50 enter"},
+		{name: "minimum, already under", keys: "F m text:500 enter"},
+		{name: "minimum, an error", keys: "F m enter"},
+		{name: "minimum, set and undone", keys: "F m text:500 enter z"},
 		{name: "reports", keys: "R"},
 		{name: "search", keys: "tab tab /"},
 

@@ -20,6 +20,8 @@ func Test_wrapped(t *testing.T) {
 		{name: "wraps at a space", text: "one two three", w: 8, want: []string{"one two", "three"}},
 		{name: "a word wider than the line is broken", text: "abcdefghij", w: 4, want: []string{"abcd", "efgh", "ij"}},
 		{name: "wide characters count as two cells", text: "日本語 日本語", w: 6, want: []string{"日本語", "日本語"}},
+		{name: "a minus stays with its number", text: "below -50.00 EUR now", w: 9, want: []string{"below", "-50.00", "EUR now"}},
+		{name: "a hyphen inside a word still breaks", text: "Wi-Fi", w: 3, want: []string{"Wi-", "Fi"}},
 		{name: "nothing", text: "", w: 10, want: []string{""}},
 		{name: "no width, no lines", text: "one", w: 0, want: nil},
 	}

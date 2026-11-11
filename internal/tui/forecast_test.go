@@ -93,6 +93,61 @@ func Test_forecastScreen(t *testing.T) {
 			shows: []string{"⇄ Sparen", "-200.00 EUR", "transfer to Savings", "Strom", "~-80.00 EUR", "estimate ±25%", "Haftpflicht", "every year", "ends 2028-12-31"},
 		},
 		{
+			name: "the day a balance would fall under its minimum, and what takes the most",
+			setup: func(t *testing.T, st *core.Local) {
+				book(t, st, "2026-10-02", "ACME", "Assets:Bank", "Income:Salary", 300000)
+				scheduled(t, st, core.NewSchedule{Name: "Rent", Start: startOn("2026-11-28"), Postings: pair("Expenses:Rent", 90000)})
+				minimumOf(t, st, "Assets:Bank", 250000)
+			},
+			shows: []string{"Bank would fall to 2,023.00 EUR on 2026-11-28 (Rent takes the most), below its minimum of 2,500.00"},
+		},
+		{
+			name: "under it already",
+			setup: func(t *testing.T, st *core.Local) {
+				book(t, st, "2026-10-02", "ACME", "Assets:Bank", "Income:Salary", 300000)
+				scheduled(t, st, core.NewSchedule{Name: "Rent", Start: startOn("2026-11-28"), Postings: pair("Expenses:Rent", 90000)})
+				minimumOf(t, st, "Assets:Bank", 400000)
+			},
+			shows: []string{"Bank holds 2,923.00 EUR, below its minimum of 4,000.00 EUR", "Rent"},
+			hides: []string{"would fall"},
+		},
+		{
+			name: "a date nobody answered counts today",
+			setup: func(t *testing.T, st *core.Local) {
+				book(t, st, "2026-10-02", "ACME", "Assets:Bank", "Income:Salary", 300000)
+				scheduled(t, st, core.NewSchedule{Name: "Rent", Start: startOn("2026-09-28"), Postings: pair("Expenses:Rent", 90000)})
+				minimumOf(t, st, "Assets:Bank", 250000)
+			},
+			shows: []string{"Bank would fall to 2,023.00 EUR on 2026-10-22 (Rent takes the most)", "1 date is waiting"},
+		},
+		{
+			name: "above its minimum: nothing is said",
+			setup: func(t *testing.T, st *core.Local) {
+				book(t, st, "2026-10-02", "ACME", "Assets:Bank", "Income:Salary", 300000)
+				scheduled(t, st, core.NewSchedule{Name: "Rent", Start: startOn("2026-11-28"), Postings: pair("Expenses:Rent", 90000)})
+				minimumOf(t, st, "Assets:Bank", 100000)
+			},
+			shows: []string{"Rent"},
+			hides: []string{"below its minimum", "would fall"},
+		},
+		{
+			name: "a minimum with no schedules is still said",
+			setup: func(t *testing.T, st *core.Local) {
+				minimumOf(t, st, "Assets:Bank", 100000)
+			},
+			shows: []string{"Bank holds -77.00 EUR, below its minimum of 1,000.00 EUR", "No schedules yet"},
+		},
+		{
+			name: "a minimum on another account is its own",
+			setup: func(t *testing.T, st *core.Local) {
+				scheduled(t, st, core.NewSchedule{Name: "Sparen", Start: startOn("2026-11-01"), Transfer: true,
+					Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-20000)}, {Account: "Assets:Savings", Amount: eur(20000)}}})
+				minimumOf(t, st, "Assets:Savings", 50000)
+			},
+			shows: []string{"Savings holds 5.00 EUR, below its minimum of 500.00 EUR"},
+			hides: []string{"Bank holds"},
+		},
+		{
 			name: "every other week",
 			setup: func(t *testing.T, st *core.Local) {
 				scheduled(t, st, core.NewSchedule{Name: "Bike", Every: 2, Unit: core.EveryWeek, Start: startOn("2026-11-02"), Postings: pair("Expenses:Fun", 1000)})
@@ -251,4 +306,12 @@ func testSchedules(t *testing.T, st *core.Local, dollars string) {
 		Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-20000)}, {Account: dollars, Amount: ledger.Money{Minor: 21500, Currency: "USD"}}}})
 	scheduled(t, st, core.NewSchedule{Name: "Strom", Start: startOn("2026-11-15"), Tolerance: 25, Postings: pair("Expenses:Power", 8000)})
 	scheduled(t, st, core.NewSchedule{Name: "Haftpflicht", Unit: core.EveryYear, Start: startOn("2027-03-01"), End: startOn("2028-12-31"), Postings: pair("Expenses:Insurance", 30000)})
+}
+
+// minimumOf gives account a minimum balance.
+func minimumOf(t *testing.T, st *core.Local, account string, minor int64) {
+	t.Helper()
+	if err := st.SetMinimumBalance(t.Context(), account, eur(minor)); err != nil {
+		t.Fatal(err)
+	}
 }

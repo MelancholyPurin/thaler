@@ -18,8 +18,10 @@ const (
 
 // refreshSchedules loads the schedules with when each is next due, as of today.
 func (m *Model) refreshSchedules() (err error) {
-	m.schedules, err = m.svc.ScheduleStatuses(m.ctx, m.now().Format(ledger.DateLayout))
-	return err
+	if m.schedules, err = m.svc.ScheduleStatuses(m.ctx, m.now().Format(ledger.DateLayout)); err != nil {
+		return err
+	}
+	return m.refreshLows()
 }
 
 // overdue is how many dates, of all the schedules, wait for an answer.
@@ -44,6 +46,8 @@ func (m *Model) updateForecast(key string) tea.Cmd {
 	case "p":
 		m.toggleSchedulePause()
 		return nil
+	case "m":
+		return m.openMinimum()
 	case "z":
 		m.undoLast()
 		return nil
@@ -150,13 +154,19 @@ func (m *Model) scheduleLines(iw int) (lines []string, sel span) {
 func (m *Model) forecastBody(l layout) string {
 	iw := m.width - 2
 	title := m.loc.T("panel_schedules", nil)
+	lows := m.lowLines(iw)
+	if len(lows) > 0 {
+		lows = append(lows, "")
+	}
 	if len(m.schedules) == 0 {
-		lines := append([]string{""}, wrapped(" "+m.loc.T("schedules_empty", nil), iw, dim)...)
+		lines := lows
+		lines = append(lines, wrapped(" "+m.loc.T("schedules_empty", nil), iw, dim)...)
 		return box(title, lines, m.width, l.avail, true, "")
 	}
-	var head []string
+	head := lows
 	if n := m.overdue(); n > 0 {
-		head = append(wrapped(m.loc.T("schedules_waiting", map[string]any{"Count": n}), iw, warn), "")
+		head = append(head, wrapped(m.loc.T("schedules_waiting", map[string]any{"Count": n}), iw, warn)...)
+		head = append(head, "")
 	}
 	head = append(head, leftRight("", dim.Render(fitRight(m.loc.T("label_amount", nil), scheduleAmountW)+"  "+fitRight(m.loc.T("label_next", nil), scheduleNextW)), iw))
 	lines, sel := m.scheduleLines(iw)
