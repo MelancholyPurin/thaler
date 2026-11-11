@@ -700,5 +700,20 @@
   "footer_due_edit": "enter apuntarlo · esc volver",
   "due_estimate": "una estimación (±{{.Percent}}%): pulsa e para poner lo que fue de verdad",
   "hint_answer": "enter responder",
-  "help_due": "Previsión: repasar lo que vence, lo más antiguo primero: enter apunta una fecha tal cual, e con otro importe, s la omite"
+  "help_due": "Previsión: repasar lo que vence, lo más antiguo primero: enter apunta una fecha tal cual, e con otro importe, s la omite",
+  "low_now": "{{.Account}} tiene {{.Balance}}, por debajo de su mínimo de {{.Minimum}}",
+  "low_on": "{{.Account}} bajaría a {{.Balance}} el {{.Date}}, por debajo de su mínimo de {{.Minimum}}",
+  "low_on_by": "{{.Account}} bajaría a {{.Balance}} el {{.Date}} ({{.Schedule}} es lo que más resta), por debajo de su mínimo de {{.Minimum}}",
+  "minimum_title": "Saldo mínimo",
+  "minimum_footer": "↑/↓ · enter guardar · esc cancelar",
+  "label_minimum": "Mínimo",
+  "minimum_placeholder": "importe (vacío lo quita)",
+  "minimum_hint": "Lo más bajo que debe llegar esta cuenta, en {{.Currency}}. Un importe vacío lo quita. La Previsión avisa del día en que un saldo bajaría de ahí.",
+  "minimum_no_accounts": "todavía no hay cuentas de Assets: crea una primero",
+  "minimum_type_amount": "escribe un importe: no hay mínimo que quitar",
+  "minimum_set": "Mínimo de {{.Name}}: {{.Amount}}",
+  "minimum_cleared": "Mínimo de {{.Name}} quitado",
+  "undid_minimum": "Se deshizo el cambio del mínimo de {{.Name}}",
+  "hint_minimum": "m mínimo",
+  "help_minimum": "Previsión: m fija lo más bajo que debe llegar una cuenta; la pantalla avisa del día en que un saldo bajaría de ahí, y z deshace"
 }

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -165,12 +166,20 @@ func wrapped(text string, w int, style lipgloss.Style) []string {
 	if w <= 0 {
 		return nil
 	}
-	parts := strings.Split(ansi.Wrap(text, w, ""), "\n")
+	// ansi.Wrap also breaks after a hyphen, which would leave the minus of -50.00 at the
+	// end of a line and its number on the next. A private-use character of the same width
+	// stands in for it while the text is wrapped.
+	parts := strings.Split(ansi.Wrap(minusBeforeNumber.ReplaceAllString(text, "${1}"+string(minusStandIn)+"${2}"), w, ""), "\n")
 	for i, p := range parts {
-		parts[i] = style.Render(p)
+		parts[i] = style.Render(strings.ReplaceAll(p, string(minusStandIn), "-"))
 	}
 	return parts
 }
+
+// minusStandIn replaces a minus sign that starts a number while a text is wrapped.
+const minusStandIn = '\ue000'
+
+var minusBeforeNumber = regexp.MustCompile(`(^|\s|\()-(\d)`)
 
 // statusLine joins the parts of a status with " · " as far as they fit the line, the
 // most important first: what does not fit is left out, not cut in half. The first

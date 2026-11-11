@@ -29,7 +29,7 @@ func fixedNow() time.Time { return time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC
 
 func openLedger(t *testing.T) *core.Local {
 	t.Helper()
-	st, err := core.Open(t.Context(), ":memory:")
+	st, err := core.Open(t.Context(), ":memory:", core.WithClock(fixedNow))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ var paneNames = map[pane]string{paneHome: "home", paneAccounts: "accounts", pane
 var screenNames2 = map[screen]string{screenLedger: "ledger", screenBudget: "budget", screenForecast: "forecast", screenReports: "reports"}
 var modeNames = map[mode]string{
 	modeList: "list", modeFilter: "filter", modePick: "pick", modeHelp: "help", modeForm: "form", modeConfirm: "confirm",
-	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language", modeTarget: "target", modeSchedule: "schedule", modeDue: "due",
+	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language", modeTarget: "target", modeSchedule: "schedule", modeDue: "due", modeMinimum: "minimum",
 }
 
 // visibleRows are the transactions the list shows, newest first.

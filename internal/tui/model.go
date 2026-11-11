@@ -66,6 +66,7 @@ const (
 	modeTarget               // setting a category's target for the month
 	modeSchedule             // creating or editing a schedule
 	modeDue                  // going through what is due
+	modeMinimum              // setting the lowest an account should fall
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -137,6 +138,9 @@ type Model struct {
 	schedScroll  int                   // first line of them shown
 	schedForm    *scheduleForm         // the schedule popup while it is open
 	due          *dueState             // the dates being answered, while the popup is open
+	minimums     []core.MinimumBalance // the lowest each account should fall
+	lows         []core.LowBalance     // the accounts that would fall under theirs, the soonest first
+	minForm      *minimumForm          // the minimum popup while it is open
 	now          func() time.Time
 	focus        pane
 	accts        listState // index 0 is "All accounts", then m.accounts
@@ -396,6 +400,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateScheduleForm(msg)
 		case modeDue:
 			return m.updateDue(msg)
+		case modeMinimum:
+			return m.updateMinimum(msg)
 		default:
 			return m.updateList(msg)
 		}
