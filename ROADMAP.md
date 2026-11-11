@@ -153,7 +153,7 @@ Things that happen on a schedule. Thaler **asks first**: it proposes an occurren
 
 Read-only queries over the ledger.
 
-- [ ] `RPT-1` Spending per category across months
+- [x] `RPT-1` Spending per category across months (`SpendingReport` in the service: for each Expenses category what it spent in each month of a range, in the base currency, each amount at the rate of its day; every month of the range is there, a refund counts against its month, the largest total comes first; a range is at most 120 months and, without a start, the 12 months up to this one; the screens are `TRP-1`, and the commands `CLI-14`)
 - [ ] `RPT-2` Net worth over time, in the base currency
 - [ ] `RPT-3` Income against spending per month, and the savings rate
 - [ ] `RPT-4` Where the most money goes, by payee
