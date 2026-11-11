@@ -547,6 +547,8 @@
   "target_not_base_currency": "ein Ziel gilt in der Basiswährung ({{.Base}}), nicht in {{.Currency}}",
   "schedule_not_found": "Der Zeitplan {{.ID}} existiert nicht",
   "projection_before_today": "Die Vorschau beginnt heute ({{.Today}}); {{.Date}} liegt davor",
+  "minimum_not_asset": "{{.Name}} ist kein Assets-Konto: nur ein Assets-Konto kann einen Mindestkontostand haben",
+  "minimum_wrong_currency": "{{.Name}} führt {{.Currency}}, der Mindestbetrag ist also in {{.Currency}}, nicht in {{.Got}}",
   "schedule_name_empty": "Ein Zeitplan braucht einen Namen",
   "schedule_name_taken": "Es gibt bereits einen Zeitplan namens \"{{.Name}}\"",
   "schedule_every_invalid": "Ein Zeitplan wiederholt sich alle 1 oder mehr Wochen, Monate oder Jahre, nicht alle {{.Every}}",

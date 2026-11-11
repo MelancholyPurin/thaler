@@ -547,6 +547,8 @@
   "target_not_base_currency": "a target is in the base currency ({{.Base}}), not in {{.Currency}}",
   "schedule_not_found": "schedule {{.ID}} does not exist",
   "projection_before_today": "the projection starts today ({{.Today}}); {{.Date}} is before that",
+  "minimum_not_asset": "{{.Name}} is not an Assets account: only an Assets account can have a minimum balance",
+  "minimum_wrong_currency": "{{.Name}} holds {{.Currency}}, so its minimum is in {{.Currency}}, not {{.Got}}",
   "schedule_name_empty": "a schedule needs a name",
   "schedule_name_taken": "there is already a schedule called \"{{.Name}}\"",
   "schedule_every_invalid": "a schedule repeats every 1 or more weeks, months or years, not every {{.Every}}",
