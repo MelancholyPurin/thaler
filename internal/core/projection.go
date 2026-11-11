@@ -108,3 +108,88 @@ func (s *Local) Projection(ctx context.Context, upTo string) (Projection, error)
 	}
 	return out, nil
 }
+
+// SetMinimumBalance stores the lowest account should fall.
+func (s *Local) SetMinimumBalance(ctx context.Context, account string, amount ledger.Money) error {
+	acc, err := s.assetAccount(ctx, account)
+	if err != nil {
+		return err
+	}
+	if amount.Currency != acc.Currency {
+		return coded.New("minimum_wrong_currency", map[string]any{"Name": acc.Name, "Currency": acc.Currency, "Got": amount.Currency})
+	}
+	return s.repo.queries().putMinimumBalance(ctx, acc.ID, amount.Minor)
+}
+
+// ClearMinimumBalance takes the limit away.
+func (s *Local) ClearMinimumBalance(ctx context.Context, account string) error {
+	acc, err := s.assetAccount(ctx, account)
+	if err != nil {
+		return err
+	}
+	return s.repo.queries().deleteMinimumBalance(ctx, acc.ID)
+}
+
+// MinimumBalances lists the limits.
+func (s *Local) MinimumBalances(ctx context.Context) ([]MinimumBalance, error) {
+	return s.repo.queries().minimumBalances(ctx)
+}
+
+func (s *Local) assetAccount(ctx context.Context, name string) (Account, error) {
+	acc, err := s.repo.queries().account(ctx, name)
+	if err != nil {
+		return Account{}, err
+	}
+	if acc.Type != ledger.Assets {
+		return Account{}, coded.New("minimum_not_asset", map[string]any{"Name": acc.Name})
+	}
+	return acc, nil
+}
+
+// LowBalances finds the first day each account with a minimum would fall below it.
+func (s *Local) LowBalances(ctx context.Context, upTo string) ([]LowBalance, error) {
+	p, err := s.Projection(ctx, upTo)
+	if err != nil {
+		return nil, err
+	}
+	minimums, err := s.repo.queries().minimumBalances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []LowBalance
+	for _, m := range minimums {
+		for _, a := range p.Accounts {
+			if a.Name != m.Account {
+				continue
+			}
+			if low, ok := firstBelow(a, m.Amount, p.From); ok {
+				out = append(out, low)
+			}
+		}
+	}
+	// By account already; the sort is stable, so a tie on the day keeps that.
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Date < out[j].Date })
+	return out, nil
+}
+
+// firstBelow is the first day a holds less than limit. Balances are compared at the
+// end of a day: what a day's schedules take and add in between is not ordered.
+func firstBelow(a ProjectedAccount, limit ledger.Money, today string) (LowBalance, bool) {
+	if a.Start.Minor < limit.Minor {
+		return LowBalance{Account: a.Name, Minimum: limit, Date: today, Balance: a.Start, Now: true}, true
+	}
+	for _, d := range a.Days {
+		if d.Balance.Minor >= limit.Minor {
+			continue
+		}
+		low := LowBalance{Account: a.Name, Minimum: limit, Date: d.Date, Balance: d.Balance}
+		var most int64
+		for _, m := range d.Moves {
+			if m.Amount.Minor < most {
+				most, low.Schedule = m.Amount.Minor, m.Schedule
+			}
+		}
+		return low, true
+	}
+	return LowBalance{}, false
+}

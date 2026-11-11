@@ -160,6 +160,22 @@ type Service interface {
 	// writes nothing.
 	Projection(ctx context.Context, upTo string) (Projection, error)
 
+	// SetMinimumBalance says the lowest an Assets account should fall, in its own
+	// currency (it may be negative, for an agreed overdraft); setting it again
+	// replaces it. An account with none is never warned about. Only an Assets
+	// account has one.
+	SetMinimumBalance(ctx context.Context, account string, amount ledger.Money) error
+	// ClearMinimumBalance takes the limit away; an account that has none is left as
+	// it is.
+	ClearMinimumBalance(ctx context.Context, account string) error
+	// MinimumBalances lists the limits, by account name.
+	MinimumBalances(ctx context.Context) ([]MinimumBalance, error)
+	// LowBalances lists, for each account with a minimum, the first day up to upTo
+	// (YYYY-MM-DD, not before today) on which its projected balance is below it
+	// (see Projection), the soonest first. An account that is below it already is
+	// listed on today. One that stays above is not listed.
+	LowBalances(ctx context.Context, upTo string) ([]LowBalance, error)
+
 	// Maintenance.
 	// Check returns a description of every database inconsistency found.
 	Check(ctx context.Context) ([]string, error)
@@ -751,4 +767,25 @@ func (a ProjectedAccount) BalanceOn(day string) ledger.Money {
 		out = d.Balance
 	}
 	return out
+}
+
+// MinimumBalance is the lowest an account should fall.
+type MinimumBalance struct {
+	Account string
+	Amount  ledger.Money
+}
+
+// LowBalance is the first day an account would hold less than its minimum. The
+// balance is the one at the end of that day, after everything the schedules move
+// on it.
+type LowBalance struct {
+	Account string
+	Minimum ledger.Money
+	Date    string
+	Balance ledger.Money
+	// Now is true when the account is below its minimum already; Date is then
+	// today and Schedule is empty.
+	Now bool
+	// Schedule is the one that takes the most out of the account that day.
+	Schedule string
 }
