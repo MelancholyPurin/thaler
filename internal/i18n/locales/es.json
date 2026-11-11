@@ -725,5 +725,9 @@
   "hint_tab_balances": "tab saldos",
   "hint_tab_schedules": "tab programaciones",
   "hint_scroll": "↑/↓ desplazar",
-  "help_balances": "Previsión: tab alterna entre las programaciones y los saldos de cada cuenta al final de cada una de las próximas semanas; ↑ ↓ los desplazan"
+  "help_balances": "Previsión: tab alterna entre las programaciones y los saldos de cada cuenta al final de cada una de las próximas semanas; ↑ ↓ los desplazan",
+  "forecast_scope": "{{.Panel}} · {{.Account}}",
+  "schedules_none_for": "Ninguna programación mueve {{.Account}}.",
+  "hint_account": "a cuenta",
+  "help_scope": "Previsión: a mira una cuenta, la siguiente cada vez, y todas de nuevo tras la última: las programaciones que la mueven, sus saldos y su aviso"
 }
