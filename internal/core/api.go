@@ -86,6 +86,8 @@ type Service interface {
 	// Reports.
 	BalanceReport(ctx context.Context, req BalanceRequest) (BalanceReport, error)
 	BudgetReport(ctx context.Context, req BudgetRequest) (BudgetReport, error)
+	// SpendingReport is what each Expenses category spent in each month of a range.
+	SpendingReport(ctx context.Context, req SpendingRequest) (SpendingReport, error)
 
 	// MonthBudget is what each expense category spent in a month against its
 	// target, and what is left.
@@ -717,6 +719,39 @@ type BudgetReport struct {
 	Income, Expenses          []BudgetLine // largest first
 	IncomeTotal, ExpenseTotal ledger.Money
 	Missing                   []ledger.Currency // no exchange rate, so left out
+}
+
+// SpendingRequest asks what the categories spent month by month.
+type SpendingRequest struct {
+	// From and To are months (YYYY-MM), both included. An empty To is the current
+	// month; an empty From is the 11 months before To, so that the report covers
+	// 12. A range is at most 120 months.
+	From, To string
+	// RateDate is the latest day exchange rates are looked up on, as for a
+	// BudgetRequest; empty = today. Each amount is converted at the rate of the day
+	// it was booked, a day before its currency's first rate at the rate of the end of
+	// the range.
+	RateDate string
+}
+
+// CategorySpending is one Expenses category over the months of a report. A refund
+// counts against what was spent, so a month can be negative.
+type CategorySpending struct {
+	Name   string
+	Months []ledger.Money // one for each month of the report, in its order
+	Total  ledger.Money
+}
+
+// SpendingReport is the answer to a SpendingRequest, all in the base currency.
+// Categories are those that spent or got back something in the range, the largest
+// total first (a tie by name); Uncategorized is one of them.
+type SpendingReport struct {
+	Base       ledger.Currency
+	Months     []string // YYYY-MM, oldest first, every month of the range
+	Categories []CategorySpending
+	Totals     []ledger.Money // all categories, for each month
+	Total      ledger.Money
+	Missing    []ledger.Currency // no exchange rate, so left out
 }
 
 // ---- projection ------------------------------------------------------------

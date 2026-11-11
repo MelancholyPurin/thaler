@@ -729,5 +729,7 @@
   "forecast_scope": "{{.Panel}} · {{.Account}}",
   "schedules_none_for": "No schedule moves {{.Account}}.",
   "hint_account": "a account",
-  "help_scope": "Forecast: a looks at one account, the next each time, and at all of them again after the last: the schedules that move it, its balances and its warning"
+  "help_scope": "Forecast: a looks at one account, the next each time, and at all of them again after the last: the schedules that move it, its balances and its warning",
+  "spending_backwards": "the report cannot start in {{.From}}: that is after it ends ({{.To}})",
+  "spending_too_long": "a report covers at most {{.Max}} months"
 }

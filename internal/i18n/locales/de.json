@@ -729,5 +729,7 @@
   "forecast_scope": "{{.Panel}} · {{.Account}}",
   "schedules_none_for": "Kein Zeitplan bewegt {{.Account}}.",
   "hint_account": "a Konto",
-  "help_scope": "Prognose: a zeigt ein Konto, jedes Mal das nächste, nach dem letzten wieder alle: die Zeitpläne, die es bewegen, seine Salden und seine Warnung"
+  "help_scope": "Prognose: a zeigt ein Konto, jedes Mal das nächste, nach dem letzten wieder alle: die Zeitpläne, die es bewegen, seine Salden und seine Warnung",
+  "spending_backwards": "Der Bericht kann nicht mit {{.From}} beginnen: das liegt nach seinem Ende ({{.To}})",
+  "spending_too_long": "ein Bericht umfasst höchstens {{.Max}} Monate"
 }

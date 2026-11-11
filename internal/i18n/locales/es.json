@@ -729,5 +729,7 @@
   "forecast_scope": "{{.Panel}} · {{.Account}}",
   "schedules_none_for": "Ninguna programación mueve {{.Account}}.",
   "hint_account": "a cuenta",
-  "help_scope": "Previsión: a mira una cuenta, la siguiente cada vez, y todas de nuevo tras la última: las programaciones que la mueven, sus saldos y su aviso"
+  "help_scope": "Previsión: a mira una cuenta, la siguiente cada vez, y todas de nuevo tras la última: las programaciones que la mueven, sus saldos y su aviso",
+  "spending_backwards": "el informe no puede empezar en {{.From}}: es posterior a su final ({{.To}})",
+  "spending_too_long": "un informe abarca como máximo {{.Max}} meses"
 }
