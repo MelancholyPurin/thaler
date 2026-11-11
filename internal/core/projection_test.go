@@ -276,3 +276,182 @@ func Test_Open_withClock(t *testing.T) {
 		})
 	}
 }
+
+func minimum(account string, amount ledger.Money) given {
+	return func(t *testing.T, st *Local) {
+		t.Helper()
+		check(t, st.SetMinimumBalance(t.Context(), account, amount))
+	}
+}
+
+func Test_SetMinimumBalance(t *testing.T) {
+	tcs := []struct {
+		name    string
+		setup   []given
+		account string
+		amount  ledger.Money
+		clear   bool
+		want    []MinimumBalance
+		wantErr string
+	}{
+		{name: "set", account: "Assets:Bank", amount: eur(50000), want: []MinimumBalance{{"Assets:Bank", eur(50000)}}},
+		{name: "zero is a limit too", account: "Assets:Bank", amount: eur(0), want: []MinimumBalance{{"Assets:Bank", eur(0)}}},
+		{name: "an agreed overdraft", account: "Assets:Bank", amount: eur(-30000), want: []MinimumBalance{{"Assets:Bank", eur(-30000)}}},
+		{
+			name: "setting it again replaces it", setup: []given{minimum("Assets:Bank", eur(50000))},
+			account: "Assets:Bank", amount: eur(10000), want: []MinimumBalance{{"Assets:Bank", eur(10000)}},
+		},
+		{
+			name: "listed by account", setup: []given{minimum("Assets:Savings", eur(100000))},
+			account: "Assets:Bank", amount: eur(50000), want: []MinimumBalance{{"Assets:Bank", eur(50000)}, {"Assets:Savings", eur(100000)}},
+		},
+		{
+			name: "clearing", setup: []given{minimum("Assets:Bank", eur(50000)), minimum("Assets:Savings", eur(100000))},
+			account: "Assets:Bank", clear: true, want: []MinimumBalance{{"Assets:Savings", eur(100000)}},
+		},
+		{name: "clearing one that is not set", account: "Assets:Bank", clear: true},
+		{name: "another currency", account: "Assets:Bank", amount: usd(50000), wantErr: "Assets:Bank holds EUR, so its minimum is in EUR, not USD"},
+		{name: "not an asset", account: "Liabilities:Card", amount: eur(0), wantErr: "Liabilities:Card is not an Assets account: only an Assets account can have a minimum balance"},
+		{name: "a category", account: "Expenses:Rent", amount: eur(0), wantErr: "Expenses:Rent is not an Assets account: only an Assets account can have a minimum balance"},
+		{name: "no such account", account: "Assets:Nowhere", amount: eur(0), wantErr: "account does not exist: Assets:Nowhere"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accounts("Assets:Bank EUR", "Assets:Savings EUR", "Liabilities:Card EUR", "Expenses:Rent")}, tc.setup...)...)
+
+			// when
+			var err error
+			if tc.clear {
+				err = st.ClearMinimumBalance(t.Context(), tc.account)
+			} else {
+				err = st.SetMinimumBalance(t.Context(), tc.account, tc.amount)
+			}
+			got, listErr := st.MinimumBalances(t.Context())
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			check(t, listErr)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("minimums mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_LowBalances(t *testing.T) {
+	funded := openingBalance("Assets:Bank", eur(200000), "2026-10-01")
+	accts := accounts("Assets:Bank EUR", "Assets:Savings EUR", "Liabilities:Card EUR")
+	named := func(name, start string, minor int64) given {
+		ns := rent()
+		ns.Name, ns.Start = name, day(start)
+		ns.Postings = []ledger.Posting{{Account: "Assets:Bank", Amount: eur(minor)}, {Account: "Expenses:Rent", Amount: eur(-minor)}}
+		return schedule(ns)
+	}
+	tcs := []struct {
+		name    string
+		setup   []given
+		upTo    string
+		want    []LowBalance
+		wantErr string
+	}{
+		{name: "no minimum, no warning", setup: []given{funded, schedule(rent()), today("2026-11-10")}, upTo: "2027-06-30"},
+		{
+			name:  "the day the rent takes it under",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(50000)), today("2026-11-10")},
+			upTo:  "2027-06-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(50000), Date: "2026-12-28", Balance: eur(20000), Schedule: "Rent"}},
+		},
+		{
+			name:  "exactly the minimum is not under it",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(110000)), today("2026-11-10")},
+			upTo:  "2026-12-27",
+		},
+		{
+			name:  "one cent under is",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(110001)), today("2026-11-10")},
+			upTo:  "2026-12-27",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(110001), Date: "2026-11-28", Balance: eur(110000), Schedule: "Rent"}},
+		},
+		{
+			name:  "not within the days asked for",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(50000)), today("2026-11-10")},
+			upTo:  "2026-12-27",
+		},
+		{
+			name:  "the day asked for is included",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(50000)), today("2026-11-10")},
+			upTo:  "2026-12-28",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(50000), Date: "2026-12-28", Balance: eur(20000), Schedule: "Rent"}},
+		},
+		{
+			name:  "already under, so today",
+			setup: []given{funded, minimum("Assets:Bank", eur(300000)), today("2026-11-10")},
+			upTo:  "2026-11-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(300000), Date: "2026-11-10", Balance: eur(200000), Now: true}},
+		},
+		{
+			name:  "under already, and the rent does not change the answer",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(300000)), today("2026-11-10")},
+			upTo:  "2027-06-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(300000), Date: "2026-11-10", Balance: eur(200000), Now: true}},
+		},
+		{
+			name:  "an overdue date takes it under today, and is not 'now'",
+			setup: []given{funded, named("Rent", "2026-11-01", -90000), minimum("Assets:Bank", eur(150000)), today("2026-11-10")},
+			upTo:  "2026-11-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(150000), Date: "2026-11-10", Balance: eur(110000), Schedule: "Rent"}},
+		},
+		{
+			name:  "an agreed overdraft is the limit",
+			setup: []given{funded, schedule(rent()), minimum("Assets:Bank", eur(-50000)), today("2026-11-10")},
+			upTo:  "2027-06-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(-50000), Date: "2027-01-28", Balance: eur(-70000), Schedule: "Rent"}},
+		},
+		{
+			name:  "a day's money in and out is taken together",
+			setup: []given{funded, named("Salary", "2026-11-28", 300000), named("Rent", "2026-11-28", -90000), minimum("Assets:Bank", eur(150000)), today("2026-11-10")},
+			upTo:  "2026-11-30",
+		},
+		{
+			name:  "the schedule that takes the most is named",
+			setup: []given{funded, named("Gym", "2026-11-28", -3000), named("Rent", "2026-11-28", -90000), minimum("Assets:Bank", eur(150000)), today("2026-11-10")},
+			upTo:  "2026-11-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(150000), Date: "2026-11-28", Balance: eur(107000), Schedule: "Rent"}},
+		},
+		{
+			name: "soonest first, whatever the accounts' names",
+			setup: []given{
+				funded, openingBalance("Assets:Savings", eur(100000), "2026-10-01"), schedule(saving()), named("Rent", "2026-11-28", -90000),
+				minimum("Assets:Bank", eur(100000)), minimum("Assets:Savings", eur(400000)), today("2026-10-30"),
+			},
+			upTo: "2026-11-30",
+			want: []LowBalance{
+				{Account: "Assets:Savings", Minimum: eur(400000), Date: "2026-10-30", Balance: eur(100000), Now: true},
+				{Account: "Assets:Bank", Minimum: eur(100000), Date: "2026-11-28", Balance: eur(90000), Schedule: "Rent"},
+			},
+		},
+		{
+			name:  "a transfer takes it from the account it leaves",
+			setup: []given{funded, openingBalance("Assets:Savings", eur(100000), "2026-10-01"), schedule(saving()), minimum("Assets:Bank", eur(190000)), minimum("Assets:Savings", eur(100000)), today("2026-10-30")},
+			upTo:  "2026-11-30",
+			want:  []LowBalance{{Account: "Assets:Bank", Minimum: eur(190000), Date: "2026-11-01", Balance: eur(180000), Schedule: "Saving"}},
+		},
+		{name: "a day before today", setup: []given{today("2026-11-10")}, upTo: "2026-11-09", wantErr: "the projection starts today (2026-11-10); 2026-11-09 is before that"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, append([]given{accts}, tc.setup...)...)
+
+			// when
+			got, err := st.LowBalances(t.Context(), tc.upTo)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("low balances mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

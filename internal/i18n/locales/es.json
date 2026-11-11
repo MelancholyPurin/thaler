@@ -547,6 +547,8 @@
   "target_not_base_currency": "un objetivo se fija en la moneda base ({{.Base}}), no en {{.Currency}}",
   "schedule_not_found": "la programación {{.ID}} no existe",
   "projection_before_today": "la proyección empieza hoy ({{.Today}}); {{.Date}} es anterior",
+  "minimum_not_asset": "{{.Name}} no es una cuenta de Assets: solo una cuenta de Assets puede tener un saldo mínimo",
+  "minimum_wrong_currency": "{{.Name}} tiene {{.Currency}}, así que su mínimo es en {{.Currency}}, no en {{.Got}}",
   "schedule_name_empty": "una programación necesita un nombre",
   "schedule_name_taken": "ya hay una programación llamada \"{{.Name}}\"",
   "schedule_every_invalid": "una programación se repite cada 1 o más semanas, meses o años, no cada {{.Every}}",

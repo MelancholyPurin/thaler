@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,14 +51,19 @@ Nothing is booked.`,
 			if err != nil {
 				return err
 			}
-			return printProjection(cmd, p)
+			low, err := svc.LowBalances(ctx, upTo)
+			if err != nil {
+				return err
+			}
+			printProjection(cmd, p, low)
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&until, "until", "", "look up to this date instead of 90 days ahead, YYYY-MM-DD or DD.MM.YYYY")
 	return cmd
 }
 
-func printProjection(cmd *cobra.Command, p core.Projection) error {
+func printProjection(cmd *cobra.Command, p core.Projection, low []core.LowBalance) {
 	out := cmd.OutOrStdout()
 	moved := false
 	for _, acc := range p.Accounts {
@@ -65,7 +71,8 @@ func printProjection(cmd *cobra.Command, p core.Projection) error {
 	}
 	if !moved {
 		fmt.Fprintf(out, "No schedule moves an account up to %s. Add one with: thaler cli schedule add\n", p.To)
-		return nil
+		printLow(out, low)
+		return
 	}
 	fmt.Fprintf(out, "Projected balances from %s up to %s\n", p.From, p.To)
 	for _, acc := range p.Accounts {
@@ -87,5 +94,23 @@ func printProjection(cmd *cobra.Command, p core.Projection) error {
 		}
 		printTable(out, []string{"Date", "Change", "Balance", "Schedules"}, rows)
 	}
-	return nil
+	printLow(out, low)
+}
+
+// printLow warns about the accounts that fall below their minimum.
+func printLow(out io.Writer, low []core.LowBalance) {
+	if len(low) == 0 {
+		return
+	}
+	fmt.Fprintln(out)
+	for _, l := range low {
+		switch {
+		case l.Now:
+			fmt.Fprintf(out, "warning: %s holds %s, below its minimum of %s, already today\n", l.Account, l.Balance, l.Minimum)
+		case l.Schedule != "":
+			fmt.Fprintf(out, "warning: %s would fall to %s on %s (%s takes the most), below its minimum of %s\n", l.Account, l.Balance, l.Date, l.Schedule, l.Minimum)
+		default:
+			fmt.Fprintf(out, "warning: %s would fall to %s on %s, below its minimum of %s\n", l.Account, l.Balance, l.Date, l.Minimum)
+		}
+	}
 }

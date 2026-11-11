@@ -158,7 +158,7 @@ Read-only queries over the ledger.
 - [ ] `RPT-3` Income against spending per month, and the savings rate
 - [ ] `RPT-4` Where the most money goes, by payee
 - [x] `RPT-5` Projected balance per account from the recurring schedules (`Projection` in the service: for each asset and liability account its balance today and, for each day up to a date, what the schedules move it by and the balance after; a date nobody answered counts today; the screen is `TFC-4`, and `thaler cli forecast` shows it)
-- [ ] `RPT-6` The day a balance would fall below a chosen amount
+- [x] `RPT-6` The day a balance would fall below a chosen amount (an Assets account can have a minimum, in its own currency and negative for an agreed overdraft, kept in the database: `SetMinimumBalance`, `ClearMinimumBalance`, `MinimumBalances`; `LowBalances` gives the first day each would fall below it, or today when it is already; none set, none warned; `thaler cli account minimum`, and `thaler cli forecast` prints the warnings; the screens are `TFC-5`)
 - [ ] `RPT-7` Any report as CSV
 
 ### SAF: Backup, encryption and restore

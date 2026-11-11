@@ -561,6 +561,38 @@ func (q queries) budgetRollovers(ctx context.Context) ([]BudgetRollover, error) 
 	return out, rows.Err()
 }
 
+func (q queries) putMinimumBalance(ctx context.Context, accountID, minor int64) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO account_minimums (account_id, amount) VALUES (?, ?)
+		 ON CONFLICT (account_id) DO UPDATE SET amount = excluded.amount`, accountID, minor)
+	return err
+}
+
+func (q queries) deleteMinimumBalance(ctx context.Context, accountID int64) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM account_minimums WHERE account_id = ?`, accountID)
+	return err
+}
+
+func (q queries) minimumBalances(ctx context.Context) ([]MinimumBalance, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT a.name, a.currency, m.amount FROM account_minimums m JOIN accounts a ON a.id = m.account_id ORDER BY a.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MinimumBalance
+	for rows.Next() {
+		var m MinimumBalance
+		var cur string
+		if err := rows.Scan(&m.Account, &cur, &m.Amount.Minor); err != nil {
+			return nil, err
+		}
+		m.Amount.Currency = ledger.Currency(cur)
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // monthlyAmount is a sum for one category in one month (a target) or on one day
 // (spending), in the currency it was kept in.
 type monthlyAmount struct {
