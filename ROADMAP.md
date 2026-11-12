@@ -281,7 +281,7 @@ Getting every transaction into the right category with as little typing as possi
 
 ### TRP: Reports tab
 
-- [ ] `TRP-1` Spending per category over the months, as text charts
+- [x] `TRP-1` Spending per category over the months, as text charts (the Reports screen lists the categories with a small chart of the last 12 months and the total, the first line being all spending, and draws the selected one's months as bars with the total and the average; the 12 months end at the period on show, `[` and `]` move them; the figures are `RPT-1`'s `SpendingReport`; choosing another range is `TRP-5`)
 - [ ] `TRP-2` Net worth history
 - [ ] `TRP-3` Income against spending per month
 - [ ] `TRP-4` The payees that cost the most
