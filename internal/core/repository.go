@@ -438,6 +438,47 @@ func (q queries) categoryTotals(ctx context.Context, from, to string) ([]datedBa
 	return out, rows.Err()
 }
 
+// payeeSpend is what one transaction put on Expenses accounts, in one currency.
+type payeeSpend struct {
+	txID   int64
+	payee  string
+	date   string
+	amount ledger.Money
+}
+
+// expensesByTransaction sums the postings on Expenses accounts of each transaction
+// dated from..to (inclusive), per currency. A transaction whose expenses come to
+// nothing is left out.
+func (q queries) expensesByTransaction(ctx context.Context, from, to string) ([]payeeSpend, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT t.id, t.payee, t.date, p.currency, SUM(p.amount)
+		FROM postings p
+		JOIN accounts a ON a.id = p.account_id
+		JOIN transactions t ON t.id = p.transaction_id
+		WHERE a.type = 'Expenses'
+		  AND t.date >= ? AND t.date <= ?
+		GROUP BY t.id, p.currency
+		HAVING SUM(p.amount) <> 0
+		ORDER BY t.date, t.id, p.currency`, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []payeeSpend
+	for rows.Next() {
+		var (
+			s   payeeSpend
+			cur string
+		)
+		if err := rows.Scan(&s.txID, &s.payee, &s.date, &cur, &s.amount.Minor); err != nil {
+			return nil, err
+		}
+		s.amount.Currency = ledger.Currency(cur)
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func (q queries) sums(ctx context.Context, query string, args ...any) ([]Balance, error) {
 	rows, err := q.db.QueryContext(ctx, query, args...)
 	if err != nil {
