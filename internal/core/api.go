@@ -88,6 +88,9 @@ type Service interface {
 	BudgetReport(ctx context.Context, req BudgetRequest) (BudgetReport, error)
 	// SpendingReport is what each Expenses category spent in each month of a range.
 	SpendingReport(ctx context.Context, req SpendingRequest) (SpendingReport, error)
+	// CashFlowReport is what came in and went out in each month of a range, and the
+	// share of the income that was kept.
+	CashFlowReport(ctx context.Context, req CashFlowRequest) (CashFlowReport, error)
 
 	// MonthBudget is what each expense category spent in a month against its
 	// target, and what is left.
@@ -752,6 +755,37 @@ type SpendingReport struct {
 	Totals     []ledger.Money // all categories, for each month
 	Total      ledger.Money
 	Missing    []ledger.Currency // no exchange rate, so left out
+}
+
+// CashFlowRequest asks what came in and went out month by month. Its fields are those of
+// a SpendingRequest, and an empty From or To means the same.
+type CashFlowRequest struct {
+	From, To string
+	RateDate string
+}
+
+// SavingsRate is the share of the income that was kept, in basis points (2500 is
+// 25.00%): negative when more went out than came in. Without income in the month there
+// is no share, and Known is false.
+type SavingsRate struct {
+	BasisPoints int64
+	Known       bool
+}
+
+// CashFlowMonth is one month, or all of them (Month empty), in the base currency.
+// Net is Income less Spending: negative when the month cost more than it brought in.
+type CashFlowMonth struct {
+	Month                 string // YYYY-MM
+	Income, Spending, Net ledger.Money
+	Savings               SavingsRate
+}
+
+// CashFlowReport is the answer to a CashFlowRequest.
+type CashFlowReport struct {
+	Base    ledger.Currency
+	Months  []CashFlowMonth   // oldest first, every month of the range
+	Total   CashFlowMonth     // all of them
+	Missing []ledger.Currency // no exchange rate, so left out
 }
 
 // ---- projection ------------------------------------------------------------
