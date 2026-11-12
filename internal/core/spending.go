@@ -16,37 +16,45 @@ const (
 	spendingMonthsMax     = 120
 )
 
-// SpendingReport is what each Expenses category spent in each month from req.From to
-// req.To, in the base currency. Every month of the range is there, one without
-// spending too, so that the columns of the categories line up.
-func (s *Local) SpendingReport(ctx context.Context, req SpendingRequest) (SpendingReport, error) {
-	to := req.To
+// monthRange is the months of a report from..to (YYYY-MM, both included), oldest first,
+// and the first and last day they cover. An empty to is this month, an empty from the
+// 11 months before to.
+func (s *Local) monthRange(from, to string) (months []string, firstDay, lastDay string, err error) {
 	if to == "" {
 		to = s.today()[:len(monthLayout)]
 	}
 	last, err := time.Parse(monthLayout, to)
 	if err != nil {
-		return SpendingReport{}, coded.New("invalid_month", map[string]any{"Text": to})
+		return nil, "", "", coded.New("invalid_month", map[string]any{"Text": to})
 	}
 	first := last.AddDate(0, -(spendingMonthsDefault - 1), 0)
-	if req.From != "" {
-		if first, err = time.Parse(monthLayout, req.From); err != nil {
-			return SpendingReport{}, coded.New("invalid_month", map[string]any{"Text": req.From})
+	if from != "" {
+		if first, err = time.Parse(monthLayout, from); err != nil {
+			return nil, "", "", coded.New("invalid_month", map[string]any{"Text": from})
 		}
 	}
 	if first.After(last) {
-		return SpendingReport{}, coded.New("spending_backwards", map[string]any{"From": first.Format(monthLayout), "To": to})
+		return nil, "", "", coded.New("spending_backwards", map[string]any{"From": first.Format(monthLayout), "To": to})
 	}
-	var months []string
 	for m := first; !m.After(last); m = m.AddDate(0, 1, 0) {
 		if len(months) == spendingMonthsMax {
-			return SpendingReport{}, coded.New("spending_too_long", map[string]any{"Max": spendingMonthsMax})
+			return nil, "", "", coded.New("spending_too_long", map[string]any{"Max": spendingMonthsMax})
 		}
 		months = append(months, m.Format(monthLayout))
 	}
-	end := last.AddDate(0, 1, -1).Format(ledger.DateLayout)
+	return months, first.Format(ledger.DateLayout), last.AddDate(0, 1, -1).Format(ledger.DateLayout), nil
+}
 
-	totals, err := s.repo.queries().categoryTotals(ctx, first.Format(ledger.DateLayout), end)
+// SpendingReport is what each Expenses category spent in each month from req.From to
+// req.To, in the base currency. Every month of the range is there, one without
+// spending too, so that the columns of the categories line up.
+func (s *Local) SpendingReport(ctx context.Context, req SpendingRequest) (SpendingReport, error) {
+	months, firstDay, end, err := s.monthRange(req.From, req.To)
+	if err != nil {
+		return SpendingReport{}, err
+	}
+
+	totals, err := s.repo.queries().categoryTotals(ctx, firstDay, end)
 	if err != nil {
 		return SpendingReport{}, err
 	}
