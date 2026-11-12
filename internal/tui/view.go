@@ -23,8 +23,8 @@ func (m *Model) View() string {
 		body = m.budgetBody(l)
 	case screenForecast:
 		body = m.forecastBody(l)
-	default:
-		body = m.placeholderBody(l)
+	case screenReports:
+		body = m.reportsBody(l)
 	}
 	screen := m.tabStrip() + "\n" + body + "\n" + m.bottomBar()
 	switch m.mode {
@@ -113,27 +113,6 @@ func (m *Model) budgetBody(l layout) string {
 		return left
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, m.rightPane(l))
-}
-
-// plannedLines say what a screen that is not built yet will hold.
-func (m *Model) plannedLines(s screen) []string {
-	const bullet = "  • "
-	if s != screenReports {
-		return nil
-	}
-	return []string{
-		m.loc.T("planned_reports_title", nil),
-		"",
-		bullet + m.loc.T("planned_reports_categories", nil),
-		bullet + m.loc.T("planned_reports_net_worth", nil),
-		bullet + m.loc.T("planned_reports_income", nil),
-	}
-}
-
-func (m *Model) placeholderBody(l layout) string {
-	lines := []string{"", dim.Render(m.loc.T("not_built_yet", nil)), ""}
-	lines = append(lines, m.plannedLines(m.screen)...)
-	return box(m.screenName(m.screen), lines, m.width, l.avail, true, "")
 }
 
 func (m *Model) leftBlocks(l layout) []string {
@@ -326,6 +305,8 @@ func (m *Model) hintItems() (hints, tail []string) {
 			return []string{m.loc.T("hint_scroll", nil), m.loc.T("hint_tab_schedules", nil), m.loc.T("hint_account", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
 		}
 		return []string{m.loc.T("hint_schedule", nil), m.loc.T("hint_answer", nil), m.loc.T("hint_tab_balances", nil), m.loc.T("hint_new", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_pause", nil), m.loc.T("hint_account", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
+	case m.screen == screenReports:
+		return []string{m.loc.T("hint_category", nil), m.loc.T("hint_month_keys", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
 	case m.screen != screenLedger:
 		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
 	}
@@ -452,6 +433,7 @@ func (m *Model) helpPopup() string {
 		{"m", m.loc.T("help_minimum", nil)},
 		{"tab", m.loc.T("help_balances", nil)},
 		{"a", m.loc.T("help_scope", nil)},
+		{"R", m.loc.T("help_reports", nil)},
 		{"?", m.loc.T("help_help", nil)},
 		{"q  ctrl+c", m.loc.T("help_quit", nil)},
 	}

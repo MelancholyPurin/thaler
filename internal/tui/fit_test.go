@@ -201,6 +201,8 @@ func Test_View_fits(t *testing.T) {
 		{name: "minimum, an error", keys: "F m enter"},
 		{name: "minimum, set and undone", keys: "F m text:500 enter z"},
 		{name: "reports", keys: "R"},
+		{name: "reports, a category", keys: "R down"},
+		{name: "reports, an earlier month", keys: "R [ [ ["},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.

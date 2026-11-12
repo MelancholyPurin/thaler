@@ -144,6 +144,8 @@ type Model struct {
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
 	balances     bool                  // the Forecast shows the balances, not the schedules
 	balTop       int                   // first line of them shown
+	spending     core.SpendingReport   // what each category spent in the 12 months up to the one on show, for the Reports
+	repList      listState             // the entry selected there
 	fcAccount    string                // the one account the Forecast is limited to, "" for all of them
 	now          func() time.Time
 	focus        pane
@@ -297,6 +299,7 @@ func (m *Model) clampAll() {
 	m.accts.clamp(len(m.accounts)+1, l.acctLines)
 	m.txs.clamp(len(m.view), l.txLines)
 	m.sched.clamp(len(m.schedules), len(m.schedules))
+	m.repList.clamp(len(m.spendEntries()), max(1, l.avail-2))
 }
 
 func (m *Model) setFocus(p pane) {
@@ -467,6 +470,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.updateBudget(key)
 	case screenForecast:
 		return m, m.updateForecast(key)
+	case screenReports:
+		m.updateReports(key)
 	}
 	return m, nil
 }

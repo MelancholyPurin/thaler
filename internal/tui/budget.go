@@ -15,6 +15,9 @@ import (
 // the money came from and where it went, and, for a month, how that stands against
 // the month's targets. Envelopes come later.
 func (m *Model) refreshBudget() error {
+	if err := m.refreshSpending(); err != nil {
+		return err
+	}
 	from, to := periodRange(m.period)
 	rateDate := m.now().Format(ledger.DateLayout)
 	report, err := m.svc.BudgetReport(m.ctx, core.BudgetRequest{From: from, To: to, RateDate: rateDate})
