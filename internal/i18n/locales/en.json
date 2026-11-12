@@ -356,11 +356,6 @@
   "panel_uncategorized": "uncategorized",
   "position_of": "{{.N}} of {{.Total}}",
   "this_month": "this month",
-  "not_built_yet": "Not built yet.",
-  "planned_reports_title": "Where the money went, over time.",
-  "planned_reports_categories": "spending by category across months",
-  "planned_reports_net_worth": "net worth history",
-  "planned_reports_income": "income against expenses",
   "tx_none_yet": "No transactions yet.",
   "tx_none_hint": "n creates an account · i imports a bank export",
   "tx_none_period": "No transactions in {{.Period}}.",
@@ -731,5 +726,12 @@
   "hint_account": "a account",
   "help_scope": "Forecast: a looks at one account, the next each time, and at all of them again after the last: the schedules that move it, its balances and its warning",
   "spending_backwards": "the report cannot start in {{.From}}: that is after it ends ({{.To}})",
-  "spending_too_long": "a report covers at most {{.Max}} months"
+  "spending_too_long": "a report covers at most {{.Max}} months",
+  "report_spending": "Spending by category",
+  "report_range": "{{.From}} – {{.To}} · {{.Currency}}",
+  "report_all_spending": "All spending",
+  "report_total": "Total",
+  "report_per_month": "Per month",
+  "report_nothing": "Nothing was spent in these months.",
+  "help_reports": "Reports: ↑ ↓ choose a category to see its months as bars; [ ] move the 12 months shown back or forward"
 }

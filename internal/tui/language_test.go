@@ -265,6 +265,8 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "minimum, already under", keys: "F m text:500 enter"},
 		{name: "minimum, set and undone", keys: "F m text:500 enter z"},
 		{name: "reports", keys: "R"},
+		{name: "reports, a category", keys: "R down"},
+		{name: "reports, an earlier month", keys: "R [ [ ["},
 		{name: "language", keys: "ctrl+l"},
 	}
 	for _, tc := range tcs {
@@ -320,6 +322,10 @@ func Test_View_translated(t *testing.T) {
 		{name: "Spanish, one account, the balances", tag: language.Spanish, keys: "F a tab", shows: []string{"Saldos · Bank", "a cuenta"}, hides: []string{"Balances", "a account"}},
 		{name: "German, one account", tag: language.German, keys: "F a", shows: []string{"Zeitpläne · Bank"}, hides: []string{"Schedules"}},
 		{name: "German, one account, the balances", tag: language.German, keys: "F a tab", shows: []string{"Salden · Bank", "a Konto"}, hides: []string{"Balances", "a account"}},
+		{name: "Spanish, the reports", tag: language.Spanish, keys: "R down", shows: []string{"Gasto por categoría", "nov 2025 – oct 2026 · EUR", "Todo el gasto", "Total", "Al mes", "sep 2026"}, hides: []string{"Spending by category", "All spending", "Per month"}},
+		{name: "German, the reports", tag: language.German, keys: "R down", shows: []string{"Ausgaben nach Kategorie", "Nov 2025 – Okt 2026 · EUR", "Alle Ausgaben", "Gesamt", "Pro Monat", "Sep 2026"}, hides: []string{"Spending by category", "All spending", "Per month"}},
+		{name: "Spanish, the reports keys", tag: language.Spanish, keys: "R", shows: []string{"↑/↓ categoría", "[ ] mes"}, hides: []string{"↑/↓ category"}},
+		{name: "German, the reports keys", tag: language.German, keys: "R", shows: []string{"↑/↓ Kategorie", "[ ] Monat"}, hides: []string{"↑/↓ category"}},
 		{name: "Spanish, the balances key", tag: language.Spanish, keys: "F", shows: []string{"tab saldos"}, hides: []string{"tab balances"}},
 		{name: "German, the balances key", tag: language.German, keys: "F", shows: []string{"tab Salden"}, hides: []string{"tab balances"}},
 		{name: "Spanish, the minimum key", tag: language.Spanish, keys: "F tab", shows: []string{"m mínimo"}, hides: []string{"m minimum"}},

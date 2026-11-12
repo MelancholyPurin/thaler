@@ -356,11 +356,6 @@
   "panel_uncategorized": "pendientes",
   "position_of": "{{.N}} de {{.Total}}",
   "this_month": "este mes",
-  "not_built_yet": "Aún no está hecho.",
-  "planned_reports_title": "A dónde fue el dinero, a lo largo del tiempo.",
-  "planned_reports_categories": "gastos por categoría a lo largo de los meses",
-  "planned_reports_net_worth": "evolución del patrimonio neto",
-  "planned_reports_income": "ingresos frente a gastos",
   "tx_none_yet": "Todavía no hay transacciones.",
   "tx_none_hint": "n crea una cuenta · i importa un extracto del banco",
   "tx_none_period": "No hay transacciones en {{.Period}}.",
@@ -731,5 +726,12 @@
   "hint_account": "a cuenta",
   "help_scope": "Previsión: a mira una cuenta, la siguiente cada vez, y todas de nuevo tras la última: las programaciones que la mueven, sus saldos y su aviso",
   "spending_backwards": "el informe no puede empezar en {{.From}}: es posterior a su final ({{.To}})",
-  "spending_too_long": "un informe abarca como máximo {{.Max}} meses"
+  "spending_too_long": "un informe abarca como máximo {{.Max}} meses",
+  "report_spending": "Gasto por categoría",
+  "report_range": "{{.From}} – {{.To}} · {{.Currency}}",
+  "report_all_spending": "Todo el gasto",
+  "report_total": "Total",
+  "report_per_month": "Al mes",
+  "report_nothing": "No se gastó nada en estos meses.",
+  "help_reports": "Informes: ↑ ↓ elige una categoría para ver sus meses como barras; [ ] adelantan o retrasan los 12 meses mostrados"
 }

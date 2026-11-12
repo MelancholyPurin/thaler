@@ -356,11 +356,6 @@
   "panel_uncategorized": "ohne Kat.",
   "position_of": "{{.N}} von {{.Total}}",
   "this_month": "dieser Monat",
-  "not_built_yet": "Noch nicht gebaut.",
-  "planned_reports_title": "Wohin das Geld ging, im Lauf der Zeit.",
-  "planned_reports_categories": "Ausgaben je Kategorie über die Monate",
-  "planned_reports_net_worth": "Verlauf des Nettovermögens",
-  "planned_reports_income": "Einnahmen gegenüber Ausgaben",
   "tx_none_yet": "Noch keine Transaktionen.",
   "tx_none_hint": "n legt ein Konto an · i importiert einen Bankexport",
   "tx_none_period": "Keine Transaktionen in {{.Period}}.",
@@ -731,5 +726,12 @@
   "hint_account": "a Konto",
   "help_scope": "Prognose: a zeigt ein Konto, jedes Mal das nächste, nach dem letzten wieder alle: die Zeitpläne, die es bewegen, seine Salden und seine Warnung",
   "spending_backwards": "Der Bericht kann nicht mit {{.From}} beginnen: das liegt nach seinem Ende ({{.To}})",
-  "spending_too_long": "ein Bericht umfasst höchstens {{.Max}} Monate"
+  "spending_too_long": "ein Bericht umfasst höchstens {{.Max}} Monate",
+  "report_spending": "Ausgaben nach Kategorie",
+  "report_range": "{{.From}} – {{.To}} · {{.Currency}}",
+  "report_all_spending": "Alle Ausgaben",
+  "report_total": "Gesamt",
+  "report_per_month": "Pro Monat",
+  "report_nothing": "In diesen Monaten wurde nichts ausgegeben.",
+  "help_reports": "Berichte: ↑ ↓ wählt eine Kategorie, deren Monate als Balken erscheinen; [ ] verschieben die 12 gezeigten Monate"
 }

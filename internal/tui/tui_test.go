@@ -612,17 +612,6 @@ func Test_Update_screenKeys(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("screens that are not built say so", func(t *testing.T) {
-		// given
-		m, _ := newModel(t)
-
-		// when
-		press(m, "R")
-
-		// then
-		checkView(t, m.View(), []string{"Not built yet", "Reports"}, nil)
-	})
 }
 
 func Test_Update_periodKeys(t *testing.T) {
