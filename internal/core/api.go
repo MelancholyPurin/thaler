@@ -91,6 +91,8 @@ type Service interface {
 	// CashFlowReport is what came in and went out in each month of a range, and the
 	// share of the income that was kept.
 	CashFlowReport(ctx context.Context, req CashFlowRequest) (CashFlowReport, error)
+	// PayeeReport is where the most money went in a range of months, by payee.
+	PayeeReport(ctx context.Context, req PayeeRequest) (PayeeReport, error)
 
 	// MonthBudget is what each expense category spent in a month against its
 	// target, and what is left.
@@ -786,6 +788,35 @@ type CashFlowReport struct {
 	Months  []CashFlowMonth   // oldest first, every month of the range
 	Total   CashFlowMonth     // all of them
 	Missing []ledger.Currency // no exchange rate, so left out
+}
+
+// PayeeRequest asks which payees took the most. From, To and RateDate are those of a
+// SpendingRequest. With a Limit, only that many payees are listed and the others are
+// added up in Others; without one, every payee is listed.
+type PayeeRequest struct {
+	From, To string
+	RateDate string
+	Limit    int
+}
+
+// PayeeSpending is what one payee took, or the payees left out by a Limit.
+type PayeeSpending struct {
+	Name         string // empty for the transactions with no payee, and for Others
+	Amount       ledger.Money
+	Transactions int
+}
+
+// PayeeReport is the answer to a PayeeRequest, in the base currency. A refund counts
+// against its payee, so an amount can be negative.
+type PayeeReport struct {
+	Base     ledger.Currency
+	From, To string          // the first and last month, YYYY-MM
+	Payees   []PayeeSpending // the largest first; equal amounts by name
+	// Others is the sum of the OtherPayees payees a Limit left out.
+	Others      PayeeSpending
+	OtherPayees int
+	Total       ledger.Money      // all of them, those in Others too
+	Missing     []ledger.Currency // no exchange rate, so left out
 }
 
 // ---- projection ------------------------------------------------------------
