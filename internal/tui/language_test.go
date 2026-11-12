@@ -267,6 +267,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "reports", keys: "R"},
 		{name: "reports, a category", keys: "R down"},
 		{name: "reports, an earlier month", keys: "R [ [ ["},
+		{name: "reports, income against spending", keys: "R tab"},
+		{name: "reports, income against spending, the oldest", keys: "R tab g"},
+		{name: "reports, income against spending, an earlier month", keys: "R tab [ [ ["},
+		{name: "reports, back to the categories", keys: "R tab tab"},
 		{name: "language", keys: "ctrl+l"},
 	}
 	for _, tc := range tcs {
@@ -324,6 +328,8 @@ func Test_View_translated(t *testing.T) {
 		{name: "German, one account, the balances", tag: language.German, keys: "F a tab", shows: []string{"Salden · Bank", "a Konto"}, hides: []string{"Balances", "a account"}},
 		{name: "Spanish, the reports", tag: language.Spanish, keys: "R down", shows: []string{"Gasto por categoría", "nov 2025 – oct 2026 · EUR", "Todo el gasto", "Total", "Al mes", "sep 2026"}, hides: []string{"Spending by category", "All spending", "Per month"}},
 		{name: "German, the reports", tag: language.German, keys: "R down", shows: []string{"Ausgaben nach Kategorie", "Nov 2025 – Okt 2026 · EUR", "Alle Ausgaben", "Gesamt", "Pro Monat", "Sep 2026"}, hides: []string{"Spending by category", "All spending", "Per month"}},
+		{name: "Spanish, income against spending", tag: language.Spanish, keys: "R tab", shows: []string{"Ingresos frente a gastos", "Ingresos", "Gastos", "Sobra", "Ahorro", "Total", "Barra: la parte de los ingresos que se gastó", "tab informe"}, hides: []string{"Income against spending", "Spent", "Kept", "Saved"}},
+		{name: "German, income against spending", tag: language.German, keys: "R tab", shows: []string{"Einnahmen gegen Ausgaben", "Einnahmen", "Ausgaben", "Übrig", "Sparquote", "Gesamt", "Balken: der ausgegebene Teil der Einnahmen", "tab Bericht"}, hides: []string{"Income against spending", "Spent", "Kept", "Saved"}},
 		{name: "Spanish, the reports keys", tag: language.Spanish, keys: "R", shows: []string{"↑/↓ categoría", "[ ] mes"}, hides: []string{"↑/↓ category"}},
 		{name: "German, the reports keys", tag: language.German, keys: "R", shows: []string{"↑/↓ Kategorie", "[ ] Monat"}, hides: []string{"↑/↓ category"}},
 		{name: "Spanish, the balances key", tag: language.Spanish, keys: "F", shows: []string{"tab saldos"}, hides: []string{"tab balances"}},
