@@ -733,5 +733,13 @@
   "report_total": "Total",
   "report_per_month": "Al mes",
   "report_nothing": "No se gastó nada en estos meses.",
-  "help_reports": "Informes: ↑ ↓ elige una categoría para ver sus meses como barras; [ ] adelantan o retrasan los 12 meses mostrados"
+  "help_reports": "Informes: tab alterna entre gasto por categoría e ingresos frente a gastos; ↑ ↓ eligen una categoría o desplazan los meses; [ ] adelantan o retrasan los 12 meses mostrados",
+  "report_cashflow": "Ingresos frente a gastos",
+  "report_income": "Ingresos",
+  "report_spent": "Gastos",
+  "report_kept": "Sobra",
+  "report_saved": "Ahorro",
+  "report_gauge_hint": "Barra: la parte de los ingresos que se gastó; ! indica que salió más de lo que entró.",
+  "percent": "{{.Value}} %",
+  "hint_tab_report": "tab informe"
 }

@@ -203,6 +203,10 @@ func Test_View_fits(t *testing.T) {
 		{name: "reports", keys: "R"},
 		{name: "reports, a category", keys: "R down"},
 		{name: "reports, an earlier month", keys: "R [ [ ["},
+		{name: "reports, income against spending", keys: "R tab"},
+		{name: "reports, income against spending, the oldest", keys: "R tab g"},
+		{name: "reports, income against spending, an earlier month", keys: "R tab [ [ ["},
+		{name: "reports, back to the categories", keys: "R tab tab"},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.

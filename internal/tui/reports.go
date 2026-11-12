@@ -10,10 +10,25 @@ import (
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-// The Reports screen. Its first report is the spending of each category over the 12
-// months up to the one on show (up to this month, for all time): on the left the
-// categories, each with a small chart of its months and its total, on the right the
-// months of the one selected as bars. The first entry of the list is all of them.
+// The Reports screen holds reports, and tab goes from one to the next. They all cover
+// the 12 months up to the one on show (up to this month, for all time).
+//
+// Spending by category: on the left the categories, each with a small chart of its
+// months and its total, on the right the months of the one selected as bars. The first
+// entry of the list is all of them.
+//
+// Income against spending: a line for each month with what came in, what went out,
+// what was kept and the share of the income that is, and a bar of how much of the
+// income was spent.
+
+// reportKind says which report the screen shows.
+type reportKind int
+
+const (
+	reportSpending reportKind = iota
+	reportCashFlow
+	numReports
+)
 
 // Widths of the amount columns, wide enough for -123,456.78.
 const (
@@ -69,9 +84,13 @@ func bar(v, top int64, width int) string {
 	return out
 }
 
-// refreshSpending loads the spending of the 12 months up to the one on show.
-func (m *Model) refreshSpending() (err error) {
-	m.spending, err = m.svc.SpendingReport(m.ctx, core.SpendingRequest{To: m.period, RateDate: m.now().Format(ledger.DateLayout)})
+// refreshReports loads the figures of the reports for the 12 months up to the one on show.
+func (m *Model) refreshReports() (err error) {
+	rateDate := m.now().Format(ledger.DateLayout)
+	if m.spending, err = m.svc.SpendingReport(m.ctx, core.SpendingRequest{To: m.period, RateDate: rateDate}); err != nil {
+		return err
+	}
+	m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{To: m.period, RateDate: rateDate})
 	return err
 }
 
@@ -102,9 +121,18 @@ func minors(ms []ledger.Money) []int64 {
 	return out
 }
 
-// updateReports handles the keys of the Reports screen: moving through the categories.
+// updateReports handles the keys of the Reports screen: the next report, and moving
+// through the one on show.
 func (m *Model) updateReports(key string) {
-	m.repList.navigate(key, len(m.spendEntries()), max(1, m.layout().avail-2-m.reportHeader(m.layout().leftW-2)))
+	l := m.layout()
+	switch {
+	case key == "tab":
+		m.report = (m.report + 1) % numReports
+	case m.report == reportCashFlow:
+		m.scrollCashFlow(key, max(1, l.avail-2))
+	default:
+		m.repList.navigate(key, len(m.spendEntries()), max(1, l.avail-2-m.reportHeader(l.leftW-2)))
+	}
 }
 
 // monthLabel is a month of the report as the language writes it.
@@ -117,19 +145,20 @@ func (m *Model) monthLabel(month string) string {
 }
 
 // reportHeader is how many lines say, above the list, which months it covers.
-func (m *Model) reportHeader(iw int) int { return len(m.reportRange(iw)) }
+func (m *Model) reportHeader(iw int) int {
+	return len(m.reportRange(iw, m.spending.Months, m.spending.Missing))
+}
 
 // reportRange are the lines above the list: the months it covers, and the currencies
 // that could not be counted. They are here, not with the bars, which a short terminal
 // cuts.
-func (m *Model) reportRange(iw int) []string {
-	months := m.spending.Months
+func (m *Model) reportRange(iw int, months []string, missing []ledger.Currency) []string {
 	if len(months) == 0 {
 		return nil
 	}
 	text := m.loc.T("report_range", map[string]any{"From": m.monthLabel(months[0]), "To": m.monthLabel(months[len(months)-1]), "Currency": m.spending.Base})
 	lines := wrapped(" "+text, iw, dim)
-	for _, c := range m.spending.Missing {
+	for _, c := range missing {
 		lines = append(lines, wrapped(" "+m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.spending.Base}), iw, warn)...)
 	}
 	return lines
@@ -137,14 +166,17 @@ func (m *Model) reportRange(iw int) []string {
 
 // reportsBody is the Reports screen.
 func (m *Model) reportsBody(l layout) string {
+	if m.report == reportCashFlow {
+		return m.cashFlowBody(l)
+	}
 	entries := m.spendEntries()
 	title := m.loc.T("report_spending", nil)
 	if len(entries) == 0 {
-		lines := append(m.reportRange(m.width-2), "", dim.Render(" "+m.loc.T("report_nothing", nil)))
+		lines := append(m.reportRange(m.width-2, m.spending.Months, m.spending.Missing), "", dim.Render(" "+m.loc.T("report_nothing", nil)))
 		return box(title, lines, m.width, l.avail, true, "")
 	}
 	iw := l.leftW - 2
-	head := m.reportRange(iw)
+	head := m.reportRange(iw, m.spending.Months, m.spending.Missing)
 	h := max(l.avail-2-len(head), 1)
 	m.repList.clamp(len(entries), h)
 

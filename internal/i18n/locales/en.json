@@ -733,5 +733,13 @@
   "report_total": "Total",
   "report_per_month": "Per month",
   "report_nothing": "Nothing was spent in these months.",
-  "help_reports": "Reports: ↑ ↓ choose a category to see its months as bars; [ ] move the 12 months shown back or forward"
+  "help_reports": "Reports: tab switches between spending by category and income against spending; ↑ ↓ choose a category or scroll the months; [ ] move the 12 months shown",
+  "report_cashflow": "Income against spending",
+  "report_income": "Income",
+  "report_spent": "Spent",
+  "report_kept": "Kept",
+  "report_saved": "Saved",
+  "report_gauge_hint": "Bar: the part of the income that was spent; ! means more went out than came in.",
+  "percent": "{{.Value}}%",
+  "hint_tab_report": "tab report"
 }

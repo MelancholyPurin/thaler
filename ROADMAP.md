@@ -283,7 +283,7 @@ Getting every transaction into the right category with as little typing as possi
 
 - [x] `TRP-1` Spending per category over the months, as text charts (the Reports screen lists the categories with a small chart of the last 12 months and the total, the first line being all spending, and draws the selected one's months as bars with the total and the average; the 12 months end at the period on show, `[` and `]` move them; the figures are `RPT-1`'s `SpendingReport`; choosing another range is `TRP-5`)
 - [ ] `TRP-2` Net worth history
-- [ ] `TRP-3` Income against spending per month
+- [x] `TRP-3` Income against spending per month (the Reports screen gained `tab` to go from one report to the next; the second shows for each of the 12 months what came in, went out and was kept, the share kept, and a bar of the part of the income spent, with the total; the figures are `RPT-3`'s `CashFlowReport`)
 - [ ] `TRP-4` The payees that cost the most
 - [ ] `TRP-5` Choose the range a report covers
 - [ ] `TRP-6` Save the shown report as CSV
