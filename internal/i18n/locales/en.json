@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Per month",
   "report_nothing": "Nothing was spent in these months.",
-  "help_reports": "Reports: tab switches between spending by category, income against spending and the payees; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown",
+  "help_reports": "Reports: tab switches between spending by category, income against spending and the payees; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown; r chooses another range of months",
   "report_cashflow": "Income against spending",
   "report_income": "Income",
   "report_spent": "Spent",
@@ -749,5 +749,15 @@
     "one": "{{.Count}} other payee",
     "other": "{{.Count}} other payees"
   },
+  "range_title": "Range of the reports",
+  "label_until": "Until",
+  "range_hint": "Months as YYYY-MM, at most 120. An empty Until is this month and an empty From is 11 months before Until. Leave both empty to follow the month on show.",
+  "range_footer": "enter next · ctrl+s apply · esc cancel",
+  "report_range_chosen": "{{.From}} – {{.To}} · {{.Currency}} · chosen range",
+  "report_earlier": {
+    "one": "{{.Count}} earlier month not shown",
+    "other": "{{.Count}} earlier months not shown"
+  },
+  "hint_range": "r range",
   "hint_tab_report": "tab report"
 }

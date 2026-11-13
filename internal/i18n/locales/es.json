@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Al mes",
   "report_nothing": "No se gastó nada en estos meses.",
-  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos y beneficiarios; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados",
+  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos y beneficiarios; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados; r elige otro período de meses",
   "report_cashflow": "Ingresos frente a gastos",
   "report_income": "Ingresos",
   "report_spent": "Gastos",
@@ -749,5 +749,15 @@
     "one": "{{.Count}} beneficiario más",
     "other": "{{.Count}} beneficiarios más"
   },
+  "range_title": "Período de los informes",
+  "label_until": "Hasta",
+  "range_hint": "Meses como AAAA-MM, como mucho 120. Un Hasta vacío es este mes y un Desde vacío son 11 meses antes del Hasta. Deja los dos vacíos para seguir el mes que se ve.",
+  "range_footer": "enter siguiente · ctrl+s aplicar · esc cancelar",
+  "report_range_chosen": "{{.From}} – {{.To}} · {{.Currency}} · período elegido",
+  "report_earlier": {
+    "one": "{{.Count}} mes anterior sin mostrar",
+    "other": "{{.Count}} meses anteriores sin mostrar"
+  },
+  "hint_range": "r período",
   "hint_tab_report": "tab informe"
 }
