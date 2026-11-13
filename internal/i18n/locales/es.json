@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Al mes",
   "report_nothing": "No se gastó nada en estos meses.",
-  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos y beneficiarios; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados; r elige otro período de meses; e guarda el informe que se ve como archivo CSV",
+  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos, beneficiarios y patrimonio neto; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados; r elige otro período de meses; e guarda el informe que se ve como archivo CSV",
   "report_cashflow": "Ingresos frente a gastos",
   "report_income": "Ingresos",
   "report_spent": "Gastos",
@@ -768,5 +768,8 @@
   "export_say_where": "indica dónde guardar el informe",
   "export_exists": "{{.Path}} ya existe: indica otro nombre",
   "hint_export": "e CSV",
+  "report_networth": "Patrimonio neto",
+  "report_change": "Cambio",
+  "report_worth_hint": "Barra: patrimonio neto frente al mes más alto; ▒ es por debajo de cero.",
   "hint_tab_report": "tab informe"
 }

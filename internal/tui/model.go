@@ -154,7 +154,9 @@ type Model struct {
 	cashFlow     core.CashFlowReport   // what came in and went out in those months
 	payeeRank    core.PayeeReport      // where the money went, by payee
 	payTop       int                   // the first line of the payees report shown
+	worthHistory core.NetWorthReport   // what the accounts were worth at the end of each of those months
 	report       reportKind            // the report the Reports screen shows
+	nwBack       int                   // how many months the net worth report is scrolled back from the newest
 	cfBack       int                   // how many months the income report is scrolled back from the newest
 	repList      listState             // the entry selected there
 	fcAccount    string                // the one account the Forecast is limited to, "" for all of them

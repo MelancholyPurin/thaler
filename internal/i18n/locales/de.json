@@ -733,7 +733,7 @@
   "report_total": "Gesamt",
   "report_per_month": "Pro Monat",
   "report_nothing": "In diesen Monaten wurde nichts ausgegeben.",
-  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben und Empfängern; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate; r wählt einen anderen Zeitraum; e speichert den gezeigten Bericht als CSV-Datei",
+  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben, Empfängern und Nettovermögen; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate; r wählt einen anderen Zeitraum; e speichert den gezeigten Bericht als CSV-Datei",
   "report_cashflow": "Einnahmen gegen Ausgaben",
   "report_income": "Einnahmen",
   "report_spent": "Ausgaben",
@@ -768,5 +768,8 @@
   "export_say_where": "gib an, wo der Bericht gespeichert werden soll",
   "export_exists": "{{.Path}} gibt es schon: gib einen anderen Namen an",
   "hint_export": "e CSV",
+  "report_networth": "Nettovermögen",
+  "report_change": "Änderung",
+  "report_worth_hint": "Balken: Nettovermögen im Vergleich zum höchsten Monat; ▒ liegt unter null.",
   "hint_tab_report": "tab Bericht"
 }

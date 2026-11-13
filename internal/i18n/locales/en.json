@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Per month",
   "report_nothing": "Nothing was spent in these months.",
-  "help_reports": "Reports: tab switches between spending by category, income against spending and the payees; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown; r chooses another range of months; e saves the report on show as a CSV file",
+  "help_reports": "Reports: tab switches between spending by category, income against spending, the payees and net worth; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown; r chooses another range of months; e saves the report on show as a CSV file",
   "report_cashflow": "Income against spending",
   "report_income": "Income",
   "report_spent": "Spent",
@@ -768,5 +768,8 @@
   "export_say_where": "say where to save the report",
   "export_exists": "{{.Path}} is already there: give another name",
   "hint_export": "e CSV",
+  "report_networth": "Net worth",
+  "report_change": "Change",
+  "report_worth_hint": "Bar: net worth against the highest month; ▒ is below zero.",
   "hint_tab_report": "tab report"
 }

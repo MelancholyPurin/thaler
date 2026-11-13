@@ -397,6 +397,47 @@ func (q queries) balances(ctx context.Context, asOf string) ([]Balance, error) {
 		ORDER BY a.name, p.currency`, asOf, asOf)
 }
 
+// monthlyMovement is what one asset or liability account took in one month, in one
+// currency. Month is empty for everything before the first month asked for.
+type monthlyMovement struct {
+	account string
+	amount  ledger.Money
+	month   string // YYYY-MM
+}
+
+// assetMovements sums the postings on Assets and Liabilities accounts per account,
+// currency and month, for transactions dated up to last (inclusive). What is dated
+// before first is one sum with an empty month: the balance the range starts from.
+func (q queries) assetMovements(ctx context.Context, first, last string) ([]monthlyMovement, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT a.name, p.currency,
+		       CASE WHEN t.date < ? THEN '' ELSE substr(t.date, 1, 7) END AS month,
+		       SUM(p.amount)
+		FROM postings p
+		JOIN accounts a ON a.id = p.account_id
+		JOIN transactions t ON t.id = p.transaction_id
+		WHERE a.type IN ('Assets', 'Liabilities') AND t.date <= ?
+		GROUP BY a.id, p.currency, month
+		ORDER BY a.name, p.currency, month`, first, last)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []monthlyMovement
+	for rows.Next() {
+		var (
+			d   monthlyMovement
+			cur string
+		)
+		if err := rows.Scan(&d.account, &cur, &d.month, &d.amount.Minor); err != nil {
+			return nil, err
+		}
+		d.amount.Currency = ledger.Currency(cur)
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // datedBalance is a Balance for one day.
 type datedBalance struct {
 	Balance

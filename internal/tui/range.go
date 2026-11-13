@@ -106,7 +106,7 @@ func (m *Model) saveRange() {
 		return
 	}
 	m.mode, m.rng = modeList, nil
-	m.cfBack, m.payTop, m.repList = 0, 0, listState{}
+	m.cfBack, m.nwBack, m.payTop, m.repList = 0, 0, 0, listState{}
 	m.clampAll()
 }
 

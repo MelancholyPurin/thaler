@@ -259,3 +259,41 @@ func Test_PayeesCSV(t *testing.T) {
 		})
 	}
 }
+
+func Test_NetWorthCSV(t *testing.T) {
+	tcs := []struct {
+		name string
+		in   NetWorthReport
+		want string
+	}{
+		{
+			name: "a line for each month, below zero too",
+			in:   NetWorthReport{Base: "EUR", Months: []NetWorthMonth{worth("2026-09", 12345), worth("2026-10", -50), worth("2026-11", 0)}},
+			want: "month,currency,net_worth\n2026-09,EUR,123.45\n2026-10,EUR,-0.50\n2026-11,EUR,0.00\n",
+		},
+		{
+			name: "a currency with no decimals",
+			in:   NetWorthReport{Base: "JPY", Months: []NetWorthMonth{{Month: "2026-10", Total: ledger.Money{Minor: 1200, Currency: "JPY"}}}},
+			want: "month,currency,net_worth\n2026-10,JPY,1200\n",
+		},
+		{
+			name: "no months: the header alone",
+			in:   NetWorthReport{Base: "EUR"},
+			want: "month,currency,net_worth\n",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got, err := NetWorthCSV(tc.in)
+
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, string(got)); diff != "" {
+				t.Errorf("NetWorthCSV mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

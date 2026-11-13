@@ -33,6 +33,8 @@ func (m *Model) reportName(k reportKind) string {
 		return m.loc.T("report_cashflow", nil)
 	case reportPayees:
 		return m.loc.T("report_payees", nil)
+	case reportNetWorth:
+		return m.loc.T("report_networth", nil)
 	}
 	return m.loc.T("report_spending", nil)
 }
@@ -44,6 +46,8 @@ func exportSlug(k reportKind) string {
 		return "cashflow"
 	case reportPayees:
 		return "payees"
+	case reportNetWorth:
+		return "networth"
 	}
 	return "categories"
 }
@@ -130,6 +134,13 @@ func (m *Model) reportCSV(kind reportKind) (data []byte, missing []ledger.Curren
 			return nil, nil, err
 		}
 		data, err = core.PayeesCSV(r)
+		return data, r.Missing, err
+	case reportNetWorth:
+		r, err := m.svc.NetWorthReport(m.ctx, core.NetWorthRequest{From: from, To: to, RateDate: rateDate})
+		if err != nil {
+			return nil, nil, err
+		}
+		data, err = core.NetWorthCSV(r)
 		return data, r.Missing, err
 	}
 	r, err := m.svc.SpendingReport(m.ctx, core.SpendingRequest{From: from, To: to, RateDate: rateDate})

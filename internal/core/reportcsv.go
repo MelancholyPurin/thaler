@@ -97,6 +97,16 @@ func PayeesCSV(r PayeeReport) ([]byte, error) {
 	return encodeCSV(rows)
 }
 
+// NetWorthCSV is a NetWorthReport as CSV: a line for each month with its currency and
+// the net worth at the end of it.
+func NetWorthCSV(r NetWorthReport) ([]byte, error) {
+	rows := [][]string{{"month", "currency", "net_worth"}}
+	for _, m := range r.Months {
+		rows = append(rows, []string{m.Month, string(r.Base), m.Total.Decimal()})
+	}
+	return encodeCSV(rows)
+}
+
 func moneyTexts(ms []ledger.Money) []string {
 	out := make([]string, len(ms))
 	for i, m := range ms {

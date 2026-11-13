@@ -93,6 +93,8 @@ type Service interface {
 	CashFlowReport(ctx context.Context, req CashFlowRequest) (CashFlowReport, error)
 	// PayeeReport is where the most money went in a range of months, by payee.
 	PayeeReport(ctx context.Context, req PayeeRequest) (PayeeReport, error)
+	// NetWorthReport is the net worth at the end of each month of a range.
+	NetWorthReport(ctx context.Context, req NetWorthRequest) (NetWorthReport, error)
 
 	// MonthBudget is what each expense category spent in a month against its
 	// target, and what is left.
@@ -817,6 +819,31 @@ type PayeeReport struct {
 	OtherPayees int
 	Total       ledger.Money      // all of them, those in Others too
 	Missing     []ledger.Currency // no exchange rate, so left out
+}
+
+// NetWorthRequest asks what the accounts were worth at the end of each month. Its fields
+// are those of a SpendingRequest, and an empty From or To means the same.
+type NetWorthRequest struct {
+	From, To string
+	RateDate string
+}
+
+// NetWorthMonth is the net worth at the end of one month, in the base currency.
+type NetWorthMonth struct {
+	Month string // YYYY-MM
+	Total ledger.Money
+}
+
+// NetWorthReport is the answer to a NetWorthRequest. Each month is what every asset and
+// liability account held on its last day, whatever was booked up to then (so the current
+// month counts what is dated later in it), each converted at the rate of that day: a
+// rate entered later does not move a month that is past. A currency with no rate on or
+// before that day is converted at the rate of the end of the range, as the other reports
+// do.
+type NetWorthReport struct {
+	Base    ledger.Currency
+	Months  []NetWorthMonth   // oldest first, every month of the range
+	Missing []ledger.Currency // no exchange rate at all, so left out
 }
 
 // ---- projection ------------------------------------------------------------
