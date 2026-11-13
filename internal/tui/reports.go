@@ -20,6 +20,9 @@ import (
 // Income against spending: a line for each month with what came in, what went out,
 // what was kept and the share of the income that is, and a bar of how much of the
 // income was spent.
+//
+// Payees: a line for each payee, the one that took most first, with a bar, what it
+// took, its share of the spending and how many transactions that was.
 
 // reportKind says which report the screen shows.
 type reportKind int
@@ -27,6 +30,7 @@ type reportKind int
 const (
 	reportSpending reportKind = iota
 	reportCashFlow
+	reportPayees
 	numReports
 )
 
@@ -90,7 +94,10 @@ func (m *Model) refreshReports() (err error) {
 	if m.spending, err = m.svc.SpendingReport(m.ctx, core.SpendingRequest{To: m.period, RateDate: rateDate}); err != nil {
 		return err
 	}
-	m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{To: m.period, RateDate: rateDate})
+	if m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{To: m.period, RateDate: rateDate}); err != nil {
+		return err
+	}
+	m.payeeRank, err = m.svc.PayeeReport(m.ctx, core.PayeeRequest{To: m.period, RateDate: rateDate, Limit: payeeLimit})
 	return err
 }
 
@@ -130,6 +137,8 @@ func (m *Model) updateReports(key string) {
 		m.report = (m.report + 1) % numReports
 	case m.report == reportCashFlow:
 		m.scrollCashFlow(key, max(1, l.avail-2))
+	case m.report == reportPayees:
+		m.scrollPayees(key)
 	default:
 		m.repList.navigate(key, len(m.spendEntries()), max(1, l.avail-2-m.reportHeader(l.leftW-2)))
 	}
@@ -166,8 +175,11 @@ func (m *Model) reportRange(iw int, months []string, missing []ledger.Currency) 
 
 // reportsBody is the Reports screen.
 func (m *Model) reportsBody(l layout) string {
-	if m.report == reportCashFlow {
+	switch m.report {
+	case reportCashFlow:
 		return m.cashFlowBody(l)
+	case reportPayees:
+		return m.payeesBody(l)
 	}
 	entries := m.spendEntries()
 	title := m.loc.T("report_spending", nil)
