@@ -89,7 +89,7 @@ func PayeesCSV(r PayeeReport) ([]byte, error) {
 	rows := [][]string{{"payee", "currency", "amount", "share_percent", "transactions"}}
 	for _, p := range r.Payees {
 		share := ""
-		if s := savingsRate(p.Amount.Minor, r.Total.Minor); s.Known {
+		if s := r.Share(p); s.Known {
 			share = percentText(s.BasisPoints)
 		}
 		rows = append(rows, []string{csvText(p.Name), string(r.Base), p.Amount.Decimal(), share, strconv.Itoa(p.Transactions)})
