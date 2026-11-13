@@ -146,6 +146,8 @@ type Model struct {
 	balTop       int                   // first line of them shown
 	spending     core.SpendingReport   // what each category spent in the 12 months up to the one on show, for the Reports
 	cashFlow     core.CashFlowReport   // what came in and went out in those months
+	payeeRank    core.PayeeReport      // where the money went, by payee
+	payTop       int                   // the first line of the payees report shown
 	report       reportKind            // the report the Reports screen shows
 	cfBack       int                   // how many months the income report is scrolled back from the newest
 	repList      listState             // the entry selected there

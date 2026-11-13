@@ -270,7 +270,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "reports, income against spending", keys: "R tab"},
 		{name: "reports, income against spending, the oldest", keys: "R tab g"},
 		{name: "reports, income against spending, an earlier month", keys: "R tab [ [ ["},
-		{name: "reports, back to the categories", keys: "R tab tab"},
+		{name: "reports, payees", keys: "R tab tab"},
+		{name: "reports, payees, the last", keys: "R tab tab G"},
+		{name: "reports, payees, an earlier month", keys: "R tab tab [ [ ["},
+		{name: "reports, back to the categories", keys: "R tab tab tab"},
 		{name: "language", keys: "ctrl+l"},
 	}
 	for _, tc := range tcs {

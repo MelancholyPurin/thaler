@@ -127,11 +127,11 @@ func Test_cashFlowScreen(t *testing.T) {
 			shows: []string{"░", "█", "Bar: the part of the income that was spent"},
 		},
 		{
-			name:  "tab twice goes back to the categories",
+			name:  "tab three times goes back to the categories",
 			setup: cashFlowLedger,
-			keys:  "R tab tab",
+			keys:  "R tab tab tab",
 			shows: []string{"Spending by category", "All spending"},
-			hides: []string{"Income against spending"},
+			hides: []string{"Income against spending", "Payees"},
 		},
 		{
 			name:  "the months move with the period",
@@ -205,13 +205,14 @@ func Test_Update_cashFlowKeys(t *testing.T) {
 	}{
 		{name: "the categories first", keys: "R", want: observed{}},
 		{name: "tab", keys: "R tab", want: observed{Report: reportCashFlow}},
-		{name: "tab twice", keys: "R tab tab", want: observed{}},
+		{name: "tab twice is the payees", keys: "R tab tab", want: observed{Report: reportPayees}},
+		{name: "tab three times", keys: "R tab tab tab", want: observed{}},
 		{name: "up goes back a month", keys: "R tab up", want: observed{Report: reportCashFlow, Back: 1}},
 		{name: "k and j", keys: "R tab k k j", want: observed{Report: reportCashFlow, Back: 1}},
 		{name: "down stops at the newest", keys: "R tab down", want: observed{Report: reportCashFlow}},
 		{name: "g goes to the oldest, held inside the months", keys: "R tab g", want: observed{Report: reportCashFlow, Back: 1}},
 		{name: "G comes back", keys: "R tab g G", want: observed{Report: reportCashFlow}},
-		{name: "the selection of the categories is kept", keys: "R down tab tab", want: observed{Cursor: 1}},
+		{name: "the selection of the categories is kept", keys: "R down tab tab tab", want: observed{Cursor: 1}},
 		{name: "keys of the categories do not move the months", keys: "R down down tab", want: observed{Report: reportCashFlow, Cursor: 2}},
 	}
 	for _, tc := range tcs {
