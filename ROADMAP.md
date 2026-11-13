@@ -210,7 +210,7 @@ The scriptable surface (`thaler cli ...`), for cron and one-off jobs.
 - [x] `CLI-12` Set and show budget targets (`thaler cli budget`, `budget set`, `budget clear`; switching carry-over on and copying a month's targets stay in the interface)
 - [x] `CLI-16` Show planned income and what is still unassigned in `thaler cli budget` (an Income table and an "Unassigned" line, only for a month with income planned)
 - [x] `CLI-13` Manage schedules and confirm what is due (`thaler cli schedule`: add, list, edit, delete, due, confirm, skip; a schedule has one account and one category here, as `add` has)
-- [ ] `CLI-14` The reports of `RPT` (reports and projections), as commands
+- [x] `CLI-14` The reports of `RPT` (reports and projections), as commands (`thaler cli report spending`, `cashflow`, `payees` and `networth`, each for the 12 months up to this one or `--from`/`--to` as `YYYY-MM`, as tables with the base currency in the heading: spending with the total and average per month, or a column for each month with `--months`; income against spending with what was kept and the share; the payees with their share and transactions, 20 listed unless `--limit` says, the rest in one line; net worth with the change from the month before; a currency with no rate is named in a warning; the projections of `RPT-5` and `RPT-6` were already `thaler cli forecast`; the tables are text, machine-readable output is `CLI-10`)
 - ~~`CLI-15` Help and messages in English, Spanish and German, following the language setting~~ (dropped: `thaler cli` is for scripts and for people who read English; everything it prints stays English, whatever the language setting)
 
 ### TLD: Ledger tab
