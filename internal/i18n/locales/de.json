@@ -733,7 +733,7 @@
   "report_total": "Gesamt",
   "report_per_month": "Pro Monat",
   "report_nothing": "In diesen Monaten wurde nichts ausgegeben.",
-  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben und Empfängern; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate",
+  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben und Empfängern; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate; r wählt einen anderen Zeitraum",
   "report_cashflow": "Einnahmen gegen Ausgaben",
   "report_income": "Einnahmen",
   "report_spent": "Ausgaben",
@@ -749,5 +749,15 @@
     "one": "{{.Count}} weiterer Empfänger",
     "other": "{{.Count}} weitere Empfänger"
   },
+  "range_title": "Zeitraum der Berichte",
+  "label_until": "Bis",
+  "range_hint": "Monate als JJJJ-MM, höchstens 120. Ein leeres Bis ist dieser Monat, ein leeres Von sind 11 Monate vor Bis. Beide leer lassen, um dem angezeigten Monat zu folgen.",
+  "range_footer": "enter weiter · ctrl+s anwenden · esc abbrechen",
+  "report_range_chosen": "{{.From}} – {{.To}} · {{.Currency}} · gewählter Zeitraum",
+  "report_earlier": {
+    "one": "{{.Count}} früherer Monat nicht gezeigt",
+    "other": "{{.Count}} frühere Monate nicht gezeigt"
+  },
+  "hint_range": "r Zeitraum",
   "hint_tab_report": "tab Bericht"
 }

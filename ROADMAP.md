@@ -285,7 +285,7 @@ Getting every transaction into the right category with as little typing as possi
 - [ ] `TRP-2` Net worth history
 - [x] `TRP-3` Income against spending per month (the Reports screen gained `tab` to go from one report to the next; the second shows for each of the 12 months what came in, went out and was kept, the share kept, and a bar of the part of the income spent, with the total; the figures are `RPT-3`'s `CashFlowReport`)
 - [x] `TRP-4` The payees that cost the most (a third report on the Reports `tab`: the payees from `RPT-4`'s `PayeeReport`, the largest first, each with a bar against the biggest, what it took, its share of the spending and its transactions, no payee as `(no payee)`, a refund as `▒`, the payees past 100 as one line, a total; `↑`/`↓` scroll; the range is that of the other reports, `TRP-5` lets you choose it)
-- [ ] `TRP-5` Choose the range a report covers
+- [x] `TRP-5` Choose the range a report covers (`r` on the Reports asks for From and Until as `YYYY-MM` and applies them to the three reports; the service refuses a range that is not one and the popup says why; an empty Until is this month, an empty From 11 months before Until, both empty follow the month on show again; a chosen range is marked and does not move with `[` `]`; a long range is drawn with a chart cell for several months and the bars of a category show the newest months)
 - [ ] `TRP-6` Save the shown report as CSV
 
 ### TFC: Forecast tab and recurring transactions
