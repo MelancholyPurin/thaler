@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Al mes",
   "report_nothing": "No se gastó nada en estos meses.",
-  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos y beneficiarios; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados; r elige otro período de meses",
+  "help_reports": "Informes: tab alterna entre gasto por categoría, ingresos frente a gastos y beneficiarios; ↑ ↓ eligen una categoría o desplazan los meses y los beneficiarios; [ ] adelantan o retrasan los 12 meses mostrados; r elige otro período de meses; e guarda el informe que se ve como archivo CSV",
   "report_cashflow": "Ingresos frente a gastos",
   "report_income": "Ingresos",
   "report_spent": "Gastos",
@@ -759,5 +759,14 @@
     "other": "{{.Count}} meses anteriores sin mostrar"
   },
   "hint_range": "r período",
+  "label_report": "Informe",
+  "export_title": "Guardar como CSV",
+  "export_what": "{{.Report}} · {{.From}} – {{.To}}",
+  "export_hint": "Un CSV simple para una hoja de cálculo: importes en {{.Currency}} con punto, meses como AAAA-MM, columnas en inglés. Un archivo que ya existe no se sobrescribe.",
+  "export_footer": "enter guardar · esc cancelar",
+  "export_saved": "{{.Report}} guardado como CSV: {{.Path}}",
+  "export_say_where": "indica dónde guardar el informe",
+  "export_exists": "{{.Path}} ya existe: indica otro nombre",
+  "hint_export": "e CSV",
   "hint_tab_report": "tab informe"
 }

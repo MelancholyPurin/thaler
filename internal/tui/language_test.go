@@ -283,6 +283,11 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "reports, a long range", keys: "R r text:2020-01 enter enter"},
 		{name: "reports, a long range, income against spending", keys: "R tab r text:2020-01 enter enter"},
 		{name: "reports, a chosen range, payees", keys: "R tab tab r text:2025-01 enter enter"},
+		{name: "reports, save as CSV", keys: "R e"},
+		{name: "reports, save as CSV, nothing typed", keys: "R e ctrl+u enter"},
+		{name: "reports, save as CSV, a folder that is not there", keys: "R e ctrl+u raw:/zz/qq/out.csv enter"},
+		{name: "reports, save as CSV, income against spending", keys: "R tab e"},
+		{name: "reports, save as CSV, payees, a chosen range", keys: "R tab tab r text:2020-01 enter enter e"},
 		{name: "reports, back to the categories", keys: "R tab tab tab"},
 		{name: "language", keys: "ctrl+l"},
 	}

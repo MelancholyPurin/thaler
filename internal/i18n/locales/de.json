@@ -733,7 +733,7 @@
   "report_total": "Gesamt",
   "report_per_month": "Pro Monat",
   "report_nothing": "In diesen Monaten wurde nichts ausgegeben.",
-  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben und Empfängern; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate; r wählt einen anderen Zeitraum",
+  "help_reports": "Berichte: tab wechselt zwischen Ausgaben nach Kategorie, Einnahmen gegen Ausgaben und Empfängern; ↑ ↓ wählen eine Kategorie oder blättern durch Monate und Empfänger; [ ] verschieben die 12 gezeigten Monate; r wählt einen anderen Zeitraum; e speichert den gezeigten Bericht als CSV-Datei",
   "report_cashflow": "Einnahmen gegen Ausgaben",
   "report_income": "Einnahmen",
   "report_spent": "Ausgaben",
@@ -759,5 +759,14 @@
     "other": "{{.Count}} frühere Monate nicht gezeigt"
   },
   "hint_range": "r Zeitraum",
+  "label_report": "Bericht",
+  "export_title": "Als CSV speichern",
+  "export_what": "{{.Report}} · {{.From}} – {{.To}}",
+  "export_hint": "Eine einfache CSV-Datei für eine Tabellenkalkulation: Beträge in {{.Currency}} mit Punkt, Monate als JJJJ-MM, englische Spaltennamen. Eine vorhandene Datei wird nicht überschrieben.",
+  "export_footer": "enter speichern · esc abbrechen",
+  "export_saved": "{{.Report}} als CSV gespeichert: {{.Path}}",
+  "export_say_where": "gib an, wo der Bericht gespeichert werden soll",
+  "export_exists": "{{.Path}} gibt es schon: gib einen anderen Namen an",
+  "hint_export": "e CSV",
   "hint_tab_report": "tab Bericht"
 }
