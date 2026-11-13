@@ -204,7 +204,7 @@ var paneNames = map[pane]string{paneHome: "home", paneAccounts: "accounts", pane
 var screenNames2 = map[screen]string{screenLedger: "ledger", screenBudget: "budget", screenForecast: "forecast", screenReports: "reports"}
 var modeNames = map[mode]string{
 	modeList: "list", modeFilter: "filter", modePick: "pick", modeHelp: "help", modeForm: "form", modeConfirm: "confirm",
-	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language", modeTarget: "target", modeSchedule: "schedule", modeDue: "due", modeMinimum: "minimum", modeRange: "range",
+	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language", modeTarget: "target", modeSchedule: "schedule", modeDue: "due", modeMinimum: "minimum", modeRange: "range", modeExport: "export",
 }
 
 // visibleRows are the transactions the list shows, newest first.

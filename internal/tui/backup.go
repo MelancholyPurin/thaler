@@ -201,15 +201,10 @@ func (m *Model) updateBackup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// backupTarget turns what was typed into the file to write: ~ is your home
-// folder, a relative path is relative to where Thaler was started, a folder
-// gets the usual timestamped file name inside it, and an encrypted backup ends
-// in .age.
-func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
+// resolvePath turns a path typed in a popup into an absolute one: ~ is your home
+// folder, and a relative path is relative to where Thaler was started.
+func resolvePath(typed string) (string, error) {
 	typed = strings.TrimSpace(typed)
-	if typed == "" {
-		return "", coded.New("backup_say_where", nil)
-	}
 	if typed == "~" || strings.HasPrefix(typed, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -217,7 +212,16 @@ func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
 		}
 		typed = filepath.Join(home, strings.TrimPrefix(typed, "~"))
 	}
-	dest, err := filepath.Abs(typed)
+	return filepath.Abs(typed)
+}
+
+// backupTarget turns what was typed into the file to write: a folder gets the usual
+// timestamped file name inside it, and an encrypted backup ends in .age.
+func (m *Model) backupTarget(typed string, encrypt bool) (string, error) {
+	if strings.TrimSpace(typed) == "" {
+		return "", coded.New("backup_say_where", nil)
+	}
+	dest, err := resolvePath(typed)
 	if err != nil {
 		return "", err
 	}

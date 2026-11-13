@@ -68,6 +68,7 @@ const (
 	modeDue                  // going through what is due
 	modeMinimum              // setting the lowest an account should fall
 	modeRange                // choosing the months the reports cover
+	modeExport               // saving the report on show as a CSV file
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -143,6 +144,7 @@ type Model struct {
 	lows         []core.LowBalance     // the accounts that would fall under theirs, the soonest first
 	minForm      *minimumForm          // the minimum popup while it is open
 	rng          *rangeForm            // the range popup while it is open
+	exp          *exportForm           // the export popup while it is open
 	repFrom      string                // the first month of the range chosen for the reports, "" if none
 	repTo        string                // and the last; with neither, they follow the month on show
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
@@ -420,6 +422,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMinimum(msg)
 		case modeRange:
 			return m.updateRange(msg)
+		case modeExport:
+			return m.updateExport(msg)
 		default:
 			return m.updateList(msg)
 		}

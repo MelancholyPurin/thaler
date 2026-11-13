@@ -169,6 +169,8 @@ func (m *Model) updateReports(key string) tea.Cmd {
 		m.report = (m.report + 1) % numReports
 	case key == "r":
 		return m.openRange()
+	case key == "e":
+		return m.openExport()
 	case m.report == reportCashFlow:
 		m.scrollCashFlow(key, max(1, l.avail-2))
 	case m.report == reportPayees:

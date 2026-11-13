@@ -58,6 +58,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.minimumPopup())
 	case modeRange:
 		screen = m.centerPopup(screen, m.rangePopup())
+	case modeExport:
+		screen = m.centerPopup(screen, m.exportPopup())
 	case modeTarget:
 		screen = m.centerPopup(screen, m.targetPopup())
 	}
@@ -312,7 +314,7 @@ func (m *Model) hintItems() (hints, tail []string) {
 		if m.report != reportSpending {
 			first = m.loc.T("hint_scroll", nil)
 		}
-		return []string{first, m.loc.T("hint_tab_report", nil), m.loc.T("hint_month_keys", nil), m.loc.T("hint_range", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
+		return []string{first, m.loc.T("hint_tab_report", nil), m.loc.T("hint_month_keys", nil), m.loc.T("hint_range", nil), m.loc.T("hint_export", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
 	case m.screen != screenLedger:
 		return []string{m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil), m.loc.T("hint_month_keys", nil)}, tail
 	}
@@ -439,7 +441,7 @@ func (m *Model) helpPopup() string {
 		{"m", m.loc.T("help_minimum", nil)},
 		{"tab", m.loc.T("help_balances", nil)},
 		{"a", m.loc.T("help_scope", nil)},
-		{"tab  ↑ ↓  [ ]  r", m.loc.T("help_reports", nil)},
+		{"tab  ↑ ↓  [ ]  r  e", m.loc.T("help_reports", nil)},
 		{"?", m.loc.T("help_help", nil)},
 		{"q  ctrl+c", m.loc.T("help_quit", nil)},
 	}
