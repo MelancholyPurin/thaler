@@ -237,3 +237,33 @@ func Test_PayeeReport(t *testing.T) {
 		})
 	}
 }
+
+func Test_PayeeReport_Share(t *testing.T) {
+	tcs := []struct {
+		name  string
+		total int64
+		payee int64
+		want  SavingsRate
+	}{
+		{name: "a quarter", total: 400, payee: 100, want: SavingsRate{2500, true}},
+		{name: "all", total: 400, payee: 400, want: SavingsRate{10000, true}},
+		{name: "to the hundredth, a half up", total: 32, payee: 1, want: SavingsRate{313, true}},
+		{name: "a refund is a negative share", total: 400, payee: -40, want: SavingsRate{-1000, true}},
+		{name: "no total, no share", total: 0, payee: 100, want: SavingsRate{}},
+		{name: "a refund overall, no share", total: -100, payee: -100, want: SavingsRate{}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			r := PayeeReport{Total: eur(tc.total)}
+
+			// when
+			got := r.Share(PayeeSpending{Amount: eur(tc.payee)})
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("Share mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

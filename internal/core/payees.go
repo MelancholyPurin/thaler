@@ -80,3 +80,9 @@ func (s *Local) PayeeReport(ctx context.Context, req PayeeRequest) (PayeeReport,
 	out.Missing = sortedCurrencies(missing)
 	return out, nil
 }
+
+// Share is the part of the report's total that p took, in basis points; it is not known
+// when the total is nothing or less (a refund overall), as for a SavingsRate.
+func (r PayeeReport) Share(p PayeeSpending) SavingsRate {
+	return savingsRate(p.Amount.Minor, r.Total.Minor)
+}
