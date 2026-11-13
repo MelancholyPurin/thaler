@@ -119,6 +119,11 @@ func Test_exportScreen(t *testing.T) {
 			shows: []string{"Payees · Nov 2025 – Oct 2026", "thaler-payees-2025-11-2026-10.csv"},
 		},
 		{
+			name:  "the net worth",
+			keys:  "R tab tab tab e",
+			shows: []string{"Net worth · Nov 2025 – Oct 2026", "thaler-networth-2025-11-2026-10.csv"},
+		},
+		{
 			name:  "the months of a chosen range",
 			keys:  "R r text:2026-09 enter text:2026-10 enter e",
 			shows: []string{"Spending by category · Sep 2026 – Oct 2026", "thaler-categories-2026-09-2026-10.csv"},
@@ -199,6 +204,16 @@ func Test_exportScreen_saves(t *testing.T) {
 				"REWE,EUR,30.00,41.67,2\n" +
 				"Kino,EUR,12.00,16.67,1\n",
 			shows: []string{"Saved Payees as CSV: "},
+		},
+		{
+			name: "net worth at the end of each month",
+			keys: "R tab tab tab r text:2026-08 enter text:2026-10 enter e",
+			file: "networth.csv",
+			want: "month,currency,net_worth\n" +
+				"2026-08,EUR,0.00\n" +
+				"2026-09,EUR,-30.00\n" +
+				"2026-10,EUR,-72.00\n",
+			shows: []string{"Saved Net worth as CSV: "},
 		},
 		{
 			name: "the months on show, when no range was chosen",

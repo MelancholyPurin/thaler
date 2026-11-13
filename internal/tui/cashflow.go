@@ -64,24 +64,25 @@ func (m *Model) signedAmount(v ledger.Money) string {
 	return m.loc.Amount(v)
 }
 
-// scrollCashFlow handles the keys of the income report, which shows the newest months
-// first and goes back through the older ones.
-func (m *Model) scrollCashFlow(key string, page int) {
+// scrollMonths handles the keys of a report that shows the newest months first and goes
+// back through the older ones: back is how many months it is scrolled back, n how many
+// there are.
+func scrollMonths(back *int, n int, key string, page int) {
 	switch key {
 	case "up", "k":
-		m.cfBack++
+		*back++
 	case "down", "j":
-		m.cfBack--
+		*back--
 	case "pgup", "ctrl+u":
-		m.cfBack += max(1, page-1)
+		*back += max(1, page-1)
 	case "pgdown", "ctrl+d":
-		m.cfBack -= max(1, page-1)
+		*back -= max(1, page-1)
 	case "home", "g":
-		m.cfBack = len(m.cashFlow.Months)
+		*back = n
 	case "end", "G":
-		m.cfBack = 0
+		*back = 0
 	}
-	m.cfBack = max(m.cfBack, 0)
+	*back = max(*back, 0)
 }
 
 // cashFlowBody is the income report: a line for each month, then the total.

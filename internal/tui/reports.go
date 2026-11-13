@@ -24,6 +24,9 @@ import (
 //
 // Payees: a line for each payee, the one that took most first, with a bar, what it
 // took, its share of the spending and how many transactions that was.
+//
+// Net worth: a line for each month with what the accounts were worth at the end of it,
+// how much that changed from the month before, and a bar.
 
 // reportKind says which report the screen shows.
 type reportKind int
@@ -32,6 +35,7 @@ const (
 	reportSpending reportKind = iota
 	reportCashFlow
 	reportPayees
+	reportNetWorth
 	numReports
 )
 
@@ -129,7 +133,10 @@ func (m *Model) refreshReports() (err error) {
 	if m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{From: from, To: to, RateDate: rateDate}); err != nil {
 		return err
 	}
-	m.payeeRank, err = m.svc.PayeeReport(m.ctx, core.PayeeRequest{From: from, To: to, RateDate: rateDate, Limit: payeeLimit})
+	if m.payeeRank, err = m.svc.PayeeReport(m.ctx, core.PayeeRequest{From: from, To: to, RateDate: rateDate, Limit: payeeLimit}); err != nil {
+		return err
+	}
+	m.worthHistory, err = m.svc.NetWorthReport(m.ctx, core.NetWorthRequest{From: from, To: to, RateDate: rateDate})
 	return err
 }
 
@@ -172,9 +179,11 @@ func (m *Model) updateReports(key string) tea.Cmd {
 	case key == "e":
 		return m.openExport()
 	case m.report == reportCashFlow:
-		m.scrollCashFlow(key, max(1, l.avail-2))
+		scrollMonths(&m.cfBack, len(m.cashFlow.Months), key, max(1, l.avail-2))
 	case m.report == reportPayees:
 		m.scrollPayees(key)
+	case m.report == reportNetWorth:
+		scrollMonths(&m.nwBack, len(m.worthHistory.Months), key, max(1, l.avail-5)) // the lines shown: the borders, the range, the heads and the hint take 5
 	default:
 		m.repList.navigate(key, len(m.spendEntries()), max(1, l.avail-2-m.reportHeader(l.leftW-2)))
 	}
@@ -221,6 +230,8 @@ func (m *Model) reportsBody(l layout) string {
 		return m.cashFlowBody(l)
 	case reportPayees:
 		return m.payeesBody(l)
+	case reportNetWorth:
+		return m.netWorthBody(l)
 	}
 	entries := m.spendEntries()
 	title := m.loc.T("report_spending", nil)

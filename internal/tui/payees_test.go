@@ -257,7 +257,7 @@ func Test_Update_payeeKeys(t *testing.T) {
 		{name: "G goes to the end, held inside the list", keys: "R tab tab G", want: observed{Report: reportPayees, Top: 101 - 12}},
 		{name: "g comes back", keys: "R tab tab G g", want: observed{Report: reportPayees}},
 		{name: "keys of the categories do not scroll the payees", keys: "R down down tab tab", want: observed{Report: reportPayees}},
-		{name: "the place is kept when the report is left", keys: "R tab tab down tab", want: observed{Top: 1}},
+		{name: "the place is kept when the report is left", keys: "R tab tab down tab tab", want: observed{Top: 1}},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
