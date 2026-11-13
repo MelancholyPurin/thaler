@@ -67,6 +67,7 @@ const (
 	modeSchedule             // creating or editing a schedule
 	modeDue                  // going through what is due
 	modeMinimum              // setting the lowest an account should fall
+	modeRange                // choosing the months the reports cover
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -141,6 +142,9 @@ type Model struct {
 	minimums     []core.MinimumBalance // the lowest each account should fall
 	lows         []core.LowBalance     // the accounts that would fall under theirs, the soonest first
 	minForm      *minimumForm          // the minimum popup while it is open
+	rng          *rangeForm            // the range popup while it is open
+	repFrom      string                // the first month of the range chosen for the reports, "" if none
+	repTo        string                // and the last; with neither, they follow the month on show
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
 	balances     bool                  // the Forecast shows the balances, not the schedules
 	balTop       int                   // first line of them shown
@@ -414,6 +418,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDue(msg)
 		case modeMinimum:
 			return m.updateMinimum(msg)
+		case modeRange:
+			return m.updateRange(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -476,7 +482,7 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case screenForecast:
 		return m, m.updateForecast(key)
 	case screenReports:
-		m.updateReports(key)
+		return m, m.updateReports(key)
 	}
 	return m, nil
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/melancholypurin/thaler/internal/core"
@@ -66,6 +67,35 @@ func sparkline(values []int64) string {
 	return b.String()
 }
 
+// sparkCells is the most cells a small chart has. A longer range is drawn with each
+// cell standing for several months, as many as the range needs.
+const sparkCells = 12
+
+// bucketed cuts values into at most cells groups of neighbours and gives the mean of
+// each, rounded away from zero so that a month with something in it is never drawn as
+// one with nothing.
+func bucketed(values []int64, cells int) []int64 {
+	n := len(values)
+	if n <= cells {
+		return values
+	}
+	out := make([]int64, cells)
+	for i := range out {
+		from, to := i*n/cells, (i+1)*n/cells
+		var sum int64
+		for _, v := range values[from:to] {
+			sum += v
+		}
+		count := int64(to - from)
+		if sum < 0 {
+			out[i] = (sum - count + 1) / count
+		} else {
+			out[i] = (sum + count - 1) / count
+		}
+	}
+	return out
+}
+
 // barEighths are the partial cells at the end of a bar, from an eighth to seven.
 var barEighths = []rune("▏▎▍▌▋▊▉")
 
@@ -88,16 +118,18 @@ func bar(v, top int64, width int) string {
 	return out
 }
 
-// refreshReports loads the figures of the reports for the 12 months up to the one on show.
+// refreshReports loads the figures of the reports for their range: the 12 months up to
+// the one on show, or the range chosen (range.go).
 func (m *Model) refreshReports() (err error) {
 	rateDate := m.now().Format(ledger.DateLayout)
-	if m.spending, err = m.svc.SpendingReport(m.ctx, core.SpendingRequest{To: m.period, RateDate: rateDate}); err != nil {
+	from, to := m.reportMonths()
+	if m.spending, err = m.svc.SpendingReport(m.ctx, core.SpendingRequest{From: from, To: to, RateDate: rateDate}); err != nil {
 		return err
 	}
-	if m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{To: m.period, RateDate: rateDate}); err != nil {
+	if m.cashFlow, err = m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{From: from, To: to, RateDate: rateDate}); err != nil {
 		return err
 	}
-	m.payeeRank, err = m.svc.PayeeReport(m.ctx, core.PayeeRequest{To: m.period, RateDate: rateDate, Limit: payeeLimit})
+	m.payeeRank, err = m.svc.PayeeReport(m.ctx, core.PayeeRequest{From: from, To: to, RateDate: rateDate, Limit: payeeLimit})
 	return err
 }
 
@@ -128,13 +160,15 @@ func minors(ms []ledger.Money) []int64 {
 	return out
 }
 
-// updateReports handles the keys of the Reports screen: the next report, and moving
-// through the one on show.
-func (m *Model) updateReports(key string) {
+// updateReports handles the keys of the Reports screen: the next report, choosing the
+// range, and moving through the one on show.
+func (m *Model) updateReports(key string) tea.Cmd {
 	l := m.layout()
 	switch {
 	case key == "tab":
 		m.report = (m.report + 1) % numReports
+	case key == "r":
+		return m.openRange()
 	case m.report == reportCashFlow:
 		m.scrollCashFlow(key, max(1, l.avail-2))
 	case m.report == reportPayees:
@@ -142,6 +176,7 @@ func (m *Model) updateReports(key string) {
 	default:
 		m.repList.navigate(key, len(m.spendEntries()), max(1, l.avail-2-m.reportHeader(l.leftW-2)))
 	}
+	return nil
 }
 
 // monthLabel is a month of the report as the language writes it.
@@ -165,7 +200,11 @@ func (m *Model) reportRange(iw int, months []string, missing []ledger.Currency) 
 	if len(months) == 0 {
 		return nil
 	}
-	text := m.loc.T("report_range", map[string]any{"From": m.monthLabel(months[0]), "To": m.monthLabel(months[len(months)-1]), "Currency": m.spending.Base})
+	args := map[string]any{"From": m.monthLabel(months[0]), "To": m.monthLabel(months[len(months)-1]), "Currency": m.spending.Base}
+	text := m.loc.T("report_range", args)
+	if m.customRange() {
+		text = m.loc.T("report_range_chosen", args)
+	}
 	lines := wrapped(" "+text, iw, dim)
 	for _, c := range missing {
 		lines = append(lines, wrapped(" "+m.loc.T("budget_no_rate", map[string]any{"From": c, "To": m.spending.Base}), iw, warn)...)
@@ -192,11 +231,12 @@ func (m *Model) reportsBody(l layout) string {
 	h := max(l.avail-2-len(head), 1)
 	m.repList.clamp(len(entries), h)
 
-	nameW := max(iw-1-len(m.spending.Months)-1-reportTotalW, 6)
+	cells := min(len(m.spending.Months), sparkCells)
+	nameW := max(iw-1-cells-1-reportTotalW, 6)
 	lines := head
 	for i := m.repList.offset; i < min(m.repList.offset+h, len(entries)); i++ {
 		e := entries[i]
-		line := " " + fit(e.name, nameW-1) + " " + sparkline(minors(e.months)) + " " + fitRight(m.loc.Amount(e.total), reportTotalW)
+		line := " " + fit(e.name, nameW-1) + " " + sparkline(bucketed(minors(e.months), sparkCells)) + " " + fitRight(m.loc.Amount(e.total), reportTotalW)
 		if i == m.repList.cursor {
 			line = selFocused.Render(fit(line, iw))
 		} else {
@@ -225,9 +265,20 @@ func (m *Model) reportDetail(l layout, e spendEntry) string {
 	for _, v := range e.months {
 		top = max(top, max(v.Minor, -v.Minor))
 	}
+	// A range too long for the pane shows its newest months, and says how many are left
+	// out; the total and the average stay in view.
+	first := 0
 	var lines []string
-	for i, month := range m.spending.Months {
-		v := e.months[i]
+	if room := l.avail - 2 - 3; len(m.spending.Months) > room && room >= 1 { // 3: the rule, the total, the average
+		left := func(shown int) []string {
+			return wrapped(m.loc.T("report_earlier", map[string]any{"Count": len(m.spending.Months) - shown}), iw, dim)
+		}
+		shown := max(room-len(left(room-1)), 0)
+		lines = left(shown)
+		first = len(m.spending.Months) - shown
+	}
+	for i := first; i < len(m.spending.Months); i++ {
+		month, v := m.spending.Months[i], e.months[i]
 		b := bar(v.Minor, top, barW)
 		lines = append(lines, dim.Render(fit(m.monthLabel(month), labelW))+" "+accent.Render(b)+strings.Repeat(" ", barW-lipgloss.Width(b))+" "+fitRight(m.loc.Amount(v), reportAmountW))
 	}
