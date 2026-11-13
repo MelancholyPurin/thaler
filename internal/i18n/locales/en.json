@@ -733,7 +733,7 @@
   "report_total": "Total",
   "report_per_month": "Per month",
   "report_nothing": "Nothing was spent in these months.",
-  "help_reports": "Reports: tab switches between spending by category, income against spending and the payees; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown; r chooses another range of months",
+  "help_reports": "Reports: tab switches between spending by category, income against spending and the payees; ↑ ↓ choose a category or scroll the months and payees; [ ] move the 12 months shown; r chooses another range of months; e saves the report on show as a CSV file",
   "report_cashflow": "Income against spending",
   "report_income": "Income",
   "report_spent": "Spent",
@@ -759,5 +759,14 @@
     "other": "{{.Count}} earlier months not shown"
   },
   "hint_range": "r range",
+  "label_report": "Report",
+  "export_title": "Save as CSV",
+  "export_what": "{{.Report}} · {{.From}} – {{.To}}",
+  "export_hint": "A plain CSV for a spreadsheet: amounts in {{.Currency}} with a point, months as YYYY-MM, English column names. A file that is already there is not overwritten.",
+  "export_footer": "enter save · esc cancel",
+  "export_saved": "Saved {{.Report}} as CSV: {{.Path}}",
+  "export_say_where": "say where to save the report",
+  "export_exists": "{{.Path}} is already there: give another name",
+  "hint_export": "e CSV",
   "hint_tab_report": "tab report"
 }
