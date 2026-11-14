@@ -198,6 +198,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 		a.scheduleCmd(),
 		a.forecastCmd(),
 		a.reportCmd(),
+		a.exportCmd(),
 	)
 	root.AddCommand(cli)
 	return root

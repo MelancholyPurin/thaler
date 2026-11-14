@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,27 +150,6 @@ func (m *Model) reportCSV(kind reportKind) (data []byte, missing []ledger.Curren
 	return data, r.Missing, err
 }
 
-// writeNew writes data to a file that is not there yet, readable by you alone as the
-// figures are your money's. A write that fails leaves no file behind.
-func writeNew(path string, data []byte) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return coded.New("export_exists", map[string]any{"Path": path})
-	}
-	if err != nil {
-		return err
-	}
-	if _, err = file.Write(data); err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return err
-	}
-	if err = file.Close(); err != nil {
-		_ = os.Remove(path)
-	}
-	return err
-}
-
 // saveExport checks where, writes the file and says so.
 func (m *Model) saveExport() {
 	f := m.exp
@@ -185,7 +163,7 @@ func (m *Model) saveExport() {
 		f.err = m.errText(err)
 		return
 	}
-	if err = writeNew(dest, data); err != nil {
+	if err = core.WriteNewFile(dest, data); err != nil {
 		f.err = m.errText(err)
 		return
 	}

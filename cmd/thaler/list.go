@@ -23,19 +23,11 @@ func (a *app) listCmd() *cobra.Command {
 				return err
 			}
 			filter := core.TxFilter{Account: account, Limit: limit}
-			if from != "" {
-				d, err := ledger.ParseDate(from)
-				if err != nil {
-					return err
-				}
-				filter.From = d.Format(ledger.DateLayout)
+			if filter.From, err = isoDateFlag(from); err != nil {
+				return err
 			}
-			if to != "" {
-				d, err := ledger.ParseDate(to)
-				if err != nil {
-					return err
-				}
-				filter.To = d.Format(ledger.DateLayout)
+			if filter.To, err = isoDateFlag(to); err != nil {
+				return err
 			}
 			txs, err := svc.ListTransactions(ctx, filter)
 			if err != nil {
@@ -79,4 +71,16 @@ func (a *app) listCmd() *cobra.Command {
 	cmd.Flags().StringVar(&to, "to", "", "last day to include (YYYY-MM-DD)")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 30, "show only the newest N transactions (0 = all)")
 	return cmd
+}
+
+// isoDateFlag is a --from or --to value as YYYY-MM-DD; empty stays empty.
+func isoDateFlag(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	d, err := ledger.ParseDate(s)
+	if err != nil {
+		return "", err
+	}
+	return d.Format(ledger.DateLayout), nil
 }
