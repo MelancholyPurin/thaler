@@ -28,6 +28,9 @@ Without --yes nothing is removed: the files that would be are listed. The number
 to keep is --keep, or keep_backups in config.toml (default 10).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if wantsJSON(cmd) && yes {
+				return fmt.Errorf("--json only lists: run prune --yes without it to remove the files")
+			}
 			// Not a.service(): this only looks at files, and has to work when the
 			// database does not open.
 			if !cmd.Flags().Changed("keep") {
@@ -37,6 +40,9 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 				}
 				keep = cfg.KeepCount()
 				if keep == 0 {
+					if wantsJSON(cmd) {
+						return printJSON(cmd, core.PrunePlan{})
+					}
 					fmt.Fprintln(cmd.OutOrStdout(), "keep_backups is 0 in config.toml: all backups are kept. Say how many to keep with --keep N.")
 					return nil
 				}
@@ -44,6 +50,9 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			plan, err := core.PlanPrune(a.dbPath(), keep)
 			if err != nil {
 				return err
+			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, plan)
 			}
 			out := cmd.OutOrStdout()
 			if plan.Count() == 0 {
@@ -63,6 +72,7 @@ to keep is --keep, or keep_backups in config.toml (default 10).`,
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.Flags().IntVar(&keep, "keep", 0, "how many of the newest backups to keep in each folder (default: keep_backups in config.toml, else 10)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "remove them, instead of only listing them")
 	return cmd

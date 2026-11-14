@@ -55,10 +55,17 @@ Nothing is booked.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, struct {
+					Projection  core.Projection
+					LowBalances []core.LowBalance
+				}{p, low})
+			}
 			printProjection(cmd, p, low)
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.Flags().StringVar(&until, "until", "", "look up to this date instead of 90 days ahead, YYYY-MM-DD or DD.MM.YYYY")
 	return cmd
 }

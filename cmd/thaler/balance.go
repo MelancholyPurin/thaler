@@ -34,6 +34,9 @@ equity accounts are listed too (income and equity show as negative credits).`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, report)
+			}
 			if len(report.Lines) == 0 {
 				fmt.Fprintln(out, "No balances yet. Create an account and add or import transactions (see README).")
 				return nil
@@ -54,6 +57,7 @@ equity accounts are listed too (income and equity show as negative credits).`,
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.Flags().StringVar(&asOf, "as-of", "", "report balances as of this day (YYYY-MM-DD, default: today)")
 	cmd.Flags().BoolVar(&all, "all", false, "also list income, expense and equity accounts")
 	return cmd

@@ -153,6 +153,9 @@ rate on or before that date is used.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, rates)
+			}
 			out := cmd.OutOrStdout()
 			if len(rates) == 0 {
 				fmt.Fprintln(out, "No exchange rates yet. Add one with: thaler cli rate set USD EUR 0.92")
@@ -165,6 +168,7 @@ rate on or before that date is used.`,
 		},
 	}
 
+	addJSONFlag(list)
 	root.AddCommand(set, list)
 	return root
 }
