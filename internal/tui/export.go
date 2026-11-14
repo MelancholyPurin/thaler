@@ -114,40 +114,18 @@ func (m *Model) exportTarget(typed string) (string, error) {
 	return dest, nil
 }
 
-// reportCSV asks the service for the report on show, for the months it covers, and
-// writes it as CSV. It also says which currencies the report left out.
+// reportKinds says which of the service's reports each report of the screen is.
+var reportKinds = map[reportKind]core.ReportKind{
+	reportSpending: core.ReportSpending, reportCashFlow: core.ReportCashFlow,
+	reportPayees: core.ReportPayees, reportNetWorth: core.ReportNetWorth,
+}
+
+// reportCSV asks the service for the report on show, for the months it covers, as CSV. It
+// also says which currencies the report left out.
 func (m *Model) reportCSV(kind reportKind) (data []byte, missing []ledger.Currency, err error) {
 	from, to := m.reportMonths()
-	rateDate := m.now().Format(ledger.DateLayout)
-	switch kind {
-	case reportCashFlow:
-		r, err := m.svc.CashFlowReport(m.ctx, core.CashFlowRequest{From: from, To: to, RateDate: rateDate})
-		if err != nil {
-			return nil, nil, err
-		}
-		data, err = core.CashFlowCSV(r)
-		return data, r.Missing, err
-	case reportPayees:
-		r, err := m.svc.PayeeReport(m.ctx, core.PayeeRequest{From: from, To: to, RateDate: rateDate})
-		if err != nil {
-			return nil, nil, err
-		}
-		data, err = core.PayeesCSV(r)
-		return data, r.Missing, err
-	case reportNetWorth:
-		r, err := m.svc.NetWorthReport(m.ctx, core.NetWorthRequest{From: from, To: to, RateDate: rateDate})
-		if err != nil {
-			return nil, nil, err
-		}
-		data, err = core.NetWorthCSV(r)
-		return data, r.Missing, err
-	}
-	r, err := m.svc.SpendingReport(m.ctx, core.SpendingRequest{From: from, To: to, RateDate: rateDate})
-	if err != nil {
-		return nil, nil, err
-	}
-	data, err = core.SpendingCSV(r)
-	return data, r.Missing, err
+	file, err := m.svc.ReportCSV(m.ctx, core.ReportCSVRequest{Report: reportKinds[kind], From: from, To: to, RateDate: m.now().Format(ledger.DateLayout)})
+	return file.Data, file.Missing, err
 }
 
 // saveExport checks where, writes the file and says so.
