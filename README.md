@@ -274,6 +274,8 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 
 Write negative amounts as `--amount=-12.50`. Amounts accept `12.50`, `12,50` and `1.234,56`; ambiguous input such as `1,234` is rejected rather than guessed.
 
+**For scripts: `--json`.** Every listing (`account list`, `account minimum`, `list`, `balance`, `budget`, `rate list`, `schedule list`, `schedule due`, `forecast`, `prune`, and the four `report`s) takes `--json`, which prints one JSON document instead of the table and nothing else (what a table says in a warning, such as a currency with no exchange rate, is in the data as a `missing` list; `prune --json` only lists, it refuses `--yes`). The document is what the service answered, written the same way everywhere: objects have `snake_case` keys in a fixed order (`spent_total`, `schedule_id`), lists are `[]` when empty and never `null`, an amount is `{"amount": "-12.50", "currency": "EUR"}` with the amount as text with a point (never a number, so no digit is lost), days are `YYYY-MM-DD`, months `YYYY-MM`, moments RFC 3339 in UTC, and an exchange rate is its exact decimal as text. `thaler cli export` writes transactions as CSV.
+
 ## Layout
 
 ```
