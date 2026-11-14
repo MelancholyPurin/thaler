@@ -206,7 +206,7 @@ The scriptable surface (`thaler cli ...`), for cron and one-off jobs.
 - [x] `CLI-8` Base currency and exchange rates
 - [x] `CLI-9` Verify the ledger is consistent
 - [ ] `CLI-10` Machine-readable output for every listing
-- [ ] `CLI-11` Export transactions as CSV
+- [x] `CLI-11` Export transactions as CSV (`thaler cli export [DEST]`: a line for each posting of the transactions chosen by `--account`, `--from` and `--to`, oldest first, with the transaction's id, date, payee and description, the account, and the amount as a plain decimal with its currency, so that a split or a transfer is all there and each transaction adds up to nothing; to standard output, or to a new file readable by you alone that is never overwritten, `WriteNewFile` in the service package, which the interface's CSV save now shares; `TransactionsCSV` makes the file; names a spreadsheet would read as a formula get a `'`)
 - [x] `CLI-12` Set and show budget targets (`thaler cli budget`, `budget set`, `budget clear`; switching carry-over on and copying a month's targets stay in the interface)
 - [x] `CLI-16` Show planned income and what is still unassigned in `thaler cli budget` (an Income table and an "Unassigned" line, only for a month with income planned)
 - [x] `CLI-13` Manage schedules and confirm what is due (`thaler cli schedule`: add, list, edit, delete, due, confirm, skip; a schedule has one account and one category here, as `add` has)

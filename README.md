@@ -256,6 +256,7 @@ Run without arguments, `thaler` opens the terminal UI (see above). Everything el
 | `thaler cli transfer --from A --to B --amount N [--to-amount M]` | between your own accounts, also across currencies |
 | `thaler cli import FILE -a ACCOUNT [--profile P] [--dry-run]` | bank CSV import |
 | `thaler cli list [-a ACCOUNT] [--from D] [--to D] [-n 30]` | transactions, newest last |
+| `thaler cli export [DEST] [-a ACCOUNT] [--from D] [--to D]` | the transactions as CSV for a spreadsheet, oldest first, a line for each posting (id, date, payee, description, account, amount, currency; English column names, amounts as decimals with a point); to standard output, or to a new file readable by you alone that is never overwritten |
 | `thaler cli recategorize [--dry-run]` | apply the config.toml rules to transactions still uncategorized |
 | `thaler cli category set ID CATEGORY` | move one transaction to another category (created if new) |
 | `thaler cli balance [--as-of D] [--all]` | balances and net worth |
