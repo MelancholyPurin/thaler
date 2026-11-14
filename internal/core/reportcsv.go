@@ -2,10 +2,12 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"strconv"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -113,4 +115,37 @@ func moneyTexts(ms []ledger.Money) []string {
 		out[i] = m.Decimal()
 	}
 	return out
+}
+
+// ReportCSV is the report asked for as a CSV file, for the months asked for. The payees
+// file holds every payee, not a limited few. A report that is not one of ReportKinds is
+// refused with unknown_report.
+func (s *Local) ReportCSV(ctx context.Context, req ReportCSVRequest) (ReportCSV, error) {
+	switch req.Report {
+	case ReportSpending:
+		r, err := s.SpendingReport(ctx, SpendingRequest{From: req.From, To: req.To, RateDate: req.RateDate})
+		return csvFile(r.Missing, err, func() ([]byte, error) { return SpendingCSV(r) })
+	case ReportCashFlow:
+		r, err := s.CashFlowReport(ctx, CashFlowRequest{From: req.From, To: req.To, RateDate: req.RateDate})
+		return csvFile(r.Missing, err, func() ([]byte, error) { return CashFlowCSV(r) })
+	case ReportPayees:
+		r, err := s.PayeeReport(ctx, PayeeRequest{From: req.From, To: req.To, RateDate: req.RateDate})
+		return csvFile(r.Missing, err, func() ([]byte, error) { return PayeesCSV(r) })
+	case ReportNetWorth:
+		r, err := s.NetWorthReport(ctx, NetWorthRequest{From: req.From, To: req.To, RateDate: req.RateDate})
+		return csvFile(r.Missing, err, func() ([]byte, error) { return NetWorthCSV(r) })
+	}
+	return ReportCSV{}, coded.New("unknown_report", map[string]any{"Report": string(req.Report)})
+}
+
+// csvFile is a report's CSV once the report is made: err is what making it said.
+func csvFile(missing []ledger.Currency, err error, encode func() ([]byte, error)) (ReportCSV, error) {
+	if err != nil {
+		return ReportCSV{}, err
+	}
+	data, err := encode()
+	if err != nil {
+		return ReportCSV{}, err
+	}
+	return ReportCSV{Data: data, Missing: missing}, nil
 }

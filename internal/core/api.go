@@ -95,6 +95,8 @@ type Service interface {
 	PayeeReport(ctx context.Context, req PayeeRequest) (PayeeReport, error)
 	// NetWorthReport is the net worth at the end of each month of a range.
 	NetWorthReport(ctx context.Context, req NetWorthRequest) (NetWorthReport, error)
+	// ReportCSV is one of those reports, for a range of months, as a CSV file.
+	ReportCSV(ctx context.Context, req ReportCSVRequest) (ReportCSV, error)
 
 	// MonthBudget is what each expense category spent in a month against its
 	// target, and what is left.
@@ -844,6 +846,35 @@ type NetWorthReport struct {
 	Base    ledger.Currency
 	Months  []NetWorthMonth   // oldest first, every month of the range
 	Missing []ledger.Currency // no exchange rate at all, so left out
+}
+
+// ReportKind names a report that can be had as CSV.
+type ReportKind string
+
+const (
+	ReportSpending ReportKind = "spending" // SpendingReport
+	ReportCashFlow ReportKind = "cashflow" // CashFlowReport
+	ReportPayees   ReportKind = "payees"   // PayeeReport, every payee
+	ReportNetWorth ReportKind = "networth" // NetWorthReport
+)
+
+// ReportKinds are the reports that can be had as CSV, in the order the screens show them.
+var ReportKinds = []ReportKind{ReportSpending, ReportCashFlow, ReportPayees, ReportNetWorth}
+
+// ReportCSVRequest asks for a report as CSV. From, To and RateDate are those of a
+// SpendingRequest, and the report covers the same months.
+type ReportCSVRequest struct {
+	Report   ReportKind
+	From, To string
+	RateDate string
+}
+
+// ReportCSV is the answer to a ReportCSVRequest: the file, in the form of the CSV
+// functions (SpendingCSV and the others), and the currencies the report left out for
+// want of an exchange rate, which the file does not say.
+type ReportCSV struct {
+	Data    []byte
+	Missing []ledger.Currency
 }
 
 // ---- projection ------------------------------------------------------------
