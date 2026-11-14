@@ -727,6 +727,7 @@
   "help_scope": "Previsión: a mira una cuenta, la siguiente cada vez, y todas de nuevo tras la última: las programaciones que la mueven, sus saldos y su aviso",
   "spending_backwards": "el informe no puede empezar en {{.From}}: es posterior a su final ({{.To}})",
   "spending_too_long": "un informe abarca como máximo {{.Max}} meses",
+  "unknown_report": "informe desconocido {{.Report}}: use spending, cashflow, payees o networth",
   "report_spending": "Gasto por categoría",
   "report_range": "{{.From}} – {{.To}} · {{.Currency}}",
   "report_all_spending": "Todo el gasto",

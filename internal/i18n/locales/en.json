@@ -727,6 +727,7 @@
   "help_scope": "Forecast: a looks at one account, the next each time, and at all of them again after the last: the schedules that move it, its balances and its warning",
   "spending_backwards": "the report cannot start in {{.From}}: that is after it ends ({{.To}})",
   "spending_too_long": "a report covers at most {{.Max}} months",
+  "unknown_report": "unknown report {{.Report}}: use spending, cashflow, payees or networth",
   "report_spending": "Spending by category",
   "report_range": "{{.From}} – {{.To}} · {{.Currency}}",
   "report_all_spending": "All spending",
