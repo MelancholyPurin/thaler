@@ -230,6 +230,12 @@ func Test_View_fits(t *testing.T) {
 		{name: "reports, save as CSV, payees, a chosen range", keys: "R tab tab r text:2020-01 enter enter e"},
 		{name: "reports, save as CSV, net worth", keys: "R tab tab tab e"},
 		{name: "reports, back to the categories", keys: "R tab tab tab tab"},
+		{name: "categories", keys: "K"},
+		{name: "categories, the new name", keys: "K r"},
+		{name: "categories, a name that is taken", keys: "K r ctrl+u raw:Expenses:Groceries enter"},
+		{name: "categories, where to merge", keys: "K m"},
+		{name: "categories, the question", keys: "K m enter"},
+		{name: "categories, nowhere to merge", keys: "K down down down m"},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.

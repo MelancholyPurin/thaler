@@ -780,5 +780,33 @@
   "report_networth": "Net worth",
   "report_change": "Change",
   "report_worth_hint": "Bar: net worth against the highest month; ▒ is below zero.",
+  "categories_title": "Categories",
+  "categories_footer": "↑/↓ · r rename · m merge · esc close",
+  "categories_none": "There are no categories yet",
+  "category_used": {
+    "one": "{{.Count}} transaction",
+    "other": "{{.Count}} transactions"
+  },
+  "label_new_name": "New name",
+  "category_rename_hint": "Type the whole name, such as Expenses:Dining. The categories below it are renamed with it; rules in config.toml are not changed.",
+  "category_rename_footer": "enter rename · esc back",
+  "category_type_name": "type the new name",
+  "category_no_other": "there is no other category of the same kind to merge it into",
+  "category_merge_into": "Merge {{.Name}} into:",
+  "category_merge_footer": "↑/↓ · enter choose · esc back",
+  "category_merge_confirm": {
+    "one": "Merge {{.From}} into {{.Into}}? Its transaction, schedules, targets and carry-over move there, and {{.From}} is removed. z cannot take this back.",
+    "other": "Merge {{.From}} into {{.Into}}? Its {{.Count}} transactions, schedules, targets and carry-over move there, and {{.From}} is removed. z cannot take this back."
+  },
+  "category_confirm_footer": "enter merge · esc back",
+  "category_renamed": "{{.From}} renamed to {{.To}}",
+  "category_merged": "{{.From}} merged into {{.Into}}",
+  "category_rules_left": {
+    "one": "{{.Count}} rule in config.toml still names {{.Name}}",
+    "other": "{{.Count}} rules in config.toml still name {{.Name}}"
+  },
+  "undid_rename": "{{.To}} is called {{.From}} again",
+  "hint_categories": "K categories",
+  "help_categories": "Categories: ↑ ↓ choose; r renames the category and those below it; m merges it into another of its kind, after asking (z cannot take a merge back); rules in config.toml are not changed",
   "hint_tab_report": "tab report"
 }

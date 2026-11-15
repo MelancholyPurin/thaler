@@ -50,25 +50,26 @@ type Options struct {
 type mode int
 
 const (
-	modeList     mode = iota // browsing the panels
-	modeFilter               // typing into the search box
-	modePick                 // choosing a category for the selected transaction
-	modeHelp                 // key reference popup
-	modeForm                 // adding or editing a transaction
-	modeConfirm              // asking before deleting a transaction
-	modeImport               // importing a bank export
-	modeAccount              // creating an account or setting its balance
-	modeTransfer             // moving money between two accounts
-	modeBackup               // writing a backup of the database
-	modeRestore              // putting a backup in place of the database
-	modePrune                // removing the oldest backups
-	modeLanguage             // choosing the language
-	modeTarget               // setting a category's target for the month
-	modeSchedule             // creating or editing a schedule
-	modeDue                  // going through what is due
-	modeMinimum              // setting the lowest an account should fall
-	modeRange                // choosing the months the reports cover
-	modeExport               // saving the report on show as a CSV file
+	modeList       mode = iota // browsing the panels
+	modeFilter                 // typing into the search box
+	modePick                   // choosing a category for the selected transaction
+	modeHelp                   // key reference popup
+	modeForm                   // adding or editing a transaction
+	modeConfirm                // asking before deleting a transaction
+	modeImport                 // importing a bank export
+	modeAccount                // creating an account or setting its balance
+	modeTransfer               // moving money between two accounts
+	modeBackup                 // writing a backup of the database
+	modeRestore                // putting a backup in place of the database
+	modePrune                  // removing the oldest backups
+	modeLanguage               // choosing the language
+	modeTarget                 // setting a category's target for the month
+	modeSchedule               // creating or editing a schedule
+	modeDue                    // going through what is due
+	modeMinimum                // setting the lowest an account should fall
+	modeRange                  // choosing the months the reports cover
+	modeExport                 // saving the report on show as a CSV file
+	modeCategories             // renaming or merging categories
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -145,6 +146,7 @@ type Model struct {
 	minForm      *minimumForm          // the minimum popup while it is open
 	rng          *rangeForm            // the range popup while it is open
 	exp          *exportForm           // the export popup while it is open
+	catForm      *categoryForm         // the categories popup while it is open
 	repFrom      string                // the first month of the range chosen for the reports, "" if none
 	repTo        string                // and the last; with neither, they follow the month on show
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
@@ -426,6 +428,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRange(msg)
 		case modeExport:
 			return m.updateExport(msg)
+		case modeCategories:
+			return m.updateCategories(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -445,6 +449,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "C":
 		return m, m.editConfig()
+	case "K":
+		return m, m.openCategories()
 	case "S":
 		return m, m.openBackup()
 	case "ctrl+r":

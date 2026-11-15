@@ -780,5 +780,33 @@
   "report_networth": "Nettovermögen",
   "report_change": "Änderung",
   "report_worth_hint": "Balken: Nettovermögen im Vergleich zum höchsten Monat; ▒ liegt unter null.",
+  "categories_title": "Kategorien",
+  "categories_footer": "↑/↓ · r umbenennen · m zusammenführen · esc schließen",
+  "categories_none": "Es gibt noch keine Kategorien",
+  "category_used": {
+    "one": "{{.Count}} Buchung",
+    "other": "{{.Count}} Buchungen"
+  },
+  "label_new_name": "Neuer Name",
+  "category_rename_hint": "Den ganzen Namen eingeben, etwa Expenses:Dining. Die Kategorien darunter werden mit umbenannt; Regeln in config.toml bleiben unverändert.",
+  "category_rename_footer": "enter umbenennen · esc zurück",
+  "category_type_name": "den neuen Namen eingeben",
+  "category_no_other": "es gibt keine andere Kategorie der gleichen Art, mit der sie sich zusammenführen ließe",
+  "category_merge_into": "{{.Name}} zusammenführen mit:",
+  "category_merge_footer": "↑/↓ · enter wählen · esc zurück",
+  "category_merge_confirm": {
+    "one": "{{.From}} mit {{.Into}} zusammenführen? Ihre Buchung, Daueraufträge, Ziele und Überträge gehen nach {{.Into}}, und {{.From}} wird entfernt. z kann das nicht rückgängig machen.",
+    "other": "{{.From}} mit {{.Into}} zusammenführen? Ihre {{.Count}} Buchungen, Daueraufträge, Ziele und Überträge gehen nach {{.Into}}, und {{.From}} wird entfernt. z kann das nicht rückgängig machen."
+  },
+  "category_confirm_footer": "enter zusammenführen · esc zurück",
+  "category_renamed": "{{.From}} umbenannt in {{.To}}",
+  "category_merged": "{{.From}} mit {{.Into}} zusammengeführt",
+  "category_rules_left": {
+    "one": "{{.Count}} Regel in config.toml nennt noch {{.Name}}",
+    "other": "{{.Count}} Regeln in config.toml nennen noch {{.Name}}"
+  },
+  "undid_rename": "{{.To}} heißt wieder {{.From}}",
+  "hint_categories": "K Kategorien",
+  "help_categories": "Kategorien: ↑ ↓ wählen; r benennt die Kategorie und die darunter um; m führt sie nach Rückfrage mit einer anderen der gleichen Art zusammen (z macht eine Zusammenführung nicht rückgängig); Regeln in config.toml bleiben unverändert",
   "hint_tab_report": "tab Bericht"
 }

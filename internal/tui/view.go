@@ -60,6 +60,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.rangePopup())
 	case modeExport:
 		screen = m.centerPopup(screen, m.exportPopup())
+	case modeCategories:
+		screen = m.centerPopup(screen, m.categoriesPopup())
 	case modeTarget:
 		screen = m.centerPopup(screen, m.targetPopup())
 	}
@@ -301,9 +303,9 @@ func (m *Model) hintItems() (hints, tail []string) {
 	tail = []string{m.loc.T("hint_help", nil), m.loc.T("hint_quit", nil)}
 	switch {
 	case m.screen == screenBudget && m.catsFocused():
-		return []string{m.loc.T("hint_category", nil), m.loc.T("hint_enter_transactions", nil), m.loc.T("hint_target", nil), m.loc.T("hint_tab_months", nil), m.loc.T("hint_step", nil)}, tail
+		return []string{m.loc.T("hint_category", nil), m.loc.T("hint_enter_transactions", nil), m.loc.T("hint_target", nil), m.loc.T("hint_categories", nil), m.loc.T("hint_tab_months", nil), m.loc.T("hint_step", nil)}, tail
 	case m.screen == screenBudget:
-		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_tab_categories", nil), m.loc.T("hint_target", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
+		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_tab_categories", nil), m.loc.T("hint_target", nil), m.loc.T("hint_categories", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
 	case m.screen == screenForecast:
 		if m.balances {
 			return []string{m.loc.T("hint_scroll", nil), m.loc.T("hint_tab_schedules", nil), m.loc.T("hint_account", nil), m.loc.T("hint_minimum", nil), m.loc.T("hint_screen_ledger", nil), m.loc.T("hint_screen_budget", nil)}, tail
@@ -324,7 +326,7 @@ func (m *Model) hintItems() (hints, tail []string) {
 	case paneAccounts:
 		return []string{m.loc.T("hint_pick_account", nil), m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_balance", nil), m.loc.T("hint_new", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	}
-	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil)}
+	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil), m.loc.T("hint_categories", nil)}
 	if m.onlyCategory != "" {
 		hints = append([]string{m.loc.T("hint_esc_all", nil)}, hints...)
 	}
@@ -435,6 +437,7 @@ func (m *Model) helpPopup() string {
 		{"ctrl+p", m.loc.T("help_prune", nil)},
 		{"ctrl+l", m.loc.T("help_language", nil)},
 		{"C", m.loc.T("help_config", nil)},
+		{"K", m.loc.T("help_categories", nil)},
 		{"F", m.loc.T("help_forecast", nil)},
 		{"n  e  p", m.loc.T("help_schedule", nil)},
 		{"enter", m.loc.T("help_due", nil)},
