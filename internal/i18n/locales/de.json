@@ -844,5 +844,17 @@
     "other": "Kategorisierung von {{.Count}} Buchungen rückgängig gemacht"
   },
   "rules_apply_nothing": "Es gibt keine Buchungen ohne Kategorie",
-  "pick_similar_payee": "ähnlicher Empfänger"
+  "pick_similar_payee": "ähnlicher Empfänger",
+  "config_theme": "{{.Path}}: theme ist \"{{.Value}}\": nimm eines von {{.Themes}}",
+  "unknown_theme": "unbekanntes Farbschema \"{{.Name}}\"",
+  "theme_title": "Farben",
+  "theme_auto": "Dem Terminal folgen",
+  "theme_dark": "Für dunkles Terminal",
+  "theme_light": "Für helles Terminal",
+  "theme_footer": "enter wählen · ↑/↓ testen · esc abbrechen",
+  "theme_hint": "Auto nimmt die Farben, die zum Hintergrund des Terminals passen; wähle ein Farbschema, wenn es falsch rät. Wird in config.toml gespeichert.",
+  "theme_saved": "Farben: {{.Name}} (in config.toml gespeichert)",
+  "theme_session": "Farben: {{.Name}} (bis zum Beenden: es gibt keine Konfigurationsdatei zum Speichern)",
+  "theme_not_saved": "Farben: {{.Name}} (bis zum Beenden: konnte nicht gespeichert werden: {{.Error}})",
+  "help_theme": "Farben wählen: wie das Terminal, dunkel oder hell (in config.toml gespeichert)"
 }
