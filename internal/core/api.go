@@ -53,6 +53,16 @@ type Service interface {
 	GetAccount(ctx context.Context, name string) (Account, error)
 	ListAccounts(ctx context.Context) ([]Account, error)
 
+	// RenameCategory gives an Income or Expenses category, and the categories below
+	// it, a new name of the same type. Nothing else changes: the transactions, targets
+	// and schedules follow the category.
+	RenameCategory(ctx context.Context, from, to string) (CategoryRename, error)
+	// MergeCategory moves everything of the category from into another of the same
+	// type, and removes from.
+	MergeCategory(ctx context.Context, from, into string) (CategoryMerge, error)
+	// DeleteCategory removes a category, moving its transactions to Uncategorized.
+	DeleteCategory(ctx context.Context, name string) (CategoryMerge, error)
+
 	// Transactions.
 	AddTransaction(ctx context.Context, nt NewTransaction) (AddResult, error)
 	GetTransaction(ctx context.Context, id int64) (TxView, error)
@@ -484,6 +494,24 @@ type Balance struct {
 	Account string
 	Type    ledger.AccountType
 	Amount  ledger.Money
+}
+
+// CategoryRename is what RenameCategory did: the new names of the categories it
+// renamed, the one asked for first and those below it after.
+type CategoryRename struct {
+	Renamed []string
+}
+
+// CategoryMerge is what MergeCategory or DeleteCategory moved: how many transactions
+// and schedules now book to the other category, how many monthly targets went with
+// it, and how many were dropped because the other category had its own for that month
+// (or cannot have one, as Uncategorized cannot). The carry-over goes the same way:
+// the other category's own stays, else it is taken over.
+type CategoryMerge struct {
+	Transactions   int
+	Schedules      int
+	Targets        int
+	TargetsDropped int
 }
 
 // BalanceRequest asks for balances and net worth.
