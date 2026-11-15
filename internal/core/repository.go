@@ -968,6 +968,105 @@ func (q queries) firstPostingDate(ctx context.Context, accountID, skip int64) (s
 	return day, err
 }
 
+// ---- categories ------------------------------------------------------------
+
+// renameAccount gives an account a new name.
+func (q queries) renameAccount(ctx context.Context, id int64, name string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE accounts SET name = ?, version = version + 1, updated_at = `+nowSQL+` WHERE id = ?`, name, id)
+	return err
+}
+
+// touchAccount says an account's rows changed, for what keeps track of versions.
+func (q queries) touchAccount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE accounts SET version = version + 1, updated_at = `+nowSQL+` WHERE id = ?`, id)
+	return err
+}
+
+// accountCurrencies are the currencies the postings of an account are in.
+func (q queries) accountCurrencies(ctx context.Context, id int64) ([]ledger.Currency, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT DISTINCT currency FROM postings WHERE account_id = ? ORDER BY currency`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ledger.Currency
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		out = append(out, ledger.Currency(c))
+	}
+	return out, rows.Err()
+}
+
+// moveAccountPostings books everything that is on account from to account to, and
+// says how many transactions that was. The transactions are marked as changed.
+func (q queries) moveAccountPostings(ctx context.Context, from, to int64) (int, error) {
+	var n int
+	if err := q.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT transaction_id) FROM postings WHERE account_id = ?`, from).Scan(&n); err != nil {
+		return 0, err
+	}
+	if _, err := q.db.ExecContext(ctx, `UPDATE transactions SET version = version + 1, updated_at = `+nowSQL+`
+		WHERE id IN (SELECT transaction_id FROM postings WHERE account_id = ?)`, from); err != nil {
+		return 0, err
+	}
+	_, err := q.db.ExecContext(ctx, `UPDATE postings SET account_id = ? WHERE account_id = ?`, to, from)
+	return n, err
+}
+
+// moveSchedulePostings points the schedules that book to account from at account to, and
+// says how many schedules that was.
+func (q queries) moveSchedulePostings(ctx context.Context, from, to int64) (int, error) {
+	var n int
+	if err := q.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT schedule_id) FROM schedule_postings WHERE account_id = ?`, from).Scan(&n); err != nil {
+		return 0, err
+	}
+	_, err := q.db.ExecContext(ctx, `UPDATE schedule_postings SET account_id = ? WHERE account_id = ?`, to, from)
+	return n, err
+}
+
+// moveBudget hands the targets and the carry-over of account from to account to. A month
+// that to has a target for keeps it: the target of from for that month is dropped. With
+// keep false (to can have none) all of them are dropped. It says how many targets moved
+// and how many were dropped.
+func (q queries) moveBudget(ctx context.Context, from, to int64, keep bool) (moved, dropped int, err error) {
+	if keep {
+		res, err := q.db.ExecContext(ctx, `UPDATE budget_targets SET account_id = ?
+			WHERE account_id = ? AND month NOT IN (SELECT month FROM budget_targets WHERE account_id = ?)`, to, from, to)
+		if err != nil {
+			return 0, 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, 0, err
+		}
+		moved = int(n)
+		if _, err := q.db.ExecContext(ctx, `UPDATE budget_rollover SET account_id = ?
+			WHERE account_id = ? AND NOT EXISTS (SELECT 1 FROM budget_rollover WHERE account_id = ?)`, to, from, to); err != nil {
+			return 0, 0, err
+		}
+	}
+	res, err := q.db.ExecContext(ctx, `DELETE FROM budget_targets WHERE account_id = ?`, from)
+	if err != nil {
+		return 0, 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, 0, err
+	}
+	if _, err := q.db.ExecContext(ctx, `DELETE FROM budget_rollover WHERE account_id = ?`, from); err != nil {
+		return 0, 0, err
+	}
+	return moved, int(n), nil
+}
+
+// deleteAccount removes an account nothing refers to any more.
+func (q queries) deleteAccount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM accounts WHERE id = ?`, id)
+	return err
+}
+
 // ---- maintenance -----------------------------------------------------------
 
 func (q queries) integrityCheck(ctx context.Context) (string, error) {
