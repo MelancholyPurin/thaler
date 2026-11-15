@@ -8,6 +8,12 @@
 # in English. In the TUI, ctrl+l chooses the language and writes this line for you.
 # language = "de"
 
+# The colours of the interface: "auto" (the default) follows the terminal's
+# background, "dark" and "light" fix them for a terminal that does not say what its
+# background is (some multiplexers, a session over ssh). In the TUI, ctrl+t chooses
+# the theme and writes this line for you.
+# theme = "dark"
+
 # The folder the interface lists bank exports from when you press `i` to import
 # (default: ~/Downloads). You can always type or drop another file or folder.
 # import_dir = "~/Documents/bank-exports"
