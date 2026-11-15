@@ -244,7 +244,7 @@ Getting every transaction into the right category with as little typing as possi
 - [ ] `TCT-4` List, edit, reorder and delete rules inside the TUI
 - [ ] `TCT-5` Run the rules again over existing uncategorized transactions
 - ~~`TCT-6` Categorize a selection at once~~ (folded into `TLD-14`)
-- [ ] `TCT-7` Rename and merge categories
+- [x] `TCT-7` Rename and merge categories (`K` opens a list of every category with its number of transactions, the cursor on the one the Ledger or the Budget has selected; `r` renames it, with the categories below it, to the whole new name, and `z` takes that back; `m` chooses another category of its kind to merge it into and asks before doing it, which `z` cannot take back; both are `RenameCategory` and `MergeCategory` of `LDG-14`, whose refusals are shown in the popup; the rules in `config.toml` that name the category are not changed, the status line counts them; deleting a category is not here)
 - [ ] `TCT-8` Suggest a category from how similar payees were categorized
 
 ### TIM: Importing in the TUI
