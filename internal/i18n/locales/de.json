@@ -867,5 +867,22 @@
   "account_has_schedules": {
     "one": "{{.Name}} hat noch {{.Count}} Zeitplan: lösche ihn, bevor du das Konto schließt",
     "other": "{{.Name}} hat noch {{.Count}} Zeitpläne: lösche sie, bevor du das Konto schließt"
-  }
+  },
+  "account_closed_tag": "geschlossen",
+  "account_closed_detail": "Geschlossen: behält ihren Verlauf und nimmt kein neues Geld an",
+  "accounts_none_closed": "Keine geschlossenen Konten",
+  "accounts_closed_shown": "Geschlossene Konten werden gezeigt (v blendet sie aus)",
+  "accounts_closed_hidden": "Geschlossene Konten ausgeblendet",
+  "account_closed_status": "{{.Name}} geschlossen",
+  "account_reopened": "{{.Name}} wieder geöffnet",
+  "hint_v_shows_closed": "v zeigt geschlossene",
+  "undid_close": "Schließen von {{.Name}} rückgängig gemacht",
+  "undid_reopen": "Wiederöffnen von {{.Name}} rückgängig gemacht",
+  "account_renamed": "{{.From}} heißt jetzt {{.To}}",
+  "rename_title": "Konto umbenennen",
+  "rename_current": "Jetzt: {{.Name}}",
+  "rename_hint": "Der Typ bleibt: gib nur ein, was auf {{.Type}}: folgt. Alles, was auf dem Konto gebucht ist, bleibt bei ihm.",
+  "rename_footer": "enter umbenennen · esc abbrechen",
+  "help_accounts_panel": "im Kontenfenster: Konto umbenennen / schließen (oder ein geschlossenes wieder öffnen) / geschlossene zeigen oder ausblenden",
+  "undid_rename_account": "Umbenennung von {{.From}} in {{.To}} rückgängig gemacht"
 }

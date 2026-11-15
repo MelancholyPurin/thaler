@@ -867,5 +867,22 @@
   "account_has_schedules": {
     "one": "{{.Name}} aún tiene {{.Count}} programación: bórrala antes de cerrar la cuenta",
     "other": "{{.Name}} aún tiene {{.Count}} programaciones: bórralas antes de cerrar la cuenta"
-  }
+  },
+  "account_closed_tag": "cerrada",
+  "account_closed_detail": "Cerrada: conserva su historial y no admite dinero nuevo",
+  "accounts_none_closed": "No hay cuentas cerradas",
+  "accounts_closed_shown": "Se muestran las cuentas cerradas (v las oculta)",
+  "accounts_closed_hidden": "Cuentas cerradas ocultas",
+  "account_closed_status": "Cerrada {{.Name}}",
+  "account_reopened": "Reabierta {{.Name}}",
+  "hint_v_shows_closed": "v muestra las cerradas",
+  "undid_close": "Se deshizo el cierre de {{.Name}}",
+  "undid_reopen": "Se deshizo la reapertura de {{.Name}}",
+  "account_renamed": "{{.From}} ahora se llama {{.To}}",
+  "rename_title": "Renombrar cuenta",
+  "rename_current": "Ahora: {{.Name}}",
+  "rename_hint": "El tipo no cambia: escribe solo lo que sigue a {{.Type}}:. Todo lo anotado en la cuenta se queda con ella.",
+  "rename_footer": "enter renombrar · esc cancelar",
+  "help_accounts_panel": "en el panel de Cuentas: renombrar la cuenta / cerrarla (o reabrir una cerrada) / mostrar u ocultar las cerradas",
+  "undid_rename_account": "Se deshizo el cambio de nombre de {{.From}} a {{.To}}"
 }

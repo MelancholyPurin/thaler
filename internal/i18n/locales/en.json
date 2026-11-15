@@ -867,5 +867,22 @@
   "account_has_schedules": {
     "one": "{{.Name}} still has {{.Count}} schedule: delete it before closing the account",
     "other": "{{.Name}} still has {{.Count}} schedules: delete them before closing the account"
-  }
+  },
+  "account_closed_tag": "closed",
+  "account_closed_detail": "Closed: it keeps its history and takes no new money",
+  "accounts_none_closed": "No closed accounts",
+  "accounts_closed_shown": "Closed accounts shown (v hides them)",
+  "accounts_closed_hidden": "Closed accounts hidden",
+  "account_closed_status": "Closed {{.Name}}",
+  "account_reopened": "Reopened {{.Name}}",
+  "hint_v_shows_closed": "v shows closed accounts",
+  "undid_close": "Undid closing {{.Name}}",
+  "undid_reopen": "Undid reopening {{.Name}}",
+  "account_renamed": "Renamed {{.From}} to {{.To}}",
+  "rename_title": "Rename account",
+  "rename_current": "Now: {{.Name}}",
+  "rename_hint": "The type stays: type only what follows {{.Type}}:. Everything booked on the account stays with it.",
+  "rename_footer": "enter rename · esc cancel",
+  "help_accounts_panel": "in the Accounts panel: rename the account / close it (or reopen a closed one) / show or hide the closed ones",
+  "undid_rename_account": "Undid renaming {{.From}} to {{.To}}"
 }
