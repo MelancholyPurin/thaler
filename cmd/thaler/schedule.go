@@ -247,7 +247,9 @@ settles the date. Without one the amount has to be exact.
 }
 
 func (a *app) scheduleListCmd() *cobra.Command {
-	return &cobra.Command{Use: "list", Short: "List the schedules", Args: cobra.NoArgs, RunE: a.listSchedules}
+	cmd := &cobra.Command{Use: "list", Short: "List the schedules", Args: cobra.NoArgs, RunE: a.listSchedules}
+	addJSONFlag(cmd)
+	return cmd
 }
 
 func (a *app) listSchedules(cmd *cobra.Command, _ []string) error {
@@ -259,6 +261,9 @@ func (a *app) listSchedules(cmd *cobra.Command, _ []string) error {
 	all, err := svc.Schedules(ctx)
 	if err != nil {
 		return err
+	}
+	if wantsJSON(cmd) {
+		return printJSON(cmd, all)
 	}
 	out := cmd.OutOrStdout()
 	if len(all) == 0 {
@@ -600,6 +605,9 @@ or "schedule skip".`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, due)
+			}
 			out := cmd.OutOrStdout()
 			if len(due) == 0 {
 				fmt.Fprintf(out, "Nothing is due up to %s.\n", upTo)
@@ -614,6 +622,7 @@ or "schedule skip".`,
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.Flags().StringVar(&until, "until", "", "count up to this date instead of today, YYYY-MM-DD or DD.MM.YYYY")
 	return cmd
 }

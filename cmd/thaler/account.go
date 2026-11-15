@@ -57,6 +57,9 @@ and equity accounts accept any currency unless you give one.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, accs)
+			}
 			out := cmd.OutOrStdout()
 			if len(accs) == 0 {
 				fmt.Fprintln(out, a.cli().T("no_accounts_yet", nil))
@@ -70,6 +73,8 @@ and equity accounts accept any currency unless you give one.`,
 			return nil
 		},
 	}
+
+	addJSONFlag(list)
 
 	var asOf string
 	balance := &cobra.Command{
@@ -151,6 +156,9 @@ Without arguments the minimums set are listed; --clear takes one away.`,
 				if err != nil {
 					return err
 				}
+				if wantsJSON(cmd) {
+					return printJSON(cmd, mins)
+				}
 				if len(mins) == 0 {
 					fmt.Fprintln(out, "No minimum balances. Set one with: thaler cli account minimum Assets:Bank 500")
 					return nil
@@ -192,6 +200,7 @@ Without arguments the minimums set are listed; --clear takes one away.`,
 			return nil
 		},
 	}
+	addJSONFlag(minimum)
 	minimum.Flags().BoolVar(&clearMinimum, "clear", false, "take the minimum of the account away")
 	minimum.Flags().StringVar(&minimumAmount, "amount", "", "the minimum, instead of the second argument (for a negative one: --amount=-300)")
 

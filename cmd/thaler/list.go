@@ -33,6 +33,9 @@ func (a *app) listCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, txs)
+			}
 			out := cmd.OutOrStdout()
 			if len(txs) == 0 {
 				fmt.Fprintln(out, "No transactions found.")
@@ -66,6 +69,7 @@ func (a *app) listCmd() *cobra.Command {
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.Flags().StringVarP(&account, "account", "a", "", "only transactions touching this account or its sub-accounts")
 	cmd.Flags().StringVar(&from, "from", "", "first day to include (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&to, "to", "", "last day to include (YYYY-MM-DD)")

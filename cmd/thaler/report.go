@@ -57,6 +57,9 @@ average.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, r)
+			}
 			printSpending(cmd.OutOrStdout(), r, byMonth)
 			return nil
 		}),
@@ -75,6 +78,9 @@ between your own accounts is neither. The last line is all the months.`,
 			r, err := svc.CashFlowReport(cmd.Context(), core.CashFlowRequest{From: from, To: to})
 			if err != nil {
 				return err
+			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, r)
 			}
 			printCashFlow(cmd.OutOrStdout(), r)
 			return nil
@@ -99,6 +105,12 @@ others in one line; --limit changes that, and --limit 0 lists every payee.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				if r.OtherPayees == 0 { // nothing was left out: the sum of nothing is in the currency of the report
+					r.Others.Amount.Currency = r.Base
+				}
+				return printJSON(cmd, r)
+			}
 			printPayees(cmd.OutOrStdout(), r)
 			return nil
 		}),
@@ -120,9 +132,15 @@ gives the same figure for one day.`,
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, r)
+			}
 			printNetWorth(cmd.OutOrStdout(), r)
 			return nil
 		}),
+	}
+	for _, c := range []*cobra.Command{spending, cashflow, payees, networth} {
+		addJSONFlag(c)
 	}
 	cmd.AddCommand(spending, cashflow, payees, networth)
 	return cmd

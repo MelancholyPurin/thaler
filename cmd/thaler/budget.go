@@ -38,10 +38,14 @@ A target belongs to one month and one category, in the base currency:
 			if err != nil {
 				return err
 			}
+			if wantsJSON(cmd) {
+				return printJSON(cmd, b)
+			}
 			printMonthBudget(cmd.OutOrStdout(), b)
 			return nil
 		},
 	}
+	addJSONFlag(cmd)
 	cmd.PersistentFlags().StringVarP(&month, "month", "m", "", "the month, YYYY-MM (default: this month)")
 
 	set := &cobra.Command{
