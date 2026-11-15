@@ -24,6 +24,9 @@ type Config struct {
 	// Language is the language of the messages: en, es or de. Empty means that the
 	// environment decides (see i18n.Detect).
 	Language string `toml:"language"`
+	// Theme is the colour theme of the interface: auto, dark or light (see Themes). Empty
+	// means auto.
+	Theme string `toml:"theme"`
 	// BackupReminderDays is how many days may pass since the last backup before
 	// the TUI reminds you; 0 switches the reminder off. Nil means not set: see
 	// ReminderDays.
@@ -82,6 +85,9 @@ func Load(path string, mustExist bool) (*Config, error) {
 	}
 	if _, ok := i18n.Parse(c.Language); c.Language != "" && !ok {
 		return nil, coded.New("config_language", map[string]any{"Path": path, "Value": c.Language, "Languages": strings.Join(i18n.Codes(), ", ")})
+	}
+	if c.Theme != "" && !ValidTheme(c.Theme) {
+		return nil, coded.New("config_theme", map[string]any{"Path": path, "Value": c.Theme, "Themes": strings.Join(Themes, ", ")})
 	}
 	if d := c.BackupReminderDays; d != nil && *d < 0 {
 		return nil, coded.New("config_reminder_days", map[string]any{"Path": path, "Value": *d})

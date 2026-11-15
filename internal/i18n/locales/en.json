@@ -844,5 +844,17 @@
     "other": "Undid categorizing {{.Count}} transactions"
   },
   "rules_apply_nothing": "There are no uncategorized transactions",
-  "pick_similar_payee": "similar payee"
+  "pick_similar_payee": "similar payee",
+  "config_theme": "{{.Path}}: theme is \"{{.Value}}\": use one of {{.Themes}}",
+  "unknown_theme": "unknown theme \"{{.Name}}\"",
+  "theme_title": "Colours",
+  "theme_auto": "Follow the terminal",
+  "theme_dark": "For a dark terminal",
+  "theme_light": "For a light terminal",
+  "theme_footer": "enter choose · ↑/↓ try · esc cancel",
+  "theme_hint": "Auto uses the colours that suit the terminal's background; choose a theme when it guesses wrong. Saved in config.toml.",
+  "theme_saved": "Colours: {{.Name}} (saved in config.toml)",
+  "theme_session": "Colours: {{.Name}} (until you quit: there is no config file to save it in)",
+  "theme_not_saved": "Colours: {{.Name}} (until you quit: could not save it: {{.Error}})",
+  "help_theme": "choose the colours: follow the terminal, dark or light (saved in config.toml)"
 }

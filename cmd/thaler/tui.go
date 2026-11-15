@@ -34,6 +34,7 @@ func (a *app) runTUI(cmd *cobra.Command, args []string) error {
 		BackupDir:      config.BackupDir(a.dbPath()),
 		Restore:        a.swapDatabase,
 		Loc:            a.localizer(),
+		Theme:          a.theme(),
 	})
 }
 
@@ -56,4 +57,13 @@ func (a *app) swapDatabase(ctx context.Context, src, passphrase string) (core.Se
 	}
 	a.svc = svc
 	return svc, res, restoreErr
+}
+
+// theme is the colour theme of config.toml; a file that cannot be read does not stop the
+// interface, which then follows the terminal.
+func (a *app) theme() string {
+	if c, err := a.config(); err == nil {
+		return c.Theme
+	}
+	return ""
 }

@@ -844,5 +844,17 @@
     "other": "Se deshizo la categorización de {{.Count}} transacciones"
   },
   "rules_apply_nothing": "No hay transacciones sin categoría",
-  "pick_similar_payee": "destinatario parecido"
+  "pick_similar_payee": "destinatario parecido",
+  "config_theme": "{{.Path}}: theme es \"{{.Value}}\": usa uno de {{.Themes}}",
+  "unknown_theme": "tema desconocido \"{{.Name}}\"",
+  "theme_title": "Colores",
+  "theme_auto": "Seguir al terminal",
+  "theme_dark": "Para terminal oscuro",
+  "theme_light": "Para terminal claro",
+  "theme_footer": "enter elegir · ↑/↓ probar · esc cancelar",
+  "theme_hint": "Auto usa los colores que van con el fondo del terminal; elige un tema cuando se equivoque. Se guarda en config.toml.",
+  "theme_saved": "Colores: {{.Name}} (guardado en config.toml)",
+  "theme_session": "Colores: {{.Name}} (hasta que salgas: no hay archivo de configuración donde guardarlo)",
+  "theme_not_saved": "Colores: {{.Name}} (hasta que salgas: no se pudo guardar: {{.Error}})",
+  "help_theme": "elegir los colores: según el terminal, oscuro o claro (se guarda en config.toml)"
 }

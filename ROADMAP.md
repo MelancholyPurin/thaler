@@ -232,7 +232,7 @@ The main screen: accounts, transactions and the forms to change them.
 - [ ] `TLD-13` Rename and archive accounts
 - [ ] `TLD-14` Select several transactions to categorize or delete at once (also what `TCT-6` asked for)
 - [ ] `TLD-15` Sort, and filter by amount, date range, category and account
-- [ ] `TLD-16` Colour themes for dark and light terminals
+- [x] `TLD-16` Colour themes for dark and light terminals (`theme = "auto" | "dark" | "light"` in `config.toml`; auto asks the terminal for its background as before, dark and light fix the colours where it answers wrongly or not at all; `ctrl+t` lists the themes, tries each on the screen as the cursor moves, and `enter` writes the line for you like `ctrl+l` does for the language, `esc` puts the old one back; selection and emphasis never depended on colour, and `NO_COLOR` still draws without any)
 
 ### TCT: Categorizing and rules
 
