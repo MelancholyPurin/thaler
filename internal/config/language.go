@@ -10,22 +10,22 @@ import (
 	"github.com/melancholypurin/thaler/internal/i18n"
 )
 
-var (
-	languageLine   = regexp.MustCompile(`^(\s*language\s*=\s*)("[^"]*"|'[^']*')(.*)$`)
-	languageSample = regexp.MustCompile(`^\s*#\s*language\s*=`)
-)
-
-// SetLanguage makes language = "code" the language setting of the config file,
-// creating the file from the example first if there is none. Only that one line
-// changes: an existing setting is replaced where it stands (its comment kept),
-// otherwise the line goes below the commented sample of the setting if the file has
-// one, else above the first table, where a top-level key has to be. Everything else,
-// comments and rules included, stays as it was. The file is replaced in one step, so
-// an interruption leaves the old one.
+// SetLanguage makes language = "code" the language setting of the config file; see
+// setString.
 func SetLanguage(path, example, code string) error {
 	if _, ok := i18n.Parse(code); !ok {
 		return coded.New("unknown_language", map[string]any{"Code": code})
 	}
+	return setString(path, example, "language", code)
+}
+
+// setString makes key = "value" a top-level setting of the config file, creating the file
+// from the example first if there is none. Only that one line changes: an existing setting
+// is replaced where it stands (its comment kept), otherwise the line goes below the
+// commented sample of the setting if the file has one, else above the first table, where a
+// top-level key has to be. Everything else, comments and rules included, stays as it was.
+// The file is replaced in one step, so an interruption leaves the old one.
+func setString(path, example, key, value string) error {
 	if err := Ensure(path, example); err != nil {
 		return err
 	}
@@ -37,7 +37,9 @@ func SetLanguage(path, example, code string) error {
 	if err != nil {
 		return err
 	}
-	line := "language = " + tomlString(code)
+	settingLine := regexp.MustCompile(`^(\s*` + regexp.QuoteMeta(key) + `\s*=\s*)("[^"]*"|'[^']*')(.*)$`)
+	settingSample := regexp.MustCompile(`^\s*#\s*` + regexp.QuoteMeta(key) + `\s*=`)
+	line := key + " = " + tomlString(value)
 	lines := strings.Split(string(body), "\n") // a final newline leaves a last element of ""
 
 	end, sample, replaced := len(lines), -1, false
@@ -46,12 +48,12 @@ func SetLanguage(path, example, code string) error {
 			end = i // a key below a table header would belong to the table
 			break
 		}
-		if m := languageLine.FindStringSubmatch(l); m != nil {
-			lines[i] = m[1] + tomlString(code) + m[3]
+		if m := settingLine.FindStringSubmatch(l); m != nil {
+			lines[i] = m[1] + tomlString(value) + m[3]
 			replaced = true
 			break
 		}
-		if sample < 0 && languageSample.MatchString(l) {
+		if sample < 0 && settingSample.MatchString(l) {
 			sample = i
 		}
 	}
