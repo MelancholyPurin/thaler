@@ -856,5 +856,16 @@
   "theme_saved": "Farben: {{.Name}} (in config.toml gespeichert)",
   "theme_session": "Farben: {{.Name}} (bis zum Beenden: es gibt keine Konfigurationsdatei zum Speichern)",
   "theme_not_saved": "Farben: {{.Name}} (bis zum Beenden: konnte nicht gespeichert werden: {{.Error}})",
-  "help_theme": "Farben wählen: wie das Terminal, dunkel oder hell (in config.toml gespeichert)"
+  "help_theme": "Farben wählen: wie das Terminal, dunkel oder hell (in config.toml gespeichert)",
+  "account_not_money": "{{.Name}} ist keines deiner Konten: nur Assets- und Liabilities-Konten werden umbenannt oder geschlossen",
+  "account_type_change": "{{.From}} kann nicht in {{.To}} umbenannt werden: ein Konto bleibt {{.Type}}, der neue Name beginnt also mit {{.Type}}:",
+  "account_same_name": "{{.Name}} heißt schon so",
+  "account_closed": "{{.Name}} ist geschlossen: öffne es zuerst wieder",
+  "account_already_closed": "{{.Name}} ist schon geschlossen",
+  "account_not_closed": "{{.Name}} ist nicht geschlossen",
+  "account_not_empty": "{{.Name}} enthält noch {{.Balance}}: bring es weg, bevor du das Konto schließt",
+  "account_has_schedules": {
+    "one": "{{.Name}} hat noch {{.Count}} Zeitplan: lösche ihn, bevor du das Konto schließt",
+    "other": "{{.Name}} hat noch {{.Count}} Zeitpläne: lösche sie, bevor du das Konto schließt"
+  }
 }
