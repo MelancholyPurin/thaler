@@ -102,9 +102,11 @@ func (m *Model) reload() error {
 
 	m.categories = m.categories[:0]
 	byName := make(map[string]*acctEntry)
-	m.accounts = m.accounts[:0]
+	m.accounts, m.closed = m.accounts[:0], m.closed[:0]
 	for _, a := range accs {
 		switch {
+		case a.Type.NeedsCurrency() && a.Closed:
+			m.closed = append(m.closed, acctEntry{account: a, balance: ledger.Money{Currency: a.Currency}})
 		case a.Type.NeedsCurrency():
 			m.accounts = append(m.accounts, acctEntry{account: a, balance: ledger.Money{Currency: a.Currency}})
 		case (a.Type == ledger.Income || a.Type == ledger.Expenses) && a.Name != ledger.UncategorizedExpense && a.Name != ledger.UncategorizedIncome:
@@ -113,6 +115,9 @@ func (m *Model) reload() error {
 	}
 	for i := range m.accounts {
 		byName[m.accounts[i].account.Name] = &m.accounts[i]
+	}
+	for i := range m.closed {
+		byName[m.closed[i].account.Name] = &m.closed[i]
 	}
 	for _, b := range balances {
 		if e := byName[b.Account]; e != nil {
@@ -154,8 +159,8 @@ func (m *Model) uncategorizedCount() int {
 
 // scopeAccount is the account the transaction list is limited to, or "" for all.
 func (m *Model) scopeAccount() string {
-	if i := m.accts.cursor - 1; i >= 0 && i < len(m.accounts) {
-		return m.accounts[i].account.Name
+	if e, ok := m.panelEntry(m.accts.cursor); ok {
+		return e.account.Name
 	}
 	return ""
 }

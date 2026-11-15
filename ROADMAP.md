@@ -229,7 +229,7 @@ The main screen: accounts, transactions and the forms to change them.
 - [x] `TLD-10` A key reference popup and the Thaler banner
 - [x] `TLD-11` Open `config.toml` in your editor from the TUI
 - [ ] `TLD-12` Create and edit split transactions
-- [ ] `TLD-13` Rename and archive accounts
+- [x] `TLD-13` Rename and archive accounts (in the Accounts panel: `r` renames the selected account, `c` closes it or reopens a closed one, `v` shows or hides the closed accounts; the service's refusals (money in it, a schedule books to it, a name that is taken) are shown as they are, `z` takes each back; closed accounts leave the panel and every form, and a transaction of one cannot be edited, but its category can change; `LDG-13` does the work)
 - [ ] `TLD-14` Select several transactions to categorize or delete at once (also what `TCT-6` asked for)
 - [ ] `TLD-15` Sort, and filter by amount, date range, category and account
 - [x] `TLD-16` Colour themes for dark and light terminals (`theme = "auto" | "dark" | "light"` in `config.toml`; auto asks the terminal for its background as before, dark and light fix the colours where it answers wrongly or not at all; `ctrl+t` lists the themes, tries each on the screen as the cursor moves, and `enter` writes the line for you like `ctrl+l` does for the language, `esc` puts the old one back; selection and emphasis never depended on colour, and `NO_COLOR` still draws without any)

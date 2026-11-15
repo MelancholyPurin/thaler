@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -78,12 +79,16 @@ func (m *Model) openAccountForm(setting bool) tea.Cmd {
 	f.currency.SetValue(string(m.netWorth.Base))
 	f.balance.Placeholder = m.loc.T("acct_balance_placeholder", nil)
 	if setting {
-		i := m.accts.cursor - 1
-		if i < 0 || i >= len(m.accounts) {
+		e, ok := m.panelEntry(m.accts.cursor)
+		if !ok {
 			m.setStatus(m.loc.T("select_account_first", nil), true)
 			return nil
 		}
-		f.existing = m.accounts[i].account
+		if e.account.Closed { // its balance is nothing to set: it takes no money until it is reopened
+			m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": e.account.Name})), true)
+			return nil
+		}
+		f.existing = e.account
 	}
 	for _, in := range []*textinput.Model{&f.name, &f.currency, &f.balance, &f.asOf} {
 		in.Width = m.accountWidth()

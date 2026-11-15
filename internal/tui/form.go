@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/i18n"
 	"github.com/melancholypurin/thaler/internal/ledger"
@@ -93,6 +94,10 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 		}
 		if !r.simple {
 			m.setStatus(m.loc.T("cannot_edit_here", nil), true)
+			return nil
+		}
+		if m.isClosed(r.source.Account) { // its money is frozen until the account is reopened
+			m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": r.source.Account})), true)
 			return nil
 		}
 		f.editing, f.old = r.tx.ID, r.tx

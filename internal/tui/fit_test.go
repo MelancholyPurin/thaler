@@ -272,6 +272,12 @@ func Test_View_fits(t *testing.T) {
 		{name: "theme, trying dark", keys: "ctrl+t down"},
 		{name: "theme, trying light", keys: "ctrl+t down down"},
 		{name: "theme, chosen", keys: "ctrl+t down enter"},
+		{name: "accounts, rename", keys: "2 down r"},
+		{name: "accounts, rename to a name that is taken", keys: "2 down r ctrl+u text:USD enter"},
+		{name: "accounts, renamed", keys: "2 down r ctrl+u text:Sparkasse enter"},
+		{name: "accounts, closing refused for money in it", keys: "2 down c"},
+		{name: "accounts, closing refused for a schedule", keys: "2 down down c"},
+		{name: "accounts, no closed account to show", keys: "2 v"},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.

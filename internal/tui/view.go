@@ -52,6 +52,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.languagePopup())
 	case modeTheme:
 		screen = m.centerPopup(screen, m.themePopup())
+	case modeRename:
+		screen = m.centerPopup(screen, m.renamePopup())
 	case modeSchedule:
 		screen = m.centerPopup(screen, m.schedulePopup())
 	case modeDue:
@@ -158,17 +160,22 @@ func (m *Model) homePanel(l layout) string {
 
 func (m *Model) accountsPanel(l layout) string {
 	iw := l.leftW - 2
-	n := len(m.accounts) + 1
+	n := m.panelLen()
 	lines := make([]string, 0, l.acctLines)
 	for i := m.accts.offset; i < n && len(lines) < l.acctLines; i++ {
-		label, value := m.loc.T("all_accounts", nil), m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0)
-		if i > 0 {
-			e := m.accounts[i-1]
-			label, value = m.loc.ShortName(e.account.Name), m.loc.Money(e.balance)
+		label, value, closed := m.loc.T("all_accounts", nil), m.moneyOrDash(m.netWorth.Total, len(m.netWorth.Missing) == 0), false
+		if e, ok := m.panelEntry(i); ok {
+			label, value, closed = m.loc.ShortName(e.account.Name), m.loc.Money(e.balance), e.account.Closed
+			if closed {
+				value = m.loc.T("account_closed_tag", nil)
+			}
 		}
 		line := leftRight(label, value, iw)
-		if i == m.accts.cursor {
+		switch {
+		case i == m.accts.cursor:
 			line = m.rowStyle(paneAccounts).Render(fit(line, iw))
+		case closed:
+			line = dim.Render(line)
 		}
 		lines = append(lines, line)
 	}
@@ -427,6 +434,7 @@ func (m *Model) helpPopup() string {
 		{"x", m.loc.T("help_transfer", nil)},
 		{"i", m.loc.T("help_import", nil)},
 		{"n  b", m.loc.T("help_new_account", nil)},
+		{"r  c  v", m.loc.T("help_accounts_panel", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
 		{"tab", m.loc.T("help_budget_tab", nil)},
