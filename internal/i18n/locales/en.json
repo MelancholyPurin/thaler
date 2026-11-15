@@ -813,8 +813,8 @@
   "help_categories": "Categories: ↑ ↓ choose; r renames the category and those below it; m merges it into another of its kind, after asking (z cannot take a merge back); rules in config.toml are not changed",
   "rules_title": "Rules",
   "rules_none": "No rules yet: make one while categorizing (c)",
-  "rules_footer": "↑/↓ · enter edit · esc close",
-  "rules_hint": "The first rule that matches wins. < > move the rule up or down, d deletes it, z undoes. Transactions already categorized are not changed.",
+  "rules_footer": "↑/↓ · enter edit · a apply · esc close",
+  "rules_hint": "The first rule that matches wins. < > move the rule up or down, d deletes it, a applies the rules to the uncategorized transactions, z undoes. Transactions already categorized are not changed.",
   "rule_edit_hint": "tab goes to the other field. The category is the whole name, such as Expenses:Groceries.",
   "rule_edit_footer": "tab field · enter save · esc back",
   "rule_delete_confirm": "Delete rule {{.Rule}}, {{.Pattern}} → {{.Category}}? The transactions it categorized stay as they are.",
@@ -826,7 +826,22 @@
   "undid_rules": "Undid the change to the rules",
   "label_contains": "Contains",
   "label_regex": "Regex",
-  "help_rules": "Rules: ↑ ↓ choose; e edits its text and category; < > move it up or down, so that it is checked earlier or later; d deletes it, after asking; z undoes (config.toml keeps your comments)",
+  "help_rules": "Rules: ↑ ↓ choose; e edits its text and category; < > move it up or down, so that it is checked earlier or later; d deletes it, after asking; a applies the rules to the uncategorized transactions, after showing how many; z undoes (config.toml keeps your comments)",
   "rules_no_config": "no config file to read the rules from",
-  "hint_tab_report": "tab report"
+  "hint_tab_report": "tab report",
+  "rules_apply_none": "No uncategorized transaction matches a rule (uncategorized now: {{.Total}})",
+  "rules_apply_confirm": {
+    "one": "Apply the rules to the uncategorized transactions? {{.Count}} transaction would get a category (uncategorized now: {{.Total}}). Those already categorized are not changed.",
+    "other": "Apply the rules to the uncategorized transactions? {{.Count}} transactions would get a category (uncategorized now: {{.Total}}). Those already categorized are not changed."
+  },
+  "rules_apply_footer": "enter apply · esc back",
+  "rules_applied": {
+    "one": "{{.Count}} transaction categorized",
+    "other": "{{.Count}} transactions categorized"
+  },
+  "undid_rules_applied": {
+    "one": "Undid categorizing {{.Count}} transaction",
+    "other": "Undid categorizing {{.Count}} transactions"
+  },
+  "rules_apply_nothing": "There are no uncategorized transactions"
 }

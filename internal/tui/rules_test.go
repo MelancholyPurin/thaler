@@ -9,7 +9,10 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/melancholypurin/thaler/internal/config"
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/i18n"
+	"github.com/melancholypurin/thaler/internal/importer"
+	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 // rulesConfig is a config with settings, a comment of the person's own and three rules.
@@ -42,7 +45,7 @@ func Test_rulesScreen(t *testing.T) {
 			name:    "M lists the rules in the order they are checked, a regular expression between slashes",
 			initial: rulesConfig,
 			keys:    "M",
-			shows:   []string{"Rules", `1 "REWE"`, "→ Expenses:Groceries", "2 /b(ä|ae)ckerei/", `3 "Gehalt"`, "→ Income:Salary", "The first rule that matches wins", "enter edit · esc close"},
+			shows:   []string{"Rules", `1 "REWE"`, "→ Expenses:Groceries", "2 /b(ä|ae)ckerei/", `3 "Gehalt"`, "→ Income:Salary", "The first rule that matches wins", "enter edit · a apply · esc close"},
 		},
 		{
 			name:    "e shows what the rule looks for and its category",
@@ -363,6 +366,218 @@ func Test_rules_actions(t *testing.T) {
 	}
 }
 
+// Applying the rules categorizes what is still uncategorized, as many as the question said,
+// by the rules as the file has them now, and z puts it back.
+func Test_rules_apply(t *testing.T) {
+	type observed struct {
+		Flow
+		Step ruleStep
+		Note string // what the popup says was done
+		Err  string
+		Undo int // changes that z could take back
+	}
+	const (
+		oldRewe = "2026-10-02 REWE | Assets:Bank -20.00 | Expenses:Uncategorized 20.00"
+		rewe    = "2026-10-11 REWE | Assets:Bank -20.00 | Expenses:Uncategorized 20.00"
+		lidl    = "2026-10-12 Lidl | Assets:Bank -7.00 | Expenses:Uncategorized 7.00"
+		pay     = "2026-10-13 Gehalt Oktober | Assets:Bank 3000.00 | Income:Uncategorized -3000.00"
+		bakery  = "2026-10-14 bäckerei am Eck | Assets:Bank -3.50 | Expenses:Uncategorized 3.50"
+		nothing = "[[rule]]\ncontains = \"Zzz\"\ncategory = \"Expenses:Fun\"\n"
+	)
+	tcs := []struct {
+		name    string
+		initial string
+		setup   func(t *testing.T, st *core.Local)
+		keys    string
+		shows   []string
+		hides   []string
+		want    observed
+	}{
+		{
+			name:  "a says how many would get a category, and changes nothing",
+			keys:  "M a",
+			shows: []string{"uncategorized transactions? 4 transactions", "would get a category (uncategorized now: 7)", "enter apply · esc back"},
+			want:  observed{Flow: Flow{Mode: "rules"}, Step: ruleApply},
+		},
+		{
+			name: "enter categorizes them by the rules, and not what was categorized by hand",
+			keys: "M a enter",
+			want: observed{
+				Flow: Flow{
+					Mode: "rules",
+					Added: []string{
+						"2026-10-02 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-11 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-13 Gehalt Oktober | Assets:Bank 3000.00 | Income:Salary -3000.00",
+						"2026-10-14 bäckerei am Eck | Assets:Bank -3.50 | Expenses:Groceries 3.50",
+					},
+					Removed: []string{oldRewe, rewe, pay, bakery},
+				},
+				Note: "4 transactions categorized · z undoes", Undo: 1,
+			},
+		},
+		{
+			name: "y does as enter",
+			keys: "M a y",
+			want: observed{
+				Flow: Flow{
+					Mode: "rules",
+					Added: []string{
+						"2026-10-02 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-11 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-13 Gehalt Oktober | Assets:Bank 3000.00 | Income:Salary -3000.00",
+						"2026-10-14 bäckerei am Eck | Assets:Bank -3.50 | Expenses:Groceries 3.50",
+					},
+					Removed: []string{oldRewe, rewe, pay, bakery},
+				},
+				Note: "4 transactions categorized · z undoes", Undo: 1,
+			},
+		},
+		{name: "esc is no", keys: "M a esc", want: observed{Flow: Flow{Mode: "rules"}}},
+		{name: "n is no", keys: "M a n", want: observed{Flow: Flow{Mode: "rules"}}},
+		{name: "other keys are not an answer", keys: "M a x tab", want: observed{Flow: Flow{Mode: "rules"}, Step: ruleApply}},
+		{
+			name: "z in the popup puts them back as they were, income too",
+			keys: "M a enter z",
+			want: observed{Flow: Flow{Mode: "rules"}, Note: "Undid categorizing 4 transactions"},
+		},
+		{
+			name: "z after closing the popup does the same",
+			keys: "M a enter esc z",
+			want: observed{Flow: Flow{Mode: "list", Status: "Undid categorizing 4 transactions"}},
+		},
+		{
+			name: "a second time there is nothing left to do",
+			keys: "M a enter a",
+			want: observed{
+				Flow: Flow{
+					Mode: "rules",
+					Added: []string{
+						"2026-10-02 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-11 REWE | Assets:Bank -20.00 | Expenses:Groceries 20.00",
+						"2026-10-13 Gehalt Oktober | Assets:Bank 3000.00 | Income:Salary -3000.00",
+						"2026-10-14 bäckerei am Eck | Assets:Bank -3.50 | Expenses:Groceries 3.50",
+					},
+					Removed: []string{oldRewe, rewe, pay, bakery},
+				},
+				Note: "No uncategorized transaction matches a rule (uncategorized now: 3)", Undo: 1,
+			},
+		},
+		{
+			name: "it uses the rules as they are after an edit",
+			keys: "M e ctrl+u text:Lidl enter a enter",
+			want: observed{
+				Flow: Flow{
+					Mode: "rules",
+					Added: []string{
+						"2026-10-12 Lidl | Assets:Bank -7.00 | Expenses:Groceries 7.00",
+						"2026-10-13 Gehalt Oktober | Assets:Bank 3000.00 | Income:Salary -3000.00",
+						"2026-10-14 bäckerei am Eck | Assets:Bank -3.50 | Expenses:Groceries 3.50",
+					},
+					Removed: []string{lidl, pay, bakery},
+				},
+				Note: "3 transactions categorized · z undoes", Undo: 2,
+			},
+		},
+		{
+			name: "z takes back the apply first, then the edit",
+			keys: "M e ctrl+u text:Lidl enter a enter z z",
+			want: observed{Flow: Flow{Mode: "rules"}, Note: "Undid the change to the rules"},
+		},
+		{
+			name:    "no rule matches: it says so and asks nothing",
+			initial: nothing,
+			keys:    "M a",
+			want:    observed{Flow: Flow{Mode: "rules"}, Note: "No uncategorized transaction matches a rule (uncategorized now: 7)"},
+		},
+		{
+			name: "nothing uncategorized",
+			setup: func(t *testing.T, st *core.Local) {
+				t.Helper()
+				rules := []importer.Rule{{Contains: "Kino", Category: "Expenses:Fun"}, {Contains: "REWE", Category: "Expenses:Fun"}, {Contains: "Lidl", Category: "Expenses:Fun"}, {Contains: "Gehalt", Category: "Income:Salary"}, {Regex: "ckerei", Category: "Expenses:Fun"}}
+				if _, err := st.Recategorize(t.Context(), core.RecategorizeRequest{Rules: rules}); err != nil {
+					t.Fatal(err)
+				}
+			},
+			keys: "M a",
+			want: observed{Flow: Flow{Mode: "rules", Added: []string{}}, Note: "There are no uncategorized transactions"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			initial := tc.initial
+			if initial == "" {
+				initial = rulesConfig
+			}
+			m, st, _ := ruleModel(t, initial)
+			book(t, st, "2026-10-11", "REWE", "Assets:Bank", ledger.UncategorizedExpense, -2000)
+			book(t, st, "2026-10-12", "Lidl", "Assets:Bank", ledger.UncategorizedExpense, -700)
+			book(t, st, "2026-10-13", "Gehalt Oktober", "Assets:Bank", ledger.UncategorizedIncome, 300000)
+			book(t, st, "2026-10-14", "bäckerei am Eck", "Assets:Bank", ledger.UncategorizedExpense, -350)
+			book(t, st, "2026-10-15", "REWE Markt", "Assets:Bank", "Expenses:Fun", -900)
+			if tc.setup != nil {
+				tc.setup(t, st)
+			}
+			if err := m.reload(); err != nil {
+				t.Fatal(err)
+			}
+			m.applyFilter(false)
+			m.undo = nil
+			before := storedLines(t, st)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			got := observed{Flow: observe(t, m, st, before), Undo: len(m.undo)}
+			if m.ruleForm != nil {
+				got.Step, got.Note, got.Err = m.ruleForm.step, m.ruleForm.note, m.ruleForm.err
+			}
+			checkView(t, m.View(), tc.shows, tc.hides)
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("observed mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// The Ledger, narrowed to what needs a category, stops showing what the rules just categorized,
+// and shows it again when z puts it back.
+func Test_rules_apply_ledger(t *testing.T) {
+	tcs := []struct {
+		name string
+		keys string
+		want int // rows the Ledger shows
+	}{
+		{name: "before", keys: "u M", want: 7},
+		{name: "applied", keys: "u M a enter", want: 3},
+		{name: "undone", keys: "u M a enter z", want: 7},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st, _ := ruleModel(t, rulesConfig)
+			book(t, st, "2026-10-11", "REWE", "Assets:Bank", ledger.UncategorizedExpense, -2000)
+			book(t, st, "2026-10-12", "Lidl", "Assets:Bank", ledger.UncategorizedExpense, -700)
+			book(t, st, "2026-10-13", "Gehalt Oktober", "Assets:Bank", ledger.UncategorizedIncome, 300000)
+			book(t, st, "2026-10-14", "bäckerei am Eck", "Assets:Bank", ledger.UncategorizedExpense, -350)
+			if err := m.reload(); err != nil {
+				t.Fatal(err)
+			}
+			m.applyFilter(false)
+
+			// when
+			play(m, tc.keys)
+
+			// then
+			if diff := cmp.Diff(tc.want, len(m.view)); diff != "" {
+				t.Errorf("rows shown mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 // Without a config file or a way to read it there is nothing to show.
 func Test_rules_noConfig(t *testing.T) {
 	tcs := []struct {
@@ -404,12 +619,16 @@ func Test_rules_translated(t *testing.T) {
 		shows []string
 		hides []string
 	}{
-		{name: "Spanish, the list", tag: language.Spanish, keys: "M", shows: []string{"Reglas", "Gana la primera regla que coincide", "enter editar · esc cerrar"}, hides: []string{"The first rule", "Rules"}},
-		{name: "German, the list", tag: language.German, keys: "M", shows: []string{"Regeln", "Es gilt die erste passende Regel", "enter ändern · esc schließen"}, hides: []string{"The first rule", "Rules"}},
+		{name: "Spanish, the list", tag: language.Spanish, keys: "M", shows: []string{"Reglas", "Gana la primera regla que coincide", "enter editar · a aplicar · esc cerrar"}, hides: []string{"The first rule", "Rules"}},
+		{name: "German, the list", tag: language.German, keys: "M", shows: []string{"Regeln", "Es gilt die erste passende Regel", "enter ändern · a anwenden · esc schließen"}, hides: []string{"The first rule", "Rules"}},
 		{name: "Spanish, the form", tag: language.Spanish, keys: "M e", shows: []string{"Contiene", "Categoría", "tab campo · enter guardar · esc volver"}, hides: []string{"Contains"}},
 		{name: "German, the question", tag: language.German, keys: "M d", shows: []string{"Regel 1, \"REWE\" → Expenses:Groceries löschen?", "enter löschen · esc zurück"}, hides: []string{"Delete rule"}},
 		{name: "Spanish, moved", tag: language.Spanish, keys: "M >", shows: []string{"La regla 1 bajó al puesto 2 · z deshace"}, hides: []string{"moved down"}},
 		{name: "German, deleted and undone", tag: language.German, keys: "M d enter z", shows: []string{"Änderung an den Regeln rückgängig gemacht"}, hides: []string{"Undid"}},
+		{name: "Spanish, the apply question", tag: language.Spanish, keys: "M a", shows: []string{"¿Aplicar las reglas a las transacciones sin categoría?", "enter aplicar · esc volver"}, hides: []string{"Apply the rules"}},
+		{name: "German, applied", tag: language.German, keys: "M a enter", shows: []string{"1 Buchung kategorisiert · z macht rückgängig"}, hides: []string{"categorized"}},
+		{name: "Spanish, applied and undone", tag: language.Spanish, keys: "M a enter z", shows: []string{"Se deshizo la categorización de 1 transacción"}, hides: []string{"Undid"}},
+		{name: "German, nothing left", tag: language.German, keys: "M a enter a", shows: []string{"Keine Buchung ohne Kategorie passt zu einer Regel"}, hides: []string{"No uncategorized"}},
 		{name: "Spanish, an error", tag: language.Spanish, keys: "M e ctrl+u enter", shows: []string{"regla 1"}, hides: []string{"rule 1"}},
 	}
 	for _, tc := range tcs {

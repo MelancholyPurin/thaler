@@ -9,6 +9,7 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/coded"
 	"github.com/melancholypurin/thaler/internal/config"
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
@@ -18,7 +19,8 @@ import (
 // category, its place in the order, or deleting it. The file is rewritten by the config
 // package, which leaves the comments and the rest of the file alone and refuses a file it
 // cannot rewrite safely. Every change leaves a way to take it back, with z, also from the
-// popup. Transactions a rule has already categorized are not touched: that is TCT-5.
+// popup. Transactions a rule has already categorized are not touched by any of that; a
+// applies the rules to the ones still uncategorized, after saying how many it would be.
 
 type ruleStep int
 
@@ -26,6 +28,7 @@ const (
 	ruleChoose ruleStep = iota // choosing the rule
 	ruleEdit                   // editing its text and category
 	ruleDelete                 // being asked before it is deleted
+	ruleApply                  // being asked before the rules are applied to the uncategorized
 )
 
 type rulesForm struct {
@@ -36,6 +39,7 @@ type rulesForm struct {
 	category   textinput.Model
 	onCategory bool // the cursor of the form is in the category
 	err, note  string
+	apply      core.RecategorizeResult // what applying the rules would do, while it is asked about
 }
 
 // ruleRows is how many rules the popup shows at once, and ruleLabelW the width of the names
@@ -134,6 +138,14 @@ func (m *Model) updateRules(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.deleteRule()
 		}
 		return m, nil
+	case ruleApply:
+		switch key {
+		case "esc", "n":
+			f.step = ruleChoose
+		case "enter", "y":
+			m.applyRules()
+		}
+		return m, nil
 	}
 	f.note = ""
 	switch key {
@@ -149,6 +161,8 @@ func (m *Model) updateRules(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.focusRuleField()
 	case "d":
 		f.step, f.err = ruleDelete, ""
+	case "a":
+		m.askApply()
 	case "<":
 		m.moveRule(-1)
 	case ">":
@@ -267,6 +281,55 @@ func (m *Model) deleteRule() {
 	m.noteRule(m.loc.T("rule_deleted", map[string]any{"Rule": i + 1}))
 }
 
+// askApply works out what the rules would do to the uncategorized transactions, and asks
+// before doing it, or says there is nothing to do.
+func (m *Model) askApply() {
+	f := m.ruleForm
+	res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: f.rules, DryRun: true})
+	switch {
+	case err != nil:
+		f.err = m.errText(err)
+	case res.Uncategorized == 0:
+		f.note, f.err = m.loc.T("rules_apply_nothing", nil), ""
+	case len(res.Moves) == 0:
+		f.note, f.err = m.loc.T("rules_apply_none", map[string]any{"Total": res.Uncategorized}), ""
+	default:
+		f.apply, f.step, f.err = res, ruleApply, ""
+	}
+}
+
+// applyRules categorizes what askApply found, and leaves a way to take it back.
+func (m *Model) applyRules() {
+	f := m.ruleForm
+	f.step = ruleChoose
+	res, err := m.svc.Recategorize(m.ctx, core.RecategorizeRequest{Rules: f.rules})
+	if err != nil {
+		f.err = m.errText(err)
+		return
+	}
+	var back []core.CategoryChange
+	for _, mv := range res.Moves {
+		back = append(back, core.CategoryChange{TransactionID: mv.TransactionID, Category: uncategorizedOf(mv)})
+	}
+	n := len(res.Moves)
+	if n > 0 {
+		m.undo = append(m.undo, undoOp{
+			rules:  true,
+			undone: func() string { return m.loc.T("undid_rules_applied", map[string]any{"Count": n}) },
+			run: func() error {
+				_, err := m.svc.SetCategories(m.ctx, back)
+				return err
+			},
+		})
+	}
+	if err := m.reload(); err != nil {
+		f.err = m.errText(err)
+		return
+	}
+	m.applyFilter(true)
+	m.noteRule(m.loc.T("rules_applied", map[string]any{"Count": n}))
+}
+
 // undoRule takes back the last change to the rules, if the last thing undone is one.
 func (m *Model) undoRule() {
 	f := m.ruleForm
@@ -334,6 +397,9 @@ func (m *Model) rulesPopup() string {
 			m.ruleField(m.loc.T("label_category", nil), f.category, f.onCategory))
 		lines = append(lines, wrapped(m.loc.T("rule_edit_hint", nil), iw, dim)...)
 		footer = m.loc.T("rule_edit_footer", nil)
+	case ruleApply:
+		lines = append(lines, wrapped(m.loc.T("rules_apply_confirm", map[string]any{"Count": len(f.apply.Moves), "Total": f.apply.Uncategorized}), iw, bold)...)
+		footer = m.loc.T("rules_apply_footer", nil)
 	case ruleDelete:
 		pattern := `"` + cur.Contains + `"`
 		if cur.Regex != "" {

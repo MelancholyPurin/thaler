@@ -813,8 +813,8 @@
   "help_categories": "Kategorien: ↑ ↓ wählen; r benennt die Kategorie und die darunter um; m führt sie nach Rückfrage mit einer anderen der gleichen Art zusammen (z macht eine Zusammenführung nicht rückgängig); Regeln in config.toml bleiben unverändert",
   "rules_title": "Regeln",
   "rules_none": "Noch keine Regeln: lege eine beim Kategorisieren an (c)",
-  "rules_footer": "↑/↓ · enter ändern · esc schließen",
-  "rules_hint": "Es gilt die erste passende Regel. < > verschieben die Regel nach oben oder unten, d löscht sie, z macht rückgängig. Bereits kategorisierte Buchungen ändern sich nicht.",
+  "rules_footer": "↑/↓ · enter ändern · a anwenden · esc schließen",
+  "rules_hint": "Es gilt die erste passende Regel. < > verschieben die Regel nach oben oder unten, d löscht sie, a wendet die Regeln auf die Buchungen ohne Kategorie an, z macht rückgängig. Bereits kategorisierte Buchungen ändern sich nicht.",
   "rule_edit_hint": "tab wechselt das Feld. Die Kategorie ist der ganze Name, etwa Expenses:Groceries.",
   "rule_edit_footer": "tab Feld · enter speichern · esc zurück",
   "rule_delete_confirm": "Regel {{.Rule}}, {{.Pattern}} → {{.Category}} löschen? Die Buchungen, die sie kategorisiert hat, bleiben, wie sie sind.",
@@ -826,7 +826,22 @@
   "undid_rules": "Änderung an den Regeln rückgängig gemacht",
   "label_contains": "Enthält",
   "label_regex": "Regex",
-  "help_rules": "Regeln: ↑ ↓ wählen; e ändert Text und Kategorie; < > schieben sie nach oben oder unten, damit sie früher oder später geprüft wird; d löscht sie, nach Rückfrage; z macht rückgängig (config.toml behält deine Kommentare)",
+  "help_rules": "Regeln: ↑ ↓ wählen; e ändert Text und Kategorie; < > schieben sie nach oben oder unten, damit sie früher oder später geprüft wird; d löscht sie, nach Rückfrage; a wendet die Regeln auf die Buchungen ohne Kategorie an, nach Nennung der Anzahl; z macht rückgängig (config.toml behält deine Kommentare)",
   "rules_no_config": "keine Konfigurationsdatei, aus der die Regeln gelesen werden können",
-  "hint_tab_report": "tab Bericht"
+  "hint_tab_report": "tab Bericht",
+  "rules_apply_none": "Keine Buchung ohne Kategorie passt zu einer Regel (ohne Kategorie jetzt: {{.Total}})",
+  "rules_apply_confirm": {
+    "one": "Die Regeln auf die Buchungen ohne Kategorie anwenden? {{.Count}} Buchung bekäme eine Kategorie (ohne Kategorie jetzt: {{.Total}}). Bereits kategorisierte ändern sich nicht.",
+    "other": "Die Regeln auf die Buchungen ohne Kategorie anwenden? {{.Count}} Buchungen bekämen eine Kategorie (ohne Kategorie jetzt: {{.Total}}). Bereits kategorisierte ändern sich nicht."
+  },
+  "rules_apply_footer": "enter anwenden · esc zurück",
+  "rules_applied": {
+    "one": "{{.Count}} Buchung kategorisiert",
+    "other": "{{.Count}} Buchungen kategorisiert"
+  },
+  "undid_rules_applied": {
+    "one": "Kategorisierung von {{.Count}} Buchung rückgängig gemacht",
+    "other": "Kategorisierung von {{.Count}} Buchungen rückgängig gemacht"
+  },
+  "rules_apply_nothing": "Es gibt keine Buchungen ohne Kategorie"
 }

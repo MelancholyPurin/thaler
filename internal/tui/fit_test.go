@@ -264,6 +264,10 @@ func Test_View_fits(t *testing.T) {
 		{name: "rules, moved up", keys: "M down <"},
 		{name: "rules, moved and undone", keys: "M > z"},
 		{name: "rules, nothing to undo", keys: "M z"},
+		{name: "rules, apply question", keys: "M a"},
+		{name: "rules, applied", keys: "M a enter"},
+		{name: "rules, applied and undone", keys: "M a enter z"},
+		{name: "rules, nothing left to apply", keys: "M a enter a"},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.
