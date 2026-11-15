@@ -813,8 +813,8 @@
   "help_categories": "Categorías: ↑ ↓ eligen; r renombra la categoría y las que cuelgan de ella; m la fusiona con otra de su tipo, tras preguntar (z no deshace una fusión); las reglas de config.toml no se cambian",
   "rules_title": "Reglas",
   "rules_none": "Aún no hay reglas: crea una al categorizar (c)",
-  "rules_footer": "↑/↓ · enter editar · esc cerrar",
-  "rules_hint": "Gana la primera regla que coincide. < > suben o bajan la regla, d la borra, z deshace. Las transacciones ya categorizadas no cambian.",
+  "rules_footer": "↑/↓ · enter editar · a aplicar · esc cerrar",
+  "rules_hint": "Gana la primera regla que coincide. < > suben o bajan la regla, d la borra, a aplica las reglas a las transacciones sin categoría, z deshace. Las transacciones ya categorizadas no cambian.",
   "rule_edit_hint": "tab pasa al otro campo. La categoría es el nombre completo, como Expenses:Groceries.",
   "rule_edit_footer": "tab campo · enter guardar · esc volver",
   "rule_delete_confirm": "¿Borrar la regla {{.Rule}}, {{.Pattern}} → {{.Category}}? Las transacciones que categorizó se quedan como están.",
@@ -826,7 +826,22 @@
   "undid_rules": "Se deshizo el cambio de las reglas",
   "label_contains": "Contiene",
   "label_regex": "Regex",
-  "help_rules": "Reglas: ↑ ↓ elegir; e edita su texto y categoría; < > la suben o bajan, para que se compruebe antes o después; d la borra, tras preguntar; z deshace (config.toml conserva tus comentarios)",
+  "help_rules": "Reglas: ↑ ↓ elegir; e edita su texto y categoría; < > la suben o bajan, para que se compruebe antes o después; d la borra, tras preguntar; a aplica las reglas a las transacciones sin categoría, tras decir cuántas; z deshace (config.toml conserva tus comentarios)",
   "rules_no_config": "no hay archivo de configuración del que leer las reglas",
-  "hint_tab_report": "tab informe"
+  "hint_tab_report": "tab informe",
+  "rules_apply_none": "Ninguna transacción sin categoría coincide con una regla (sin categoría ahora: {{.Total}})",
+  "rules_apply_confirm": {
+    "one": "¿Aplicar las reglas a las transacciones sin categoría? {{.Count}} transacción recibiría una categoría (sin categoría ahora: {{.Total}}). Las ya categorizadas no cambian.",
+    "other": "¿Aplicar las reglas a las transacciones sin categoría? {{.Count}} transacciones recibirían una categoría (sin categoría ahora: {{.Total}}). Las ya categorizadas no cambian."
+  },
+  "rules_apply_footer": "enter aplicar · esc volver",
+  "rules_applied": {
+    "one": "{{.Count}} transacción categorizada",
+    "other": "{{.Count}} transacciones categorizadas"
+  },
+  "undid_rules_applied": {
+    "one": "Se deshizo la categorización de {{.Count}} transacción",
+    "other": "Se deshizo la categorización de {{.Count}} transacciones"
+  },
+  "rules_apply_nothing": "No hay transacciones sin categoría"
 }
