@@ -189,7 +189,10 @@ func (m *Model) applyFilter(keep bool) {
 		if scope != "" && !r.touches(scope) {
 			continue
 		}
-		if m.period != "" && !strings.HasPrefix(r.tx.Date, m.period) {
+		if m.period != "" && !m.tf.dated() && !strings.HasPrefix(r.tx.Date, m.period) { // a range of dates takes the place of the month
+			continue
+		}
+		if !m.tf.matches(r) {
 			continue
 		}
 		if m.onlyUncat && !r.uncategorized {
@@ -203,6 +206,7 @@ func (m *Model) applyFilter(keep bool) {
 		}
 		m.view = append(m.view, i)
 	}
+	m.sortRows(m.view)
 	if keepID >= 0 {
 		for vi, ri := range m.view {
 			if m.rows[ri].tx.ID == keepID {
