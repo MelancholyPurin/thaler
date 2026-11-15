@@ -10,7 +10,7 @@ import (
 type undoOp struct {
 	undone func() string // the status shown once it is undone, written then so that it follows the language
 	run    func() error
-	rules  bool // a change to the rules in config.toml, which the rules popup can undo
+	rules  bool // a change made in the rules popup (to config.toml, or applying the rules), which it can undo
 }
 
 // undoLast reverses the most recent change.

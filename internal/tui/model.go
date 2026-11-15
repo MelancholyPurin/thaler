@@ -649,11 +649,7 @@ func (m *Model) applyCategory(category string) {
 			m.setStatus(m.loc.T("rule_added_others_failed", map[string]any{"Error": m.errText(err)}), true)
 		}
 		for _, mv := range res.Moves {
-			was := ledger.UncategorizedExpense
-			if mv.Amount.Minor > 0 {
-				was = ledger.UncategorizedIncome
-			}
-			back = append(back, core.CategoryChange{TransactionID: mv.TransactionID, Category: was})
+			back = append(back, core.CategoryChange{TransactionID: mv.TransactionID, Category: uncategorizedOf(mv)})
 		}
 		moved = len(res.Moves)
 	}
@@ -685,6 +681,14 @@ func (m *Model) applyCategory(category string) {
 	}
 	parts = append(parts, m.loc.T("hint_undo_categories", nil))
 	m.setStatus(m.statusLine(parts), false)
+}
+
+// uncategorizedOf is the account a move took the transaction out of, where z puts it back.
+func uncategorizedOf(mv core.Move) string {
+	if mv.Amount.Minor > 0 {
+		return ledger.UncategorizedIncome
+	}
+	return ledger.UncategorizedExpense
 }
 
 func (m *Model) setStatus(s string, isErr bool) {
