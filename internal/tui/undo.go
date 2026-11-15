@@ -11,6 +11,9 @@ type undoOp struct {
 	undone func() string // the status shown once it is undone, written then so that it follows the language
 	run    func() error
 	rules  bool // a change made in the rules popup (to config.toml, or applying the rules), which it can undo
+	// account is the account the change was about, which the Accounts panel is left on once it
+	// is undone, if it is shown.
+	account string
 }
 
 // undoLast reverses the most recent change.
@@ -28,6 +31,10 @@ func (m *Model) undoLast() {
 	if err := m.reload(); err != nil {
 		m.setStatus(m.errText(err), true)
 		return
+	}
+	if op.account != "" {
+		m.selectAccount(op.account)
+		m.clampAll()
 	}
 	m.applyFilter(true)
 	m.setStatus(op.undone(), false)

@@ -199,8 +199,12 @@ func (m *Model) accountDetail(w int) (string, []string) {
 		return m.loc.T("all_accounts", nil), lines
 	}
 
-	e := m.accounts[m.accts.cursor-1]
-	lines = append(lines, bold.Render(m.loc.AccountName(e.account.Name)), "")
+	e, _ := m.panelEntry(m.accts.cursor)
+	lines = append(lines, bold.Render(m.loc.AccountName(e.account.Name)))
+	if e.account.Closed {
+		lines = append(lines, wrapped(m.loc.T("account_closed_detail", nil), w, dim)...)
+	}
+	lines = append(lines, "")
 	lines = append(lines, kv(m.loc.T("label_type", nil), m.loc.AccountName(string(e.account.Type)), keyW, w)...)
 	lines = append(lines, kv(m.loc.T("label_currency", nil), string(e.account.Currency), keyW, w)...)
 	lines = append(lines, kv(m.loc.T("label_balance", nil), bold.Render(m.loc.Money(e.balance)), keyW, w)...)
@@ -223,7 +227,7 @@ func (m *Model) accountDetail(w int) (string, []string) {
 // selected period.
 func (m *Model) periodFlow(account string) (in, out ledger.Money) {
 	cur := ledger.Money{}
-	for _, e := range m.accounts {
+	for _, e := range append(append([]acctEntry(nil), m.accounts...), m.closed...) {
 		if e.account.Name == account {
 			cur = ledger.Money{Currency: e.account.Currency}
 		}

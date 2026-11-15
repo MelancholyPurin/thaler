@@ -245,7 +245,7 @@ var screenNames2 = map[screen]string{screenLedger: "ledger", screenBudget: "budg
 var modeNames = map[mode]string{
 	modeList: "list", modeFilter: "filter", modePick: "pick", modeHelp: "help", modeForm: "form", modeConfirm: "confirm",
 	modeImport: "import", modeAccount: "account", modeTransfer: "transfer", modeBackup: "backup", modeRestore: "restore", modePrune: "prune", modeLanguage: "language",
-	modeTheme: "theme", modeTarget: "target", modeSchedule: "schedule", modeDue: "due", modeMinimum: "minimum", modeRange: "range", modeExport: "export", modeCategories: "categories", modeRules: "rules",
+	modeTheme: "theme", modeRename: "rename", modeTarget: "target", modeSchedule: "schedule", modeDue: "due", modeMinimum: "minimum", modeRange: "range", modeExport: "export", modeCategories: "categories", modeRules: "rules",
 }
 
 // visibleRows are the transactions the list shows, newest first.

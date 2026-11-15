@@ -66,6 +66,7 @@ const (
 	modePrune                  // removing the oldest backups
 	modeLanguage               // choosing the language
 	modeTheme                  // choosing the colours
+	modeRename                 // renaming an account
 	modeTarget                 // setting a category's target for the month
 	modeSchedule               // creating or editing a schedule
 	modeDue                    // going through what is due
@@ -169,7 +170,10 @@ type Model struct {
 	fcAccount    string                // the one account the Forecast is limited to, "" for all of them
 	now          func() time.Time
 	focus        pane
-	accts        listState // index 0 is "All accounts", then m.accounts
+	accts        listState   // index 0 is "All accounts", then m.accounts, then m.closed when they are shown
+	closed       []acctEntry // the closed accounts, which the Accounts panel shows after the others when showClosed
+	showClosed   bool
+	rename       *renameForm
 	txs          listState // index into view
 	view         []int     // indexes into rows that pass the filters
 	onlyUncat    bool
@@ -311,7 +315,7 @@ func (m *Model) layout() layout {
 		}
 	} else {
 		l.hHome = 3
-		l.hAccts = max(5, min(len(m.accounts)+3, l.avail*35/100))
+		l.hAccts = max(5, min(m.panelLen()+2, l.avail*35/100))
 		l.hTxs = l.avail - l.hHome - l.hAccts
 	}
 	l.acctLines = max(l.hAccts-2, 1)
@@ -321,7 +325,7 @@ func (m *Model) layout() layout {
 
 func (m *Model) clampAll() {
 	l := m.layout()
-	m.accts.clamp(len(m.accounts)+1, l.acctLines)
+	m.accts.clamp(m.panelLen(), l.acctLines)
 	m.txs.clamp(len(m.view), l.txLines)
 	m.sched.clamp(len(m.schedules), len(m.schedules))
 	m.repList.clamp(len(m.spendEntries()), max(1, l.avail-2))
@@ -428,6 +432,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLanguage(msg)
 		case modeTheme:
 			return m.updateTheme(msg)
+		case modeRename:
+			return m.updateRename(msg)
 		case modeTarget:
 			return m.updateTarget(msg)
 		case modeSchedule:
@@ -577,10 +583,17 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 			m.setFocus(paneTransactions)
 		}
 	case paneAccounts:
-		if m.accts.navigate(key, len(m.accounts)+1, l.acctLines) {
+		switch {
+		case m.accts.navigate(key, m.panelLen(), l.acctLines):
 			m.applyFilter(false) // a different account is a different list
-		} else if key == "enter" {
+		case key == "enter":
 			m.setFocus(paneTransactions)
+		case key == "r":
+			return m, m.openRename()
+		case key == "c":
+			m.toggleClosed()
+		case key == "v":
+			m.toggleShowClosed()
 		}
 	case paneTransactions:
 		if m.txs.navigate(key, len(m.view), l.txLines) {
