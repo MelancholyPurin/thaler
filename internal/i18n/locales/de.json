@@ -843,5 +843,6 @@
     "one": "Kategorisierung von {{.Count}} Buchung rückgängig gemacht",
     "other": "Kategorisierung von {{.Count}} Buchungen rückgängig gemacht"
   },
-  "rules_apply_nothing": "Es gibt keine Buchungen ohne Kategorie"
+  "rules_apply_nothing": "Es gibt keine Buchungen ohne Kategorie",
+  "pick_similar_payee": "ähnlicher Empfänger"
 }
