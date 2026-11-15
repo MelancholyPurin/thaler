@@ -235,6 +235,7 @@ type payeeStat struct {
 	name     string
 	category string // empty if never categorised
 	count    int
+	words    []string // what the payee says, for finding payees that look like it (payeeWords)
 }
 
 // refreshPayees lists every payee used so far, most recently used first.
@@ -251,13 +252,14 @@ func (m *Model) refreshPayees() {
 		if !ok {
 			i = len(m.payees)
 			index[key] = i
-			m.payees = append(m.payees, payeeStat{name: name})
+			m.payees = append(m.payees, payeeStat{name: name, words: payeeWords(name)})
 		}
 		m.payees[i].count++
 		if m.payees[i].category == "" && r.simple && !r.uncategorized {
 			m.payees[i].category = r.category.Account
 		}
 	}
+	m.payeeDF = wordCounts(m.payees)
 }
 
 // errText is err written in the language of the person: a coded error of the

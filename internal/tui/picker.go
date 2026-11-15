@@ -42,8 +42,8 @@ func (m *Model) refreshPicker() {
 
 // rankCategories lists the categories matching what has been typed, best
 // first. With nothing typed, the category last used for the same payee comes
-// first, then categories of the matching kind (income for money in, expenses
-// for money out), most used first. A full account name that does not exist yet
+// first, then the one that payees which look like it went to (similar.go), then categories
+// of the matching kind (income for money in, expenses for money out), most used first. A full account name that does not exist yet
 // is offered as a new category, and, with nothing typed, "uncategorized" closes
 // the list so a decision can wait. skip is a transaction to ignore when looking
 // up the payee's previous category (the one being edited).
@@ -54,8 +54,9 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 		kindOK   bool
 		sameCnt  int
 		lastUsed bool
+		similar  bool // the category of payees that look like this one
 	}
-	lastForPayee := ""
+	lastForPayee, similar := "", ""
 	if payee = strings.TrimSpace(payee); payee != "" {
 		for _, r := range m.rows { // newest first
 			if r.simple && !r.uncategorized && r.tx.ID != skip && strings.EqualFold(r.tx.Payee, payee) {
@@ -63,6 +64,7 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 				break
 			}
 		}
+		similar = m.similarCategory(payee, isIncome)
 	}
 	var items []scored
 	exact := false
@@ -80,10 +82,14 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 			kindOK:   strings.HasPrefix(name, "Income:") == isIncome,
 			sameCnt:  m.counts[name],
 			lastUsed: name == lastForPayee,
+			similar:  name == similar,
 		}
-		if it.lastUsed {
+		switch {
+		case it.lastUsed:
 			it.hint = m.loc.T("pick_same_payee", nil)
-		} else if it.sameCnt > 0 {
+		case it.similar:
+			it.hint = m.loc.T("pick_similar_payee", nil)
+		case it.sameCnt > 0:
 			it.hint = m.loc.T("pick_times", map[string]any{"Count": it.sameCnt})
 		}
 		items = append(items, it)
@@ -95,6 +101,9 @@ func (m *Model) rankCategories(q string, isIncome bool, payee string, skip int64
 		}
 		if a.lastUsed != b.lastUsed {
 			return a.lastUsed
+		}
+		if a.similar != b.similar {
+			return a.similar
 		}
 		if a.kindOK != b.kindOK {
 			return a.kindOK
