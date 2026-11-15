@@ -780,5 +780,33 @@
   "report_networth": "Patrimonio neto",
   "report_change": "Cambio",
   "report_worth_hint": "Barra: patrimonio neto frente al mes más alto; ▒ es por debajo de cero.",
+  "categories_title": "Categorías",
+  "categories_footer": "↑/↓ · r renombrar · m fusionar · esc cerrar",
+  "categories_none": "Todavía no hay categorías",
+  "category_used": {
+    "one": "{{.Count}} transacción",
+    "other": "{{.Count}} transacciones"
+  },
+  "label_new_name": "Nuevo nombre",
+  "category_rename_hint": "Escriba el nombre completo, como Expenses:Dining. Las categorías que cuelgan de ella se renombran con ella; las reglas de config.toml no se cambian.",
+  "category_rename_footer": "enter renombrar · esc volver",
+  "category_type_name": "escriba el nombre nuevo",
+  "category_no_other": "no hay otra categoría del mismo tipo con la que fusionarla",
+  "category_merge_into": "Fusionar {{.Name}} con:",
+  "category_merge_footer": "↑/↓ · enter elegir · esc volver",
+  "category_merge_confirm": {
+    "one": "¿Fusionar {{.From}} con {{.Into}}? Su transacción, sus programaciones, objetivos y arrastre pasan a {{.Into}}, y {{.From}} se elimina. z no puede deshacerlo.",
+    "other": "¿Fusionar {{.From}} con {{.Into}}? Sus {{.Count}} transacciones, programaciones, objetivos y arrastre pasan a {{.Into}}, y {{.From}} se elimina. z no puede deshacerlo."
+  },
+  "category_confirm_footer": "enter fusionar · esc volver",
+  "category_renamed": "{{.From}} renombrada a {{.To}}",
+  "category_merged": "{{.From}} fusionada con {{.Into}}",
+  "category_rules_left": {
+    "one": "{{.Count}} regla de config.toml aún nombra {{.Name}}",
+    "other": "{{.Count}} reglas de config.toml aún nombran {{.Name}}"
+  },
+  "undid_rename": "{{.To}} vuelve a llamarse {{.From}}",
+  "hint_categories": "K categorías",
+  "help_categories": "Categorías: ↑ ↓ eligen; r renombra la categoría y las que cuelgan de ella; m la fusiona con otra de su tipo, tras preguntar (z no deshace una fusión); las reglas de config.toml no se cambian",
   "hint_tab_report": "tab informe"
 }
