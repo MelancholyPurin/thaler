@@ -70,6 +70,7 @@ const (
 	modeRange                  // choosing the months the reports cover
 	modeExport                 // saving the report on show as a CSV file
 	modeCategories             // renaming or merging categories
+	modeRules                  // editing the categorization rules
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -147,6 +148,7 @@ type Model struct {
 	rng          *rangeForm            // the range popup while it is open
 	exp          *exportForm           // the export popup while it is open
 	catForm      *categoryForm         // the categories popup while it is open
+	ruleForm     *rulesForm            // the rules popup while it is open
 	repFrom      string                // the first month of the range chosen for the reports, "" if none
 	repTo        string                // and the last; with neither, they follow the month on show
 	projection   core.Projection       // what the accounts would hold week by week, for the balances view of the Forecast
@@ -430,6 +432,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateExport(msg)
 		case modeCategories:
 			return m.updateCategories(msg)
+		case modeRules:
+			return m.updateRules(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -451,6 +455,8 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.editConfig()
 	case "K":
 		return m, m.openCategories()
+	case "M":
+		return m, m.openRules()
 	case "S":
 		return m, m.openBackup()
 	case "ctrl+r":

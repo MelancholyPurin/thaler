@@ -66,11 +66,23 @@ func fitModel(t *testing.T, tag language.Tag) *Model {
 	book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
 	testSchedules(t, st, "Assets:USD")
 	keep := 1
+	cfgPath := filepath.Join(dir, "config.toml")
+	rules := "[[rule]]\ncontains = \"REWE\"\ncategory = \"Expenses:Groceries\"\n\n[[rule]]\nregex = \"b(ä|ae)ckerei\"\ncategory = \"Expenses:Groceries\"\n"
+	if err := os.WriteFile(cfgPath, []byte(rules), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	m, err := newWithClock(t.Context(), st, Options{
-		LoadConfig:     func() (*config.Config, error) { return &config.Config{KeepBackups: &keep}, nil },
+		LoadConfig: func() (*config.Config, error) {
+			c, err := config.Load(cfgPath, true)
+			if err != nil {
+				return nil, err
+			}
+			c.KeepBackups = &keep
+			return c, nil
+		},
 		DatabasePath:   filepath.Join(dir, "thaler.db"),
 		BackupDir:      backups,
-		ConfigPath:     filepath.Join(dir, "config.toml"),
+		ConfigPath:     cfgPath,
 		ConfigTemplate: "# sample\n",
 		Restore: func(context.Context, string, string) (core.Service, core.RestoreResult, error) {
 			return nil, core.RestoreResult{}, errors.New("not tried here")
@@ -236,6 +248,22 @@ func Test_View_fits(t *testing.T) {
 		{name: "categories, where to merge", keys: "K m"},
 		{name: "categories, the question", keys: "K m enter"},
 		{name: "categories, nowhere to merge", keys: "K down down down m"},
+		{name: "rules", keys: "M"},
+		{name: "rules, the second", keys: "M down"},
+		{name: "rules, edit a text", keys: "M e"},
+		{name: "rules, edit a regular expression", keys: "M down e"},
+		{name: "rules, edit the category", keys: "M e tab"},
+		{name: "rules, nothing typed", keys: "M e ctrl+u enter"},
+		{name: "rules, an expression that does not compile", keys: "M down e ctrl+u raw:( enter"},
+		{name: "rules, uncategorized", keys: "M e tab ctrl+u raw:Expenses:Uncategorized enter"},
+		{name: "rules, edited", keys: "M e text:REWE_Markt enter"},
+		{name: "rules, delete question", keys: "M d"},
+		{name: "rules, deleted", keys: "M d enter"},
+		{name: "rules, the last deleted", keys: "M d enter d enter"},
+		{name: "rules, moved down", keys: "M >"},
+		{name: "rules, moved up", keys: "M down <"},
+		{name: "rules, moved and undone", keys: "M > z"},
+		{name: "rules, nothing to undo", keys: "M z"},
 		{name: "search", keys: "tab tab /"},
 
 		// What the bottom bar says after something was done.
