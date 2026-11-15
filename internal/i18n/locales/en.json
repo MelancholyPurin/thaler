@@ -843,5 +843,6 @@
     "one": "Undid categorizing {{.Count}} transaction",
     "other": "Undid categorizing {{.Count}} transactions"
   },
-  "rules_apply_nothing": "There are no uncategorized transactions"
+  "rules_apply_nothing": "There are no uncategorized transactions",
+  "pick_similar_payee": "similar payee"
 }

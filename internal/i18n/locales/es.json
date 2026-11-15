@@ -843,5 +843,6 @@
     "one": "Se deshizo la categorización de {{.Count}} transacción",
     "other": "Se deshizo la categorización de {{.Count}} transacciones"
   },
-  "rules_apply_nothing": "No hay transacciones sin categoría"
+  "rules_apply_nothing": "No hay transacciones sin categoría",
+  "pick_similar_payee": "destinatario parecido"
 }

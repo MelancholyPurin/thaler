@@ -177,7 +177,8 @@ type Model struct {
 	mode   mode
 	filter textinput.Model
 
-	payees      []payeeStat // most recently used first
+	payees      []payeeStat    // most recently used first
+	payeeDF     map[string]int // in how many payees each of their words appears
 	form        *form
 	lastAccount string // account of the last transaction added in this session
 	lastEntered string // account of the most recently entered transaction in the database
