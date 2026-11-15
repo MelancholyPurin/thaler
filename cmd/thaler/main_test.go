@@ -213,6 +213,35 @@ func Test_account_list(t *testing.T) {
 	}
 }
 
+func Test_account_rename_close_reopen(t *testing.T) {
+	list := []string{"cli", "account", "list"}
+	food := []string{"cli", "add", "-a", "Assets:Bank", "--amount=-10.00", "-p", "shop", "-t", "Expenses:Food", "-d", "2026-10-01"}
+	tcs := []cliCase{
+		{name: "rename", setup: [][]string{addBank}, args: []string{"cli", "account", "rename", "Assets:Bank", "Assets:Sparkasse"}, want: "Renamed Assets:Bank to Assets:Sparkasse\n"},
+		{name: "the transactions go with the name", setup: [][]string{addBank, food, {"cli", "account", "rename", "Assets:Bank", "Assets:Sparkasse"}}, args: []string{"cli", "list"}, want: "2026-10-01  #1     shop\n    Assets:Sparkasse  -10.00 EUR\n    Expenses:Food     +10.00 EUR\n"},
+		{name: "rename: no such account", args: []string{"cli", "account", "rename", "Assets:Nope", "Assets:New"}, wantErr: "account does not exist: Assets:Nope"},
+		{name: "rename: a category is not an account of yours", setup: [][]string{{"cli", "account", "add", "Expenses:Food"}}, args: []string{"cli", "account", "rename", "Expenses:Food", "Expenses:Dining"}, wantErr: "Expenses:Food is not one of your accounts: only Assets and Liabilities accounts are renamed or closed"},
+		{name: "rename: the name is taken", setup: [][]string{addBank, {"cli", "account", "add", "Assets:Savings", "--currency", "EUR"}}, args: []string{"cli", "account", "rename", "Assets:Bank", "Assets:Savings"}, wantErr: "account already exists: Assets:Savings"},
+		{name: "close", setup: [][]string{addBank}, args: []string{"cli", "account", "close", "Assets:Bank"}, want: "Closed Assets:Bank\n"},
+		{name: "a closed account is marked in the list", setup: [][]string{addBank, {"cli", "account", "close", "Assets:Bank"}}, args: list, want: "Assets:Bank  Assets, EUR, closed\n"},
+		{name: "close: it must be empty", setup: [][]string{addBank, {"cli", "account", "balance", "Assets:Bank", "10", "--as-of", "2026-10-01"}}, args: []string{"cli", "account", "close", "Assets:Bank"}, wantErr: "Assets:Bank still holds 10.00 EUR: move it out before closing the account"},
+		{name: "close: already closed", setup: [][]string{addBank, {"cli", "account", "close", "Assets:Bank"}}, args: []string{"cli", "account", "close", "Assets:Bank"}, wantErr: "Assets:Bank is already closed"},
+		{name: "a closed account takes nothing new", setup: [][]string{addBank, {"cli", "account", "close", "Assets:Bank"}}, args: food, wantErr: "Assets:Bank is closed: reopen it first"},
+		{name: "reopen", setup: [][]string{addBank, {"cli", "account", "close", "Assets:Bank"}}, args: []string{"cli", "account", "reopen", "Assets:Bank"}, want: "Reopened Assets:Bank\n"},
+		{name: "reopen: it is not closed", setup: [][]string{addBank}, args: []string{"cli", "account", "reopen", "Assets:Bank"}, wantErr: "Assets:Bank is not closed"},
+		{name: "reopened, it is in use again", setup: [][]string{addBank, {"cli", "account", "close", "Assets:Bank"}, {"cli", "account", "reopen", "Assets:Bank"}}, args: list, want: "Assets:Bank  Assets, EUR\n"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
 func Test_account_balance(t *testing.T) {
 	asOf := []string{"--as-of", "2026-10-22"}
 	with := func(args ...string) []string {

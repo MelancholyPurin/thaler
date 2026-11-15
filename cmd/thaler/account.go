@@ -10,7 +10,7 @@ import (
 )
 
 func (a *app) accountCmd() *cobra.Command {
-	root := &cobra.Command{Use: "account", Short: "Create and list accounts"}
+	root := &cobra.Command{Use: "account", Short: "Create, list, rename and close accounts"}
 
 	var currency string
 	add := &cobra.Command{
@@ -204,13 +204,83 @@ Without arguments the minimums set are listed; --clear takes one away.`,
 	minimum.Flags().BoolVar(&clearMinimum, "clear", false, "take the minimum of the account away")
 	minimum.Flags().StringVar(&minimumAmount, "amount", "", "the minimum, instead of the second argument (for a negative one: --amount=-300)")
 
-	root.AddCommand(add, list, balance, minimum)
+	rename := &cobra.Command{
+		Use:   "rename OLD NEW",
+		Short: "Give an Assets or Liabilities account a new name, e.g. Assets:Bank Assets:Sparkasse",
+		Long: `Rename one of your accounts. Its transactions, schedules, minimum balance and
+history stay with it; only the name changes. The new name keeps the type (an
+Assets account stays an Assets account) and must not be taken. To rename a
+category use the interface (K).`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			acc, err := svc.RenameAccount(ctx, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Renamed %s to %s\n", args[0], acc.Name)
+			return nil
+		},
+	}
+
+	closeCmd := &cobra.Command{
+		Use:   "close ACCOUNT",
+		Short: "Set an account aside, keeping its history",
+		Long: `Close an Assets or Liabilities account you no longer use. It has to hold nothing
+(move what is in it to another account first) and no schedule may book to it. Its
+transactions stay, and the reports of the months it was in use still count it, but it
+takes no new money, and a transaction of it cannot be edited or deleted, until it is
+reopened. The list of accounts marks it as closed.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			acc, err := svc.CloseAccount(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Closed %s\n", acc.Name)
+			return nil
+		},
+	}
+
+	reopen := &cobra.Command{
+		Use:   "reopen ACCOUNT",
+		Short: "Take a closed account back into use",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			acc, err := svc.ReopenAccount(ctx, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Reopened %s\n", acc.Name)
+			return nil
+		},
+	}
+
+	root.AddCommand(add, list, balance, minimum, rename, closeCmd, reopen)
 	return root
 }
 
 func describeAccount(a core.Account) string {
+	text := string(a.Type) + ", " + string(a.Currency)
 	if a.Currency == "" {
-		return string(a.Type) + ", any currency"
+		text = string(a.Type) + ", any currency"
 	}
-	return string(a.Type) + ", " + string(a.Currency)
+	if a.Closed {
+		text += ", closed"
+	}
+	return text
 }

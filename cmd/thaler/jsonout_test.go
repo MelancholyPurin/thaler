@@ -187,9 +187,9 @@ func Test_listings_json(t *testing.T) {
 	tcs := []cliCase{
 		{
 			name: "accounts", setup: all, args: []string{"cli", "account", "list", "--json"},
-			want: `[{"id":1,"name":"Assets:Bank","type":"Assets","currency":"EUR"},{"id":2,"name":"Assets:Dollars","type":"Assets","currency":"USD"},` +
-				`{"id":6,"name":"Expenses:Fun","type":"Expenses","currency":""},{"id":3,"name":"Expenses:Groceries","type":"Expenses","currency":""},` +
-				`{"id":5,"name":"Expenses:Rent","type":"Expenses","currency":""},{"id":4,"name":"Income:Salary","type":"Income","currency":""}]`,
+			want: `[{"id":1,"name":"Assets:Bank","type":"Assets","currency":"EUR","closed":false},{"id":2,"name":"Assets:Dollars","type":"Assets","currency":"USD","closed":false},` +
+				`{"id":6,"name":"Expenses:Fun","type":"Expenses","currency":"","closed":false},{"id":3,"name":"Expenses:Groceries","type":"Expenses","currency":"","closed":false},` +
+				`{"id":5,"name":"Expenses:Rent","type":"Expenses","currency":"","closed":false},{"id":4,"name":"Income:Salary","type":"Income","currency":"","closed":false}]`,
 		},
 		{name: "no accounts: an empty list, not a sentence", args: []string{"cli", "account", "list", "--json"}, want: `[]`},
 		{
