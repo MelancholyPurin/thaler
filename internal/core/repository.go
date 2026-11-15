@@ -147,8 +147,8 @@ func (q queries) account(ctx context.Context, name string) (Account, error) {
 		typ string
 		cur sql.NullString
 	)
-	err := q.db.QueryRowContext(ctx, `SELECT id, name, type, currency FROM accounts WHERE name = ?`, name).
-		Scan(&a.ID, &a.Name, &typ, &cur)
+	err := q.db.QueryRowContext(ctx, `SELECT id, name, type, currency, closed_at IS NOT NULL FROM accounts WHERE name = ?`, name).
+		Scan(&a.ID, &a.Name, &typ, &cur, &a.Closed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, coded.New("account_not_found", map[string]any{"Name": name})
 	}
@@ -161,7 +161,7 @@ func (q queries) account(ctx context.Context, name string) (Account, error) {
 }
 
 func (q queries) accounts(ctx context.Context) ([]Account, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT id, name, type, currency FROM accounts ORDER BY name`)
+	rows, err := q.db.QueryContext(ctx, `SELECT id, name, type, currency, closed_at IS NOT NULL FROM accounts ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (q queries) accounts(ctx context.Context) ([]Account, error) {
 			typ string
 			cur sql.NullString
 		)
-		if err := rows.Scan(&a.ID, &a.Name, &typ, &cur); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &typ, &cur, &a.Closed); err != nil {
 			return nil, err
 		}
 		a.Type = ledger.AccountType(typ)
@@ -980,6 +980,80 @@ func (q queries) renameAccount(ctx context.Context, id int64, name string) error
 func (q queries) touchAccount(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, `UPDATE accounts SET version = version + 1, updated_at = `+nowSQL+` WHERE id = ?`, id)
 	return err
+}
+
+// setAccountClosed closes an account (closed true) or reopens it.
+func (q queries) setAccountClosed(ctx context.Context, id int64, closed bool) error {
+	closedAt := "NULL"
+	if closed {
+		closedAt = nowSQL
+	}
+	_, err := q.db.ExecContext(ctx, `UPDATE accounts SET closed_at = `+closedAt+`, version = version + 1, updated_at = `+nowSQL+` WHERE id = ?`, id)
+	return err
+}
+
+// accountHoldings is what an account holds, one amount for each currency it holds something in.
+func (q queries) accountHoldings(ctx context.Context, accountID int64) ([]ledger.Money, error) {
+	rows, err := q.db.QueryContext(ctx, `
+		SELECT currency, SUM(amount) FROM postings WHERE account_id = ?
+		GROUP BY currency HAVING SUM(amount) <> 0 ORDER BY currency`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ledger.Money
+	for rows.Next() {
+		var (
+			cur string
+			sum int64
+		)
+		if err := rows.Scan(&cur, &sum); err != nil {
+			return nil, err
+		}
+		out = append(out, ledger.Money{Minor: sum, Currency: ledger.Currency(cur)})
+	}
+	return out, rows.Err()
+}
+
+// scheduleCount is how many schedules book to an account.
+func (q queries) scheduleCount(ctx context.Context, accountID int64) (int, error) {
+	var n int
+	err := q.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT schedule_id) FROM schedule_postings WHERE account_id = ?`, accountID).Scan(&n)
+	return n, err
+}
+
+// transactionAccounts are the accounts a transaction has postings on.
+func (q queries) transactionAccounts(ctx context.Context, txID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT DISTINCT account_id FROM postings WHERE transaction_id = ?`, txID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// closedAccountIn is the name of the first of the accounts that is closed, empty if none is.
+func (q queries) closedAccountIn(ctx context.Context, ids []int64) (string, error) {
+	for _, id := range ids {
+		var name string
+		err := q.db.QueryRowContext(ctx, `SELECT name FROM accounts WHERE id = ? AND closed_at IS NOT NULL`, id).Scan(&name)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return name, nil
+	}
+	return "", nil
 }
 
 // accountCurrencies are the currencies the postings of an account are in.

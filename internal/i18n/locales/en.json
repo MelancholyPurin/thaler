@@ -856,5 +856,16 @@
   "theme_saved": "Colours: {{.Name}} (saved in config.toml)",
   "theme_session": "Colours: {{.Name}} (until you quit: there is no config file to save it in)",
   "theme_not_saved": "Colours: {{.Name}} (until you quit: could not save it: {{.Error}})",
-  "help_theme": "choose the colours: follow the terminal, dark or light (saved in config.toml)"
+  "help_theme": "choose the colours: follow the terminal, dark or light (saved in config.toml)",
+  "account_not_money": "{{.Name}} is not one of your accounts: only Assets and Liabilities accounts are renamed or closed",
+  "account_type_change": "cannot rename {{.From}} to {{.To}}: an account stays {{.Type}}, so the new name starts with {{.Type}}:",
+  "account_same_name": "{{.Name}} already has that name",
+  "account_closed": "{{.Name}} is closed: reopen it first",
+  "account_already_closed": "{{.Name}} is already closed",
+  "account_not_closed": "{{.Name}} is not closed",
+  "account_not_empty": "{{.Name}} still holds {{.Balance}}: move it out before closing the account",
+  "account_has_schedules": {
+    "one": "{{.Name}} still has {{.Count}} schedule: delete it before closing the account",
+    "other": "{{.Name}} still has {{.Count}} schedules: delete them before closing the account"
+  }
 }

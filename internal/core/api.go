@@ -51,7 +51,18 @@ type Service interface {
 	// Accounts. Assets and Liabilities need a currency.
 	AddAccount(ctx context.Context, name string, currency ledger.Currency) (Account, error)
 	GetAccount(ctx context.Context, name string) (Account, error)
+	// ListAccounts lists every account, the closed ones too (Account.Closed).
 	ListAccounts(ctx context.Context) ([]Account, error)
+	// RenameAccount gives an Assets or Liabilities account a new name of the same type.
+	// Its transactions, schedules, minimum and balance follow it: they refer to it, not to
+	// its name.
+	RenameAccount(ctx context.Context, from, to string) (Account, error)
+	// CloseAccount sets an account aside: it has to hold nothing and have no schedules.
+	// Its history stays, and it takes no new money, edit or delete of a transaction until
+	// ReopenAccount; the category of one of its transactions can still change.
+	CloseAccount(ctx context.Context, name string) (Account, error)
+	// ReopenAccount takes a closed account back into use.
+	ReopenAccount(ctx context.Context, name string) (Account, error)
 
 	// RenameCategory gives an Income or Expenses category, and the categories below
 	// it, a new name of the same type. Nothing else changes: the transactions, targets
@@ -216,6 +227,9 @@ type Account struct {
 	Name     string
 	Type     ledger.AccountType
 	Currency ledger.Currency // empty = any currency
+	// Closed is an account that has been set aside: it keeps its history, and takes no new
+	// money until it is reopened. Only Assets and Liabilities accounts close.
+	Closed bool
 }
 
 // LedgerBalance converts a balance as people read it into the ledger's sign:

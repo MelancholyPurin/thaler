@@ -94,6 +94,19 @@ snapshot "$new" "$db" >"$work/before"
 th "$new" "$db" cli check >/dev/null || fail "the ledger check fails on a fresh database"
 ok "creates accounts, imports, adds, transfers; the ledger check passes"
 
+# An account is renamed and set aside without losing what was booked on it.
+accts="$work/accounts/thaler.db"
+mkdir -p "$work/accounts"
+th "$new" "$accts" cli account add Assets:Old -c EUR >/dev/null
+th "$new" "$accts" cli add -a Assets:Old --amount=10 -t Income:Gift -d 2026-10-01 >/dev/null
+th "$new" "$accts" cli add -a Assets:Old --amount=-10 -t Expenses:Gift -d 2026-10-02 >/dev/null
+th "$new" "$accts" cli account rename Assets:Old Assets:Archive >/dev/null || fail "renaming an account fails"
+th "$new" "$accts" cli account close Assets:Archive >/dev/null || fail "closing an empty account fails"
+th "$new" "$accts" cli account list | grep -q "Assets:Archive.*closed" || fail "a closed account is not listed as closed"
+[ "$(th "$new" "$accts" cli list | grep -c "Assets:Archive")" = 2 ] || fail "the history of a renamed, closed account is gone"
+th "$new" "$accts" cli check >/dev/null || fail "the ledger check fails after renaming and closing an account"
+ok "renames and closes an account, keeping its history"
+
 th "$new" "$db" cli backup >/dev/null
 plain="$(ls "$work"/main/backups/thaler-*.db | head -n 1)"
 th "$new" "$db" cli add -a Assets:Bank --amount=-1 -t Expenses:Smoke -d 2026-10-03 >/dev/null
