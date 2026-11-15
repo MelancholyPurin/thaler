@@ -320,6 +320,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "rules, applied", keys: "M a enter"},
 		{name: "rules, applied and undone", keys: "M a enter z"},
 		{name: "rules, nothing left to apply", keys: "M a enter a"},
+		{name: "theme", keys: "ctrl+t"},
+		{name: "theme, trying dark", keys: "ctrl+t down"},
+		{name: "theme, trying light", keys: "ctrl+t down down"},
+		{name: "theme, chosen", keys: "ctrl+t down enter"},
 		{name: "language", keys: "ctrl+l"},
 	}
 	for _, tc := range tcs {

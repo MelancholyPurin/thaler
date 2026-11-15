@@ -45,6 +45,8 @@ type Options struct {
 	Restore RestoreFunc
 	// Loc writes the amounts and dates in the language of the person; nil is English.
 	Loc *i18n.Localizer
+	// Theme is the colour theme (config.Themes); empty is auto.
+	Theme string
 }
 
 type mode int
@@ -63,6 +65,7 @@ const (
 	modeRestore                // putting a backup in place of the database
 	modePrune                  // removing the oldest backups
 	modeLanguage               // choosing the language
+	modeTheme                  // choosing the colours
 	modeTarget                 // setting a category's target for the month
 	modeSchedule               // creating or editing a schedule
 	modeDue                    // going through what is due
@@ -196,6 +199,8 @@ type Model struct {
 	rst           *restoreForm
 	prn           *pruneForm
 	lang          *languageForm
+	themeForm     *themeForm
+	theme         string // the colour theme in use: one of config.Themes
 	tgt           *targetForm
 	helpTop       int            // first line of the help that is shown, when it is longer than the screen
 	lastBackup    time.Time      // when the newest backup was made, zero if there is none; see refreshBackups
@@ -242,6 +247,8 @@ func newWithClock(ctx context.Context, svc core.Service, opts Options, now func(
 	if home, err := os.UserHomeDir(); err == nil {
 		m.downloads = filepath.Join(home, "Downloads")
 	}
+	m.theme = themeOf(opts.Theme)
+	useTheme(m.theme)
 	m.period = now().Format(monthLayout)
 	m.filter = textinput.New()
 	m.filter.Prompt = "/ "
@@ -419,6 +426,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePrune(msg)
 		case modeLanguage:
 			return m.updateLanguage(msg)
+		case modeTheme:
+			return m.updateTheme(msg)
 		case modeTarget:
 			return m.updateTarget(msg)
 		case modeSchedule:
@@ -467,6 +476,9 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+l":
 		m.openLanguage()
+		return m, nil
+	case "ctrl+t":
+		m.openTheme()
 		return m, nil
 	case "f1", "L":
 		m.setScreen(screenLedger)
