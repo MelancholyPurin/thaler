@@ -67,6 +67,7 @@ const (
 	modeLanguage               // choosing the language
 	modeTheme                  // choosing the colours
 	modeRename                 // renaming an account
+	modeFilterForm             // filtering and sorting the transactions
 	modeTarget                 // setting a category's target for the month
 	modeSchedule               // creating or editing a schedule
 	modeDue                    // going through what is due
@@ -174,6 +175,8 @@ type Model struct {
 	closed       []acctEntry // the closed accounts, which the Accounts panel shows after the others when showClosed
 	showClosed   bool
 	rename       *renameForm
+	tf           txFilter // what narrows the transactions list beyond the account, the month and the search, and its order
+	filt         *filterForm
 	txs          listState // index into view
 	view         []int     // indexes into rows that pass the filters
 	onlyUncat    bool
@@ -434,6 +437,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTheme(msg)
 		case modeRename:
 			return m.updateRename(msg)
+		case modeFilterForm:
+			return m.updateFilterForm(msg)
 		case modeTarget:
 			return m.updateTarget(msg)
 		case modeSchedule:
@@ -563,14 +568,17 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		m.onlyUncat = !m.onlyUncat
 		m.applyFilter(true)
 		return m, nil
+	case "f":
+		return m, m.openFilter()
 	case "/":
 		m.setFocus(paneTransactions)
 		m.mode = modeFilter
 		return m, m.filter.Focus()
 	case "esc":
-		if m.filter.Value() != "" || m.onlyCategory != "" {
+		if m.filter.Value() != "" || m.onlyCategory != "" || m.tf.active() {
 			m.filter.SetValue("")
 			m.onlyCategory = ""
+			m.tf = txFilter{sort: m.tf.sort}
 			m.applyFilter(true)
 		}
 		return m, nil

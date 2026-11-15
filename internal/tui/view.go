@@ -54,6 +54,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.themePopup())
 	case modeRename:
 		screen = m.centerPopup(screen, m.renamePopup())
+	case modeFilterForm:
+		screen = m.centerPopup(screen, m.filterPopup())
 	case modeSchedule:
 		screen = m.centerPopup(screen, m.schedulePopup())
 	case modeDue:
@@ -95,7 +97,11 @@ func (m *Model) tabStrip() string {
 		}
 		tabs = append(tabs, label)
 	}
-	period := dim.Render("[ ") + bold.Render(m.periodLabel(m.period)) + dim.Render(" ]")
+	label := m.periodLabel(m.period)
+	if m.screen == screenLedger && m.tf.dated() {
+		label = m.datesLabel() // the Ledger covers the dates chosen, not the month
+	}
+	period := dim.Render("[ ") + bold.Render(label) + dim.Render(" ]")
 	return leftRight(strings.Join(tabs, " "), period, m.width)
 }
 
@@ -204,6 +210,12 @@ func (m *Model) transactionsPanel(l layout) string {
 	}
 	if q := strings.TrimSpace(m.filter.Value()); q != "" {
 		title += " · /" + q
+	}
+	if m.tf.active() {
+		title += " · " + m.loc.T("panel_filtered", nil)
+	}
+	if m.tf.sort != sortNewest {
+		title += " · " + m.loc.T("panel_sorted", nil)
 	}
 
 	var lines []string
@@ -443,6 +455,7 @@ func (m *Model) helpPopup() string {
 		{"r", m.loc.T("help_rename", nil)},
 		{"z", m.loc.T("help_undo", nil)},
 		{"/", m.loc.T("help_search", nil)},
+		{"f", m.loc.T("help_filter", nil)},
 		{"u", m.loc.T("help_uncategorized", nil)},
 		{"S", m.loc.T("help_backup", nil)},
 		{"ctrl+r", m.loc.T("help_restore", nil)},
