@@ -103,7 +103,7 @@ The double-entry model and its service layer, which every surface (CLI, TUI, lat
 - [x] `LDG-11` A uuid, a version and an owner on every row, ready for sync and multiple users
 - [x] `LDG-12` One `Service` interface with a local implementation, with the repository kept private
 - [ ] `LDG-13` Rename and close accounts without losing their history
-- [ ] `LDG-14` Rename, merge and delete categories, moving their transactions
+- [x] `LDG-14` Rename, merge and delete categories, moving their transactions (`RenameCategory`, `MergeCategory` and `DeleteCategory` in the service, on Income and Expenses categories, all of a call or none: a rename gives the category and those below it a new name of the same type, none of the new names may be taken; a merge moves the transactions and schedule lines of a category into another of the same type, with its monthly targets (those for a month the other has a target for are dropped, the other's stay) and its carry-over (unless the other has one), and removes it, and is refused for a category with categories below it or for one that takes a currency the transactions are not in; a delete is a merge into the Uncategorized of its type, made if it is not there, which drops the targets; Uncategorized itself and the accounts of your own are refused; what a call did is counted for the screens, `TCT-7` and the commands; the rules in `config.toml` that name a category are the person's to change)
 - [ ] `LDG-15` Edit a split transaction as a whole, keeping it balanced
 - [ ] `LDG-16` Edit and delete both halves of a transfer together
 
