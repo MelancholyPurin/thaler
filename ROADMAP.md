@@ -241,7 +241,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TCT-1` A category picker that puts the one used for the same payee first and creates new categories as you type
 - [x] `TCT-2` Make a rule while categorizing, and apply it to the matching uncategorized transactions
 - [x] `TCT-3` Show only what still needs a category
-- [ ] `TCT-4` List, edit, reorder and delete rules inside the TUI
+- [x] `TCT-4` List, edit, reorder and delete rules inside the TUI (`M` lists the rules of `config.toml` in the order they are checked; `e` changes the text a rule looks for and its category, `<` and `>` move it, `d` deletes it after asking, and `z` takes each back while the file is as Thaler left it; `config.EditRule`, `MoveRule`, `DeleteRule` and `Revert` rewrite only the lines of the rules concerned, keep the comments, and read the result back as TOML before writing it, refusing a file whose rules are not `[[rule]]` tables; running the rules again over what is already categorized is `TCT-5`)
 - [ ] `TCT-5` Run the rules again over existing uncategorized transactions
 - ~~`TCT-6` Categorize a selection at once~~ (folded into `TLD-14`)
 - [x] `TCT-7` Rename and merge categories (`K` opens a list of every category with its number of transactions, the cursor on the one the Ledger or the Budget has selected; `r` renames it, with the categories below it, to the whole new name, and `z` takes that back; `m` chooses another category of its kind to merge it into and asks before doing it, which `z` cannot take back; both are `RenameCategory` and `MergeCategory` of `LDG-14`, whose refusals are shown in the popup; the rules in `config.toml` that name the category are not changed, the status line counts them; deleting a category is not here)
