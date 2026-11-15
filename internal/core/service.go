@@ -139,6 +139,9 @@ func resolveAccount(ctx context.Context, q queries, name string, cur ledger.Curr
 	if err != nil {
 		return Account{}, err
 	}
+	if err := guardOpen(acc); err != nil {
+		return Account{}, err
+	}
 	if acc.Currency != "" && acc.Currency != cur {
 		return Account{}, coded.New("posting_wrong_currency", map[string]any{"Account": acc.Name, "Holds": acc.Currency, "Currency": cur})
 	}
@@ -212,14 +215,19 @@ func storeTransaction(ctx context.Context, q queries, nt NewTransaction, id int6
 
 // DeleteTransaction removes a transaction and its postings.
 func (s *Local) DeleteTransaction(ctx context.Context, id int64) error {
-	found, err := s.repo.queries().deleteTransaction(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return coded.New("transaction_not_found", map[string]any{"ID": id})
-	}
-	return nil
+	return s.repo.inTx(ctx, func(q queries) error {
+		if err := guardTransactionOpen(ctx, q, id); err != nil {
+			return err
+		}
+		found, err := q.deleteTransaction(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return coded.New("transaction_not_found", map[string]any{"ID": id})
+		}
+		return nil
+	})
 }
 
 // ReplaceTransaction rewrites the date, payee, description and postings of an
@@ -244,6 +252,9 @@ func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransact
 	}
 	if !found {
 		return coded.New("transaction_not_found", map[string]any{"ID": id})
+	}
+	if err := guardTransactionOpen(ctx, q, id); err != nil {
+		return err
 	}
 	if err := nt.validate(); err != nil {
 		return err
@@ -521,6 +532,9 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 	q := s.repo.queries()
 	acc, err := q.account(ctx, req.Account)
 	if err != nil {
+		return ImportResult{}, err
+	}
+	if err := guardOpen(acc); err != nil {
 		return ImportResult{}, err
 	}
 	if acc.Currency == "" {
@@ -1305,6 +1319,9 @@ func (s *Local) SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest
 		}
 		if !acc.Type.NeedsCurrency() {
 			return coded.New("balance_not_for_type", map[string]any{"Name": acc.Name, "Type": acc.Type})
+		}
+		if err := guardOpen(acc); err != nil {
+			return err
 		}
 		if req.Balance.Currency != acc.Currency {
 			return coded.New("balance_wrong_currency", map[string]any{"Account": acc.Name, "Holds": string(acc.Currency), "Currency": string(req.Balance.Currency)})

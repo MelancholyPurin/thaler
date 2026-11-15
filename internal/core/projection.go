@@ -42,7 +42,7 @@ func (s *Local) Projection(ctx context.Context, upTo string) (Projection, error)
 	byName := make(map[string]*ProjectedAccount)
 	out := Projection{From: today, To: to}
 	for _, a := range accounts {
-		if !a.Type.NeedsCurrency() {
+		if !a.Type.NeedsCurrency() || a.Closed { // a closed account holds nothing and takes nothing
 			continue
 		}
 		out.Accounts = append(out.Accounts, ProjectedAccount{Name: a.Name, Type: a.Type, Start: ledger.Money{Currency: a.Currency}})
