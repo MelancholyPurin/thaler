@@ -198,6 +198,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		name   string
 		keys   string
 		salary bool // books Income:Salary first
+		groups bool // and spending in two categories of a group
 	}{
 		{name: "home", keys: ""},
 		{name: "the transactions", keys: "tab tab down"},
@@ -230,6 +231,11 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "budget, targets over the planned income", keys: "B e down text:10 enter e text:30 enter", salary: true},
 		{name: "budget target, error", keys: "B e enter"},
 		{name: "budget, categories", keys: "B tab"},
+		{name: "budget, groups folded", keys: "B tab space", groups: true},
+		{name: "budget, a group with a target", keys: "B e text:30 enter tab", groups: true},
+		{name: "budget, a group with a target, folded", keys: "B e text:30 enter tab space down", groups: true},
+		{name: "budget, a group's transactions", keys: "B tab enter", groups: true},
+		{name: "budget, the category of a group", keys: "B tab down enter", groups: true},
 		{name: "budget, a category's transactions", keys: "B tab enter"},
 		{name: "budget, targets copied", keys: "B c"},
 		{name: "budget, carry-over on", keys: "B e tab enter"},
@@ -372,6 +378,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			book(t, st, "2026-10-02", "EDEKA", "Assets:Bank", "Expenses:Groceries", -2000)
 			if tc.salary { // not in the others: the picker shows the stored name, Income:Salary, in English
 				book(t, st, "2026-10-03", "ACME", "Assets:Bank", "Income:Salary", 5000)
+			}
+			if tc.groups {
+				book(t, st, "2026-10-04", "ALDI", "Assets:Bank", "Expenses:Food:Shop", -1500)
+				book(t, st, "2026-10-05", "DINER", "Assets:Bank", "Expenses:Food:Out", -1000)
 			}
 			testSchedules(t, st, "Assets:Dollars")
 			if err := st.SetBudgetTarget(t.Context(), "2026-09", "Expenses:Groceries", eur(10000)); err != nil {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,26 +59,29 @@ func (m *Model) monthsStyle() lipgloss.Style {
 	return selFocused
 }
 
-// budgetEntries are the categories the Budget lists, in the order it lists them: the
-// ones with money set aside, the others that spent, then income.
-func (m *Model) budgetEntries() []string {
-	var out []string
+// budgetRows are the categories the Budget lists, in the order it lists them: the ones with
+// money set aside, the others that spent, then income. Categories of a group come under a
+// row for the group, unless it is folded.
+func (m *Model) budgetRows() []budgetRow {
+	var out []budgetRow
 	if m.hasPlan() {
-		for _, l := range m.monthly.Lines {
-			if l.Planned() {
-				out = append(out, l.Name)
-			}
-		}
-		for _, l := range m.unplanned() {
-			out = append(out, l.Name)
-		}
+		planned, other := m.planRows()
+		out = slices.Concat(planned, other)
 	} else {
-		for _, l := range m.budget.Expenses {
-			out = append(out, l.Name)
-		}
+		out = m.spendRows(m.budget.Expenses)
 	}
 	for _, l := range m.budget.Income {
-		out = append(out, l.Name)
+		out = append(out, budgetRow{key: l.Name, label: m.loc.ShortName(l.Name), amount: l.Amount})
+	}
+	return out
+}
+
+// budgetEntries are the keys of what the Budget lists: the categories and the groups, as
+// they can be selected.
+func (m *Model) budgetEntries() []string {
+	var out []string
+	for _, r := range m.budgetRows() {
+		out = append(out, r.key)
 	}
 	return out
 }
@@ -150,6 +154,12 @@ func (m *Model) updateBudget(key string) tea.Cmd {
 			m.budgetCats = false
 		case "enter":
 			m.openCategory()
+		case " ":
+			m.toggleFold()
+		case "left":
+			m.goToGroup()
+		case "right":
+			m.fold(false)
 		default:
 			ls := listState{cursor: m.budgetIndex()}
 			if ls.navigate(key, len(entries), max(l.avail-2, 1)) {
@@ -170,11 +180,12 @@ func (m *Model) updateBudget(key string) tea.Cmd {
 // openCategory shows the transactions behind a number of the Budget: the Ledger, narrowed
 // to the category selected, in the month on show.
 func (m *Model) openCategory() {
-	name := m.budgetSelected()
-	if name == "" {
+	sel := m.budgetSelected()
+	if sel == "" {
 		return
 	}
-	m.onlyCategory, m.onlyUncat = name, false
+	name := keyName(sel)
+	m.onlyCategory, m.onlyGroup, m.onlyUncat = name, isGroupKey(sel), false
 	m.filter.SetValue("")
 	m.accts.cursor = 0
 	m.setScreen(screenLedger)
@@ -242,15 +253,16 @@ func (m *Model) budgetDetail(w int) ([]string, span) {
 
 	switch {
 	case m.hasPlan():
+		planned, other := m.planRows()
 		lines = append(lines, "", dim.Render(m.loc.T("budget_section_targets", nil)))
-		add(m.targetRows(w, sel))
-		if rest := m.unplanned(); len(rest) > 0 {
+		add(m.targetRows(w, sel, planned))
+		if len(other) > 0 {
 			lines = append(lines, "", dim.Render(m.loc.T("budget_section_no_target", nil)))
-			add(categoryRows(m.loc, rest, m.monthly.SpentTotal, w, false, sel))
+			add(categoryRows(m.loc, other, m.monthly.SpentTotal, w, false, sel))
 		}
 	default:
 		lines = append(lines, "", dim.Render(m.loc.T("budget_spending", nil)))
-		add(categoryRows(m.loc, m.budget.Expenses, m.budget.ExpenseTotal, w, false, sel))
+		add(categoryRows(m.loc, m.spendRows(m.budget.Expenses), m.budget.ExpenseTotal, w, false, sel))
 		if len(m.budget.Expenses) == 0 {
 			lines = append(lines, dim.Render("  "+m.loc.T("budget_nothing_spent", nil)))
 		}
@@ -259,16 +271,20 @@ func (m *Model) budgetDetail(w int) ([]string, span) {
 	case m.monthly.HasPlannedIncome:
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
 		add(m.plannedIncomeRows(w, sel))
-		var rest []core.BudgetLine
+		var rest []budgetRow
 		for _, l := range m.monthly.Income {
 			if !l.HasPlan {
-				rest = append(rest, core.BudgetLine{Name: l.Name, Amount: l.Received})
+				rest = append(rest, budgetRow{key: l.Name, label: m.loc.ShortName(l.Name), amount: l.Received})
 			}
 		}
 		add(categoryRows(m.loc, rest, m.monthly.IncomeTotal, w, true, sel))
 	case len(m.budget.Income) > 0:
 		lines = append(lines, "", dim.Render(m.loc.T("budget_income", nil)))
-		add(categoryRows(m.loc, m.budget.Income, m.budget.IncomeTotal, w, true, sel))
+		var rows []budgetRow
+		for _, l := range m.budget.Income {
+			rows = append(rows, budgetRow{key: l.Name, label: m.loc.ShortName(l.Name), amount: l.Amount})
+		}
+		add(categoryRows(m.loc, rows, m.budget.IncomeTotal, w, true, sel))
 	}
 	if m.period != "" && !m.hasPlan() {
 		lines = append(lines, "")
@@ -290,17 +306,6 @@ func hasPlan(b core.MonthBudget) bool {
 	return false
 }
 
-// unplanned are the categories that spent something in the month with nothing set aside.
-func (m *Model) unplanned() []core.BudgetLine {
-	var out []core.BudgetLine
-	for _, l := range m.monthly.Lines {
-		if !l.Planned() && l.Spent.Minor != 0 {
-			out = append(out, core.BudgetLine{Name: l.Name, Amount: l.Spent})
-		}
-	}
-	return out
-}
-
 // signed writes an amount with a "+" when it is positive, and the currency.
 func (m *Model) signed(a ledger.Money) string {
 	if a.Minor > 0 {
@@ -312,21 +317,28 @@ func (m *Model) signed(a ledger.Money) string {
 // targetRows draws the categories with money set aside, two lines each: the name, what
 // was spent and a bar of how much of what is set aside that is, then the target, what
 // was carried in and what is left, or by how much it was passed (in red, with a full red
-// bar).
-func (m *Model) targetRows(w int, sel string) ([]string, span) {
+// bar). A category of a group that has none set aside itself is one line, as the others
+// without a target are.
+func (m *Model) targetRows(w int, sel string, rows []budgetRow) ([]string, span) {
 	const barW = 10
-	var planned []core.MonthBudgetLine
 	amtW := 0
-	for _, l := range m.monthly.Lines {
-		if l.Planned() {
-			planned = append(planned, l)
-			amtW = max(amtW, len(m.loc.Amount(l.Spent)))
-		}
+	for _, r := range rows {
+		amtW = max(amtW, len(m.loc.Amount(r.amount)))
 	}
-	nameW := max(8, w-amtW-barW-4)
 	var out []string
 	at := noSpan
-	for _, l := range planned {
+	for _, r := range rows {
+		nameW := max(8, w-amtW-barW-4-lipgloss.Width(r.lead))
+		first := len(out)
+		name := fit(r.lead+r.label, nameW+lipgloss.Width(r.lead))
+		if !r.planned {
+			out = append(out, marked(r.key == sel)+name+" "+fitRight(m.loc.Amount(r.amount), amtW))
+			if r.key == sel {
+				at = span{first, len(out)}
+			}
+			continue
+		}
+		l := r.line
 		over := l.Left.Minor < 0
 		available := l.Target.Minor + l.Carried.Minor
 		filled := barW
@@ -360,12 +372,11 @@ func (m *Model) targetRows(w int, sel string) ([]string, span) {
 		} else {
 			parts = append(parts, m.loc.T("budget_left_part", map[string]any{"Amount": m.loc.Amount(l.Left)}))
 		}
-		first := len(out)
-		out = append(out, marked(l.Name == sel)+fit(m.loc.ShortName(l.Name), nameW)+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
+		out = append(out, marked(r.key == sel)+name+" "+fitRight(m.loc.Amount(l.Spent), amtW)+" "+bar)
 		for _, line := range wrapped(strings.Join(parts, " · "), w-4, style) {
 			out = append(out, "    "+line)
 		}
-		if l.Name == sel {
+		if r.key == sel {
 			at = span{first, len(out)}
 		}
 	}
@@ -425,37 +436,37 @@ func marked(selected bool) string {
 }
 
 // categoryRows draws one line per category: name, amount, share bar.
-func categoryRows(loc *i18n.Localizer, list []core.BudgetLine, total ledger.Money, w int, isIncome bool, sel string) ([]string, span) {
+func categoryRows(loc *i18n.Localizer, list []budgetRow, total ledger.Money, w int, isIncome bool, sel string) ([]string, span) {
 	const barW = 10
 	amtW := 0
 	for _, l := range list {
-		amtW = max(amtW, len(loc.Amount(l.Amount)))
+		amtW = max(amtW, len(loc.Amount(l.amount)))
 	}
-	nameW := max(8, w-amtW-barW-4)
 	var out []string
 	at := noSpan
 	for _, l := range list {
+		nameW := max(8, w-amtW-barW-4)
 		filled := 0
 		if total.Minor > 0 {
-			filled = int((l.Amount.Minor*barW + total.Minor/2) / total.Minor)
+			filled = int((l.amount.Minor*barW + total.Minor/2) / total.Minor)
 		}
 		filled = max(0, min(barW, filled))
-		if filled == 0 && l.Amount.Minor > 0 {
+		if filled == 0 && l.amount.Minor > 0 {
 			filled = 1
 		}
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
-		name := loc.ShortName(l.Name)
-		if l.Name == ledger.UncategorizedExpense || l.Name == ledger.UncategorizedIncome {
+		name := fit(l.lead+l.label, nameW)
+		if l.key == ledger.UncategorizedExpense || l.key == ledger.UncategorizedIncome {
 			name = warn.Render(name)
 		}
 		style := dim
 		if isIncome {
 			style = accent
 		}
-		if l.Name == sel {
+		if l.key == sel {
 			at = span{len(out), len(out) + 1}
 		}
-		out = append(out, marked(l.Name == sel)+fit(name, nameW)+" "+fitRight(loc.Amount(l.Amount), amtW)+" "+style.Render(bar))
+		out = append(out, marked(l.key == sel)+name+" "+fitRight(loc.Amount(l.amount), amtW)+" "+style.Render(bar))
 	}
 	return out, at
 }

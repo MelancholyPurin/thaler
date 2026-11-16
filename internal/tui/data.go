@@ -198,7 +198,7 @@ func (m *Model) applyFilter(keep bool) {
 		if m.onlyUncat && !r.uncategorized {
 			continue
 		}
-		if m.onlyCategory != "" && !r.touches(m.onlyCategory) {
+		if m.onlyCategory != "" && !groupTouches(r, m.onlyCategory, m.onlyGroup) {
 			continue
 		}
 		if q != "" && !matchAll(q, r.text) {
