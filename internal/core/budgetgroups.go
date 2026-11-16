@@ -45,21 +45,38 @@ type MonthBudgetGroup struct {
 	Planned bool
 }
 
-// budgetGroups adds the lines up by group, the largest spending first.
-func budgetGroups(lines []MonthBudgetLine, base ledger.Currency) []MonthBudgetGroup {
+// GroupsOf maps each of the category names to its group, "" for one that is in none, the
+// way MonthBudget.Groups does: by GroupOf, and a name that a group is named after is one of
+// its members when the group exists among the names.
+func GroupsOf(names []string) map[string]string {
 	exists := make(map[string]bool)
-	for _, l := range lines {
-		if g := GroupOf(l.Name); g != "" {
+	for _, n := range names {
+		if g := GroupOf(n); g != "" {
 			exists[g] = true
 		}
 	}
+	out := make(map[string]string, len(names))
+	for _, n := range names {
+		g := GroupOf(n)
+		if g == "" && exists[n] {
+			g = n
+		}
+		out[n] = g
+	}
+	return out
+}
+
+// budgetGroups adds the lines up by group, the largest spending first.
+func budgetGroups(lines []MonthBudgetLine, base ledger.Currency) []MonthBudgetGroup {
+	names := make([]string, len(lines))
+	for i, l := range lines {
+		names[i] = l.Name
+	}
+	groupOf := GroupsOf(names)
 	zero := ledger.Money{Currency: base}
 	byName := make(map[string]*MonthBudgetGroup)
 	for _, l := range lines {
-		g := GroupOf(l.Name)
-		if g == "" && exists[l.Name] {
-			g = l.Name // the category the group is named after
-		}
+		g := groupOf[l.Name]
 		if g == "" {
 			continue
 		}
