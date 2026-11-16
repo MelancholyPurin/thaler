@@ -912,5 +912,44 @@
   "dates_between": "{{.From}} – {{.To}}",
   "dates_from": "ab {{.From}}",
   "dates_until": "bis {{.To}}",
-  "help_filter": "Buchungen nach Betrag, Datum und Kategorie filtern und ihre Reihenfolge wählen (esc hebt den Filter auf)"
+  "help_filter": "Buchungen nach Betrag, Datum und Kategorie filtern und ihre Reihenfolge wählen (esc hebt den Filter auf)",
+  "cannot_recategorize_marked": "einige markierte Transaktionen sind Überweisungen oder geteilte Transaktionen und können hier nicht neu kategorisiert werden: erst die Markierung aufheben",
+  "categorize_many_title": {
+    "one": "{{.Count}} Transaktion kategorisieren",
+    "other": "{{.Count}} Transaktionen kategorisieren"
+  },
+  "footer_pick_many": "enter übernehmen · esc abbrechen",
+  "rule_hint_many": "eine Regel entsteht aus einem Empfänger: diese Transaktion einzeln kategorisieren",
+  "categorized_many": {
+    "one": "{{.Count}} Transaktion → {{.Category}}  (z macht es rückgängig)",
+    "other": "{{.Count}} Transaktionen → {{.Category}}  (z macht es rückgängig)"
+  },
+  "undid_categorize_many": {
+    "one": "Kategorisierung von {{.Count}} Transaktion rückgängig gemacht",
+    "other": "Kategorisierung von {{.Count}} Transaktionen rückgängig gemacht"
+  },
+  "delete_many_title": {
+    "one": "{{.Count}} Transaktion löschen",
+    "other": "{{.Count}} Transaktionen löschen"
+  },
+  "delete_many_question": "Diese Transaktionen löschen?",
+  "delete_and_more": {
+    "one": "und {{.Count}} weitere",
+    "other": "und {{.Count}} weitere"
+  },
+  "deleted_many": {
+    "one": "{{.Count}} Transaktion gelöscht  (z macht es rückgängig)",
+    "other": "{{.Count}} Transaktionen gelöscht  (z macht es rückgängig)"
+  },
+  "undid_delete_many": {
+    "one": "Löschen von {{.Count}} Transaktion rückgängig gemacht",
+    "other": "Löschen von {{.Count}} Transaktionen rückgängig gemacht"
+  },
+  "panel_marked": {
+    "one": "{{.Count}} markiert",
+    "other": "{{.Count}} markiert"
+  },
+  "help_mark": "die Transaktion unter dem Cursor markieren und weiter (Strg+A markiert alle sichtbaren); c und d wirken dann auf die markierten, esc hebt auf",
+  "hint_mark": "Leertaste markieren",
+  "hint_esc_marks": "esc abwählen"
 }

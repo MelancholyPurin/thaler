@@ -912,5 +912,44 @@
   "dates_between": "{{.From}} – {{.To}}",
   "dates_from": "from {{.From}}",
   "dates_until": "until {{.To}}",
-  "help_filter": "filter the transactions by amount, dates and category, and choose their order (esc clears the filter)"
+  "help_filter": "filter the transactions by amount, dates and category, and choose their order (esc clears the filter)",
+  "cannot_recategorize_marked": "some of the marked transactions are transfers or split transactions, which cannot be recategorized here: unmark them first",
+  "categorize_many_title": {
+    "one": "Categorize {{.Count}} transaction",
+    "other": "Categorize {{.Count}} transactions"
+  },
+  "footer_pick_many": "enter apply · esc cancel",
+  "rule_hint_many": "a rule is made from one payee: categorize that transaction on its own",
+  "categorized_many": {
+    "one": "{{.Count}} transaction → {{.Category}}  (z to undo)",
+    "other": "{{.Count}} transactions → {{.Category}}  (z to undo)"
+  },
+  "undid_categorize_many": {
+    "one": "Undid categorizing {{.Count}} transaction",
+    "other": "Undid categorizing {{.Count}} transactions"
+  },
+  "delete_many_title": {
+    "one": "Delete {{.Count}} transaction",
+    "other": "Delete {{.Count}} transactions"
+  },
+  "delete_many_question": "Delete these transactions?",
+  "delete_and_more": {
+    "one": "and {{.Count}} more",
+    "other": "and {{.Count}} more"
+  },
+  "deleted_many": {
+    "one": "Deleted {{.Count}} transaction  (z to undo)",
+    "other": "Deleted {{.Count}} transactions  (z to undo)"
+  },
+  "undid_delete_many": {
+    "one": "Undid deleting {{.Count}} transaction",
+    "other": "Undid deleting {{.Count}} transactions"
+  },
+  "panel_marked": {
+    "one": "{{.Count}} marked",
+    "other": "{{.Count}} marked"
+  },
+  "help_mark": "mark the transaction under the cursor and move down (ctrl+a marks all on show); c and d then act on the marked ones, esc lets go",
+  "hint_mark": "space mark",
+  "hint_esc_marks": "esc unmark"
 }
