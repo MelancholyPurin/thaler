@@ -179,8 +179,8 @@
   "form_no_accounts": "noch keine Konten: drücke n, um eines anzulegen",
   "cannot_edit_here": "Überweisungen und geteilte Transaktionen können hier nicht bearbeitet werden",
   "pick_current": "aktuell",
-  "footer_form_enter_next": "enter weiter · tab/shift+tab Felder · ctrl+s speichern · esc abbrechen",
-  "footer_form_enter_save": "enter speichern · tab Felder · ctrl+s speichern · esc abbrechen",
+  "footer_form_enter_next": "enter weiter · tab Feld · ctrl+s sichern · ctrl+o teilen · esc zurück",
+  "footer_form_enter_save": "enter sichern · tab Felder · ctrl+o teilen · esc zurück",
   "form_amount_positive": "der Betrag muss größer als null sein",
   "form_no_category": "keine Kategorie passt; gib einen vollständigen Namen wie Expenses:Gifts ein, um eine anzulegen",
   "tx_added": "#{{.ID}} hinzugefügt  {{.Payee}}  {{.Amount}} → {{.Category}}",
@@ -951,5 +951,34 @@
   },
   "help_mark": "die Transaktion unter dem Cursor markieren und weiter (Strg+A markiert alle sichtbaren); c und d wirken dann auf die markierten, esc hebt auf",
   "hint_mark": "Leertaste markieren",
-  "hint_esc_marks": "esc abwählen"
+  "hint_esc_marks": "esc abwählen",
+  "cannot_split": "nur eine gewöhnliche Transaktion mit einer Einnahmen- oder Ausgabenkategorie oder eine bereits geteilte kann geteilt werden",
+  "split_title_new": "Neue geteilte Transaktion",
+  "split_title": "#{{.ID}} teilen",
+  "footer_split": "ctrl+n Zeile · ctrl+x entfernen · ctrl+s speichern · esc abbrechen",
+  "split_rest": "der Rest",
+  "split_no_category": "Zeile {{.N}} hat keine Kategorie",
+  "split_one_rest": "nur eine Zeile darf ohne Betrag bleiben",
+  "split_line_amount": "Zeile {{.N}}: {{.Error}}",
+  "split_line_positive": "der Betrag in Zeile {{.N}} muss größer als null sein",
+  "split_nothing_left": "für Zeile {{.N}} bleibt nichts übrig: die anderen ergeben schon den Betrag oder mehr",
+  "split_short": "den Zeilen fehlen {{.Amount}} zum Betrag",
+  "split_long": "die Zeilen liegen {{.Amount}} über dem Betrag",
+  "split_balanced": "die Zeilen ergeben den Betrag",
+  "split_left": "{{.Amount}} noch zu verteilen",
+  "split_over": "{{.Amount}} zu viel",
+  "split_rest_gets": "die Zeile ohne Betrag bekommt {{.Amount}}",
+  "split_amount_hint": "Anteil dieser Kategorie, ohne Vorzeichen · leer nimmt den Rest der anderen",
+  "split_payee_hint": "wer bezahlt wurde oder wer dich bezahlt hat",
+  "split_added": {
+    "one": "Teilung #{{.ID}} angelegt  {{.Payee}}  {{.Amount}} in {{.Count}} Kategorie",
+    "other": "Teilung #{{.ID}} angelegt  {{.Payee}}  {{.Amount}} in {{.Count}} Kategorien"
+  },
+  "split_updated": {
+    "one": "Teilung #{{.ID}} geändert  {{.Payee}}  {{.Amount}} in {{.Count}} Kategorie",
+    "other": "Teilung #{{.ID}} geändert  {{.Payee}}  {{.Amount}} in {{.Count}} Kategorien"
+  },
+  "help_split": "die gewählte Transaktion auf Kategorien aufteilen (auch Strg+O im Formular zum Anlegen und Bearbeiten); eine Teilung wird auch hier bearbeitet",
+  "hint_split": "s teilen",
+  "split_detail": "Auf Kategorien aufgeteilt: e bearbeitet sie, s auch."
 }

@@ -179,8 +179,8 @@
   "form_no_accounts": "no accounts yet: press n to create one",
   "cannot_edit_here": "transfers and split transactions cannot be edited here",
   "pick_current": "current",
-  "footer_form_enter_next": "enter next · tab/shift+tab fields · ctrl+s save · esc cancel",
-  "footer_form_enter_save": "enter save · tab/shift+tab fields · ctrl+s save · esc cancel",
+  "footer_form_enter_next": "enter next · tab fields · ctrl+s save · ctrl+o split · esc cancel",
+  "footer_form_enter_save": "enter save · tab fields · ctrl+o split · esc cancel",
   "form_amount_positive": "amount must be greater than zero",
   "form_no_category": "no category matches; type a full name like Expenses:Gifts to create one",
   "tx_added": "Added #{{.ID}}  {{.Payee}}  {{.Amount}} → {{.Category}}",
@@ -951,5 +951,34 @@
   },
   "help_mark": "mark the transaction under the cursor and move down (ctrl+a marks all on show); c and d then act on the marked ones, esc lets go",
   "hint_mark": "space mark",
-  "hint_esc_marks": "esc unmark"
+  "hint_esc_marks": "esc unmark",
+  "cannot_split": "only an ordinary transaction with an income or expense category, or one that already is a split, can be split",
+  "split_title_new": "New split transaction",
+  "split_title": "Split #{{.ID}}",
+  "footer_split": "ctrl+n add line · ctrl+x remove · ctrl+s save · esc cancel",
+  "split_rest": "the rest",
+  "split_no_category": "line {{.N}} has no category",
+  "split_one_rest": "only one line can be left without an amount",
+  "split_line_amount": "line {{.N}}: {{.Error}}",
+  "split_line_positive": "the amount of line {{.N}} must be greater than zero",
+  "split_nothing_left": "nothing is left for line {{.N}}: the other lines already add up to the amount or more",
+  "split_short": "the lines are {{.Amount}} short of the amount",
+  "split_long": "the lines are {{.Amount}} over the amount",
+  "split_balanced": "the lines add up to the amount",
+  "split_left": "{{.Amount}} left to give out",
+  "split_over": "{{.Amount}} over the amount",
+  "split_rest_gets": "the line without an amount gets {{.Amount}}",
+  "split_amount_hint": "this category's share, without a sign · empty takes what the others leave",
+  "split_payee_hint": "who was paid, or who paid you",
+  "split_added": {
+    "one": "Added split #{{.ID}}  {{.Payee}}  {{.Amount}} in {{.Count}} category",
+    "other": "Added split #{{.ID}}  {{.Payee}}  {{.Amount}} in {{.Count}} categories"
+  },
+  "split_updated": {
+    "one": "Updated split #{{.ID}}  {{.Payee}}  {{.Amount}} in {{.Count}} category",
+    "other": "Updated split #{{.ID}}  {{.Payee}}  {{.Amount}} in {{.Count}} categories"
+  },
+  "help_split": "split the selected transaction between categories (also ctrl+o in the add and edit form); a split is edited here too",
+  "hint_split": "s split",
+  "split_detail": "Split between categories: e edits it, s too."
 }
