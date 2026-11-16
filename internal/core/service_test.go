@@ -876,6 +876,60 @@ func Test_RestoreTransaction(t *testing.T) {
 	}
 }
 
+// A transaction can be rewritten as a split between categories and back, and stays balanced.
+func Test_ReplaceTransaction_split(t *testing.T) {
+	bank := func(minor int64) ledger.Posting { return ledger.Posting{Account: "Assets:Bank", Amount: eur(minor)} }
+	cat := func(name string, minor int64) ledger.Posting {
+		return ledger.Posting{Account: name, Amount: eur(minor)}
+	}
+	tcs := []struct {
+		name     string
+		postings []ledger.Posting
+		want     []PostingView
+		wantErr  string
+	}{
+		{
+			name:     "into two categories, one of them new",
+			postings: []ledger.Posting{bank(-1000), cat("Expenses:Food", 600), cat("Expenses:Household", 400)},
+			want:     []PostingView{pe("Assets:Bank", -1000), pe("Expenses:Food", 600), pe("Expenses:Household", 400)},
+		},
+		{
+			name:     "income in two",
+			postings: []ledger.Posting{bank(1000), cat("Income:Salary", -800), cat("Income:Bonus", -200)},
+			want:     []PostingView{pe("Assets:Bank", 1000), pe("Income:Salary", -800), pe("Income:Bonus", -200)},
+		},
+		{
+			name:     "back to one",
+			postings: []ledger.Posting{bank(-1000), cat("Expenses:Food", 1000)},
+			want:     []PostingView{pe("Assets:Bank", -1000), pe("Expenses:Food", 1000)},
+		},
+		{
+			name:     "lines that do not add up are refused",
+			postings: []ledger.Posting{bank(-1000), cat("Expenses:Food", 600), cat("Expenses:Household", 300)},
+			want:     []PostingView{pe("Assets:Bank", -1000), pe("Expenses:Food", 1000)},
+			wantErr:  "postings do not balance: off by EUR -1.00",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, accounts("Assets:Bank EUR"), spending("2026-10-01", "Expenses:Food", 1000))
+			nt := NewTransaction{Date: day("2026-10-01"), Payee: "shop", Postings: tc.postings}
+
+			// when
+			_, err := st.ReplaceTransaction(t.Context(), 1, nt)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			got, _ := st.GetTransaction(t.Context(), 1)
+			if diff := cmp.Diff(tc.want, got.Postings, equalEmpty); diff != "" {
+				t.Errorf("postings mismatch (-want +got):\n%s", diff)
+			}
+			checkConsistent(t, st)
+		})
+	}
+}
+
 // Several transactions go together or not at all.
 func Test_DeleteTransactions(t *testing.T) {
 	setup := []given{
