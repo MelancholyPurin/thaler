@@ -980,5 +980,8 @@
   },
   "help_split": "dividir la transacción seleccionada entre categorías (también ctrl+o en el formulario de añadir y editar); una división también se edita aquí",
   "hint_split": "s dividir",
-  "split_detail": "Dividida entre categorías: e la edita, s también."
+  "split_detail": "Dividida entre categorías: e la edita, s también.",
+  "budget_group_direct": "{{.Name}} (directamente)",
+  "hint_fold": "espacio plegar",
+  "help_fold": "Presupuesto: plegar o desplegar el grupo de la categoría seleccionada (← lo pliega, o va de una categoría a su grupo; → lo despliega); enter en un grupo lista las transacciones de todas sus categorías"
 }
