@@ -870,3 +870,146 @@ func Test_MonthBudget_rollover(t *testing.T) {
 		})
 	}
 }
+
+func Test_GroupOf(t *testing.T) {
+	tcs := []struct {
+		category string
+		want     string
+	}{
+		{category: "Expenses:Housing:Rent", want: "Expenses:Housing"},
+		{category: "Expenses:Housing:Utilities:Power", want: "Expenses:Housing"},
+		{category: "Expenses:Housing", want: ""},
+		{category: "Expenses", want: ""},
+		{category: "", want: ""},
+		{category: "Income:Salary:Bonus", want: "Income:Salary"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.category, func(t *testing.T) {
+			// when
+			got := GroupOf(tc.category)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("group mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Categories below one another are added up as a group, and the groups and the categories
+// in none add up to the totals of the month.
+func Test_MonthBudget_groups(t *testing.T) {
+	const (
+		rent  = "Expenses:Housing:Rent"
+		power = "Expenses:Housing:Power"
+		deep  = "Expenses:Housing:Utilities:Water"
+		house = "Expenses:Housing"
+		out   = "Expenses:Food:Out"
+		shop  = "Expenses:Food:Shop"
+		fun   = "Expenses:Fun"
+	)
+	with := func(steps ...given) []given {
+		return append([]given{accounts("Assets:Bank EUR", rent, power, deep, house, out, shop, fun, "Income:Salary")}, steps...)
+	}
+	tcs := []struct {
+		name  string
+		setup []given
+		want  []MonthBudgetGroup
+	}{
+		{name: "no category below another: no groups", setup: with(spending("2026-10-03", fun, 1500), target("2026-10", fun, eur(2000)))},
+		{
+			name: "two categories with targets",
+			setup: with(target("2026-10", rent, eur(90000)), target("2026-10", power, eur(10000)),
+				spending("2026-10-01", rent, 90000), spending("2026-10-05", power, 12000), spending("2026-10-09", fun, 1500)),
+			want: []MonthBudgetGroup{{Name: house, Members: []string{rent, power}, Spent: eur(102000), Target: eur(100000), HasTarget: true, Carried: eur(0), Left: eur(-2000), Unbudgeted: eur(0), Planned: true}},
+		},
+		{
+			name:  "what a category without a target spent is apart from what is left",
+			setup: with(target("2026-10", rent, eur(90000)), spending("2026-10-01", rent, 80000), spending("2026-10-05", power, 12000)),
+			want:  []MonthBudgetGroup{{Name: house, Members: []string{rent, power}, Spent: eur(92000), Target: eur(90000), HasTarget: true, Carried: eur(0), Left: eur(10000), Unbudgeted: eur(12000), Planned: true}},
+		},
+		{
+			name:  "no target at all",
+			setup: with(spending("2026-10-01", rent, 80000), spending("2026-10-05", power, 12000)),
+			want:  []MonthBudgetGroup{{Name: house, Members: []string{rent, power}, Spent: eur(92000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(92000)}},
+		},
+		{
+			name:  "the category the group is named after is one of its members",
+			setup: with(target("2026-10", house, eur(5000)), spending("2026-10-02", house, 2000), spending("2026-10-01", rent, 80000)),
+			want:  []MonthBudgetGroup{{Name: house, Members: []string{rent, house}, Spent: eur(82000), Target: eur(5000), HasTarget: true, Carried: eur(0), Left: eur(3000), Unbudgeted: eur(80000), Planned: true}},
+		},
+		{
+			name:  "a category named like a group, with nothing below it, is no group",
+			setup: with(spending("2026-10-02", house, 2000), target("2026-10", house, eur(5000))),
+		},
+		{
+			name:  "deeper categories belong to the first level",
+			setup: with(spending("2026-10-01", deep, 3000), spending("2026-10-05", power, 1000)),
+			want:  []MonthBudgetGroup{{Name: house, Members: []string{deep, power}, Spent: eur(4000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(4000)}},
+		},
+		{
+			name:  "the largest group first, then by name",
+			setup: with(spending("2026-10-01", power, 1000), spending("2026-10-02", out, 5000), spending("2026-10-03", shop, 2000)),
+			want: []MonthBudgetGroup{
+				{Name: "Expenses:Food", Members: []string{out, shop}, Spent: eur(7000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(7000)},
+				{Name: house, Members: []string{power}, Spent: eur(1000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(1000)},
+			},
+		},
+		{
+			name:  "the same spending: by name",
+			setup: with(spending("2026-10-02", out, 1000), spending("2026-10-01", power, 1000)),
+			want: []MonthBudgetGroup{
+				{Name: "Expenses:Food", Members: []string{out}, Spent: eur(1000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(1000)},
+				{Name: house, Members: []string{power}, Spent: eur(1000), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(1000)},
+			},
+		},
+		{
+			name: "what is carried in",
+			setup: with(rollover(rent, "2026-09"), target("2026-09", rent, eur(90000)), spending("2026-09-01", rent, 80000),
+				target("2026-10", rent, eur(90000)), spending("2026-10-01", rent, 90000), spending("2026-10-02", power, 500)),
+			want: []MonthBudgetGroup{{Name: house, Members: []string{rent, power}, Spent: eur(90500), Target: eur(90000), HasTarget: true, Carried: eur(10000), Left: eur(10000), Unbudgeted: eur(500), Planned: true}},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, tc.setup...)
+
+			// when
+			got, err := st.MonthBudget(t.Context(), MonthBudgetRequest{Month: "2026-10", RateDate: "2026-10-31"})
+
+			// then
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.want, got.Groups); diff != "" {
+				t.Errorf("groups mismatch (-want +got):\n%s", diff)
+			}
+			// the groups and the lines in none make the totals
+			var spent, target, carried, left, unbudgeted int64
+			grouped := map[string]bool{}
+			for _, g := range got.Groups {
+				spent, target, carried, left, unbudgeted = spent+g.Spent.Minor, target+g.Target.Minor, carried+g.Carried.Minor, left+g.Left.Minor, unbudgeted+g.Unbudgeted.Minor
+				for _, n := range g.Members {
+					grouped[n] = true
+				}
+			}
+			for _, l := range got.Lines {
+				if grouped[l.Name] {
+					continue
+				}
+				spent, target, carried = spent+l.Spent.Minor, target+l.Target.Minor, carried+l.Carried.Minor
+				if l.Planned() {
+					left += l.Left.Minor
+				} else {
+					unbudgeted += l.Spent.Minor
+				}
+			}
+			sums := []int64{spent, target, carried, left, unbudgeted}
+			wantSums := []int64{got.SpentTotal.Minor, got.TargetTotal.Minor, got.CarriedTotal.Minor, got.LeftTotal.Minor, got.UnbudgetedTotal.Minor}
+			if diff := cmp.Diff(wantSums, sums); diff != "" {
+				t.Errorf("totals of spent, target, carried, left, unbudgeted differ from the groups and the rest (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
