@@ -198,6 +198,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		name   string
 		keys   string
 		salary bool // books Income:Salary first
+		export bool // puts a bank export in the downloads folder
 		groups bool // and spending in two categories of a group
 	}{
 		{name: "home", keys: ""},
@@ -211,6 +212,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "transfer", keys: "x"},
 		{name: "transfer, date", keys: "x tab"},
 		{name: "import", keys: "i"},
+		{name: "import, review", keys: "i enter", export: true},
+		{name: "import, choosing a category", keys: "i enter down c", export: true},
+		{name: "import, a category chosen", keys: "i enter down c raw:Expenses:Gifts enter", export: true},
 		{name: "new account", keys: "n"},
 		{name: "new account, type", keys: "n tab"},
 		{name: "new account, balance", keys: "n tab tab tab"},
@@ -391,6 +395,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 				t.Fatal(err)
 			}
 			m := inLanguage(t, st, i18n.PseudoTag)
+			if tc.export {
+				writeExport(t, m, "umsaetze.csv", exportCSV)
+			}
 
 			// when
 			play(m, tc.keys)

@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,6 +31,7 @@ type importStep int
 const (
 	stepChoose importStep = iota
 	stepReview
+	stepCategory // choosing the category of one row of the review
 )
 
 type importField int
@@ -72,6 +74,20 @@ type importFlow struct {
 	problems []string // rows that could not be read or do not fit the account
 	newUncat int      // new rows no rule matched
 	list     listState
+
+	// chosen is the category the person gave a row of the review, by its line in
+	// the file. It goes to the service with the request, so what the review shows
+	// is what an import does; it is dropped when the file is read again.
+	chosen map[int]string
+	pick   *importPick
+}
+
+// importPick is the list of categories for one row of the review.
+type importPick struct {
+	input  textinput.Model
+	items  []pickItem
+	cursor int
+	row    core.ImportedRow
 }
 
 // importSize is the outer size of the import popup.
@@ -248,9 +264,11 @@ func (m *Model) focusImportField(d int) tea.Cmd {
 
 func (m *Model) updateImport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	f := m.imp
-	if f.step == stepReview {
-		m.updateImportReview(msg.String())
-		return m, nil
+	switch f.step {
+	case stepReview:
+		return m, m.updateImportReview(msg.String())
+	case stepCategory:
+		return m.updateImportPick(msg)
 	}
 	key := msg.String()
 	switch key {
@@ -345,23 +363,130 @@ func (m *Model) reviewImport() {
 	for _, r := range res.Rejected {
 		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": r.Line, "Reason": m.errText(r.Err)}))
 	}
-	f.newUncat = 0
-	for _, r := range res.Rows {
-		if !r.Duplicate && (r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome) {
-			f.newUncat++
-		}
-	}
 	f.path, f.req, f.res, f.skipped = path, req, res, parsed.Skipped
+	f.chosen = nil
+	f.countUncategorized()
 	f.list = listState{}
 	f.err = ""
 	f.step = stepReview
 	m.lastProfile = f.profiles[f.profile]
 }
 
-func (m *Model) updateImportReview(key string) {
+// countUncategorized counts the new rows that nobody has given a category.
+func (f *importFlow) countUncategorized() {
+	f.newUncat = 0
+	for _, r := range f.res.Rows {
+		if !r.Duplicate && (r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome) {
+			f.newUncat++
+		}
+	}
+}
+
+// choose gives the row on line a category (or, with "", takes the choice back)
+// and asks the service again what the import would do, since a row's category
+// decides whether it is paired as a transfer or answers a schedule. When that
+// fails the choice is dropped and the review stays as it was.
+func (m *Model) choose(line int, category string) {
+	f := m.imp
+	chosen := maps.Clone(f.chosen)
+	if chosen == nil {
+		chosen = map[int]string{}
+	}
+	if category == "" {
+		delete(chosen, line)
+	} else {
+		chosen[line] = category
+	}
+	req := f.req
+	req.Categories = chosen
+	res, err := m.svc.Import(m.ctx, req)
+	if err != nil {
+		f.err = m.errText(err)
+		return
+	}
+	f.req, f.res, f.chosen = req, res, chosen
+	f.countUncategorized()
+	f.err = ""
+}
+
+// reviewRow is the row of the review under the cursor, if the cursor is on one
+// and not on a line that could not be read.
+func (f *importFlow) reviewRow() (core.ImportedRow, bool) {
+	i := f.list.cursor - len(f.problems)
+	if i < 0 || i >= len(f.res.Rows) {
+		return core.ImportedRow{}, false
+	}
+	return f.res.Rows[i], true
+}
+
+// openImportPick lists the categories for the row under the cursor. A row that
+// is already stored, or that takes over an entry of yours, has its category
+// already, and one that could not be read is not a row.
+func (m *Model) openImportPick() tea.Cmd {
+	f := m.imp
+	r, ok := f.reviewRow()
+	switch {
+	case !ok:
+		f.err = m.loc.T("import_pick_problem", nil)
+	case r.Duplicate:
+		f.err = m.loc.T("import_pick_duplicate", nil)
+	case r.Adopts != nil:
+		f.err = m.loc.T("import_pick_adopted", nil)
+	default:
+		f.pick = &importPick{input: newInput(""), row: r}
+		f.pick.input.CharLimit = 64
+		f.pick.input.Width = m.importWidth()
+		f.step = stepCategory
+		m.refreshImportPick()
+		return f.pick.input.Focus()
+	}
+	return nil
+}
+
+func (m *Model) refreshImportPick() {
+	p := m.imp.pick
+	p.items = m.rankCategories(strings.TrimSpace(p.input.Value()), p.row.Row.Amount.Minor > 0, p.row.Row.Payee, 0)
+	p.cursor = max(0, min(p.cursor, len(p.items)-1))
+}
+
+func (m *Model) updateImportPick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	f := m.imp
+	p := f.pick
+	switch msg.String() {
+	case "esc":
+		f.step, f.pick = stepReview, nil
+		return m, nil
+	case "up", "ctrl+p":
+		p.cursor = max(0, p.cursor-1)
+		return m, nil
+	case "down", "ctrl+n":
+		p.cursor = max(0, min(len(p.items)-1, p.cursor+1))
+		return m, nil
+	case "enter":
+		if p.cursor < len(p.items) { // with nothing to choose the list stays, and says so
+			m.choose(p.row.Row.Line, p.items[p.cursor].name)
+			f.step, f.pick = stepReview, nil
+		}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	p.input, cmd = p.input.Update(msg)
+	p.cursor = 0
+	m.refreshImportPick()
+	return m, cmd
+}
+
+func (m *Model) updateImportReview(key string) tea.Cmd {
 	f := m.imp
 	_, h := m.importSize()
+	f.err = ""
 	switch key {
+	case "c":
+		return m.openImportPick()
+	case "r":
+		if r, ok := f.reviewRow(); ok && f.chosen[r.Row.Line] != "" {
+			m.choose(r.Row.Line, "")
+		}
 	case "esc":
 		f.step, f.err = stepChoose, ""
 	case "enter":
@@ -381,6 +506,7 @@ func (m *Model) updateImportReview(key string) {
 	default:
 		f.list.navigate(key, len(f.problems)+len(f.res.Rows), h-5)
 	}
+	return nil
 }
 
 // finishImport stores the rows for real, makes the import undoable, and shows
@@ -480,8 +606,11 @@ func (m *Model) importPopup() string {
 	f := m.imp
 	w, h := m.importSize()
 	iw := w - 2
-	if f.step == stepReview {
+	switch f.step {
+	case stepReview:
 		return m.importReviewPopup(w, h)
+	case stepCategory:
+		return m.importPickPopup(w, h)
 	}
 
 	label := func(name string, field importField) string {
@@ -597,14 +726,18 @@ func (m *Model) importReviewPopup(w, h int) string {
 			lines = append(lines, warn.Render(fit("⚠ "+f.problems[i], iw)))
 			continue
 		}
-		lines = append(lines, importRowLine(m.loc, f.res.Rows[i-len(f.problems)], iw, amtW, i == ls.cursor))
+		r := f.res.Rows[i-len(f.problems)]
+		lines = append(lines, importRowLine(m.loc, r, f.chosen[r.Row.Line] != "", iw, amtW, i == ls.cursor))
 	}
 	for len(lines) < h-2-1 {
 		lines = append(lines, "")
 	}
+	row, onRow := f.reviewRow()
 	switch {
 	case f.err != "":
 		lines = append(lines, errStyle.Render(fit(f.err, iw)))
+	case onRow && f.chosen[row.Row.Line] != "":
+		lines = append(lines, accent.Render(fit(m.loc.T("import_chosen_hint", nil), iw)))
 	case len(f.problems) > 0:
 		lines = append(lines, warn.Render(fit(m.loc.T("import_rows_skipped", nil), iw)))
 	default:
@@ -622,6 +755,20 @@ func (m *Model) importReviewPopup(w, h int) string {
 	return box(title, lines, w, h, true, footer)
 }
 
+// importPickPopup is the list of categories for one row, drawn where the review
+// was.
+func (m *Model) importPickPopup(w, h int) string {
+	p := m.imp.pick
+	iw := w - 2
+	title := m.loc.T("categorize_title", map[string]any{"Payee": clean(p.row.Row.Payee), "Amount": m.loc.Signed(p.row.Row.Amount)})
+	listH := max(h-2-1, 0) // minus the border and the input
+	lines := append([]string{p.input.View()}, m.pickLines(p.items, p.cursor, listH, iw)...)
+	for len(lines) < h-2 {
+		lines = append(lines, "")
+	}
+	return box(title, lines, w, h, true, m.loc.T("footer_import_pick", nil))
+}
+
 // importAmount is an amount without its currency: every row of an import is in
 // the currency of the account, which the title names.
 func importAmount(loc *i18n.Localizer, a ledger.Money) string {
@@ -633,7 +780,7 @@ func importAmount(loc *i18n.Localizer, a ledger.Money) string {
 
 // importRowLine is one row of the review list: whether it is new, its date,
 // the category the rules chose, the payee and the amount.
-func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selected bool) string {
+func importRowLine(loc *i18n.Localizer, r core.ImportedRow, chosen bool, w, amtW int, selected bool) string {
 	status := loc.T("import_status_new", nil)
 	if r.Duplicate {
 		status = loc.T("import_status_dup", nil)
@@ -641,6 +788,9 @@ func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selecte
 	catW := 16
 	payeeW := max(4, w-17-catW-amtW)
 	category := loc.ShortName(r.Category)
+	if chosen {
+		category = "✎ " + category
+	}
 	if r.Transfer != nil {
 		category = "⇄ " + loc.ShortName(r.Transfer.Account)
 	}
@@ -659,7 +809,7 @@ func importRowLine(loc *i18n.Localizer, r core.ImportedRow, w, amtW int, selecte
 	}
 	catText := fit(category, catW)
 	switch {
-	case r.Transfer != nil, r.Adopts != nil:
+	case r.Transfer != nil, r.Adopts != nil, chosen:
 		catText = accent.Render(catText)
 	case r.Category == ledger.UncategorizedExpense || r.Category == ledger.UncategorizedIncome:
 		catText = warn.Render(catText)
