@@ -218,6 +218,7 @@ func Test_listings_json(t *testing.T) {
 			want: `{"month":"2026-10","base":"EUR","lines":[` +
 				`{"name":"Expenses:Groceries","spent":` + bank("143.47") + `,"has_target":true,"target":` + bank("400.00") + `,"rollover":false,"carried":` + bank("0.00") + `,"left":` + bank("256.53") + `},` +
 				`{"name":"Expenses:Fun","spent":` + bank("4.50") + `,"has_target":false,"target":` + bank("0.00") + `,"rollover":false,"carried":` + bank("0.00") + `,"left":` + bank("0.00") + `}],` +
+				`"groups":[],` +
 				`"spent_total":` + bank("147.97") + `,"target_total":` + bank("400.00") + `,"carried_total":` + bank("0.00") + `,"left_total":` + bank("256.53") + `,"unbudgeted_total":` + bank("4.50") + `,` +
 				`"income":[{"name":"Income:Salary","received":` + bank("2900.00") + `,"has_plan":false,"planned":` + bank("0.00") + `}],` +
 				`"income_total":` + bank("2900.00") + `,"planned_income_total":` + bank("0.00") + `,"has_planned_income":false,"unassigned":` + bank("0.00") + `,"missing":[]}`,
