@@ -13,7 +13,15 @@ import (
 )
 
 func (m *Model) openPicker() tea.Cmd {
+	m.pickMany = nil
 	r, ok := m.selected()
+	switch marked := m.markedRows(); len(marked) {
+	case 0:
+	case 1:
+		r, ok = marked[0], true
+	default:
+		return m.openPickerMany(marked)
+	}
 	if !ok {
 		return nil
 	}
@@ -155,6 +163,9 @@ func (m *Model) updatePick(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.closePicker()
 		return m, nil
 	case "tab", "shift+tab":
+		if len(m.pickMany) > 0 {
+			return m, nil // a rule is made from one payee
+		}
 		return m, m.toggleRuleField()
 	case "up", "ctrl+p":
 		m.pickCursor--

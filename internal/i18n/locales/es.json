@@ -912,5 +912,44 @@
   "dates_between": "{{.From}} – {{.To}}",
   "dates_from": "desde {{.From}}",
   "dates_until": "hasta {{.To}}",
-  "help_filter": "filtrar las transacciones por importe, fechas y categoría, y elegir su orden (esc quita el filtro)"
+  "help_filter": "filtrar las transacciones por importe, fechas y categoría, y elegir su orden (esc quita el filtro)",
+  "cannot_recategorize_marked": "algunas de las transacciones marcadas son transferencias o transacciones divididas, que no se pueden recategorizar aquí: desmárcalas primero",
+  "categorize_many_title": {
+    "one": "Categorizar {{.Count}} transacción",
+    "other": "Categorizar {{.Count}} transacciones"
+  },
+  "footer_pick_many": "enter aplicar · esc cancelar",
+  "rule_hint_many": "una regla se crea a partir de un destinatario: categoriza esa transacción por separado",
+  "categorized_many": {
+    "one": "{{.Count}} transacción → {{.Category}}  (z para deshacer)",
+    "other": "{{.Count}} transacciones → {{.Category}}  (z para deshacer)"
+  },
+  "undid_categorize_many": {
+    "one": "Se deshizo la categorización de {{.Count}} transacción",
+    "other": "Se deshizo la categorización de {{.Count}} transacciones"
+  },
+  "delete_many_title": {
+    "one": "Eliminar {{.Count}} transacción",
+    "other": "Eliminar {{.Count}} transacciones"
+  },
+  "delete_many_question": "¿Eliminar estas transacciones?",
+  "delete_and_more": {
+    "one": "y {{.Count}} más",
+    "other": "y {{.Count}} más"
+  },
+  "deleted_many": {
+    "one": "Se eliminó {{.Count}} transacción  (z para deshacer)",
+    "other": "Se eliminaron {{.Count}} transacciones  (z para deshacer)"
+  },
+  "undid_delete_many": {
+    "one": "Se deshizo la eliminación de {{.Count}} transacción",
+    "other": "Se deshizo la eliminación de {{.Count}} transacciones"
+  },
+  "panel_marked": {
+    "one": "{{.Count}} marcada",
+    "other": "{{.Count}} marcadas"
+  },
+  "help_mark": "marcar la transacción bajo el cursor y bajar (ctrl+a marca todas las visibles); c y d actúan entonces sobre las marcadas, esc las suelta",
+  "hint_mark": "espacio marcar",
+  "hint_esc_marks": "esc desmarcar"
 }
