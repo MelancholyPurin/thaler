@@ -86,7 +86,7 @@ func (m *Model) openCategories() tea.Cmd {
 		}
 	}
 	f.rows = slices.Concat(spending, income)
-	focus := m.budgetSel
+	focus := keyName(m.budgetSel)
 	if r, ok := m.selected(); ok && m.screen == screenLedger {
 		focus = r.category.Account
 	}
@@ -198,6 +198,7 @@ func (m *Model) rulesNaming(name string) int {
 // followCategory points what the screens keep a category's name in at its new name, for the
 // category and those below it.
 func (m *Model) followCategory(from, to string) {
+	old := m.budgetSel
 	rename := func(name string) string {
 		if name == from || strings.HasPrefix(name, from+":") {
 			return to + strings.TrimPrefix(name, from)
@@ -205,7 +206,10 @@ func (m *Model) followCategory(from, to string) {
 		return name
 	}
 	m.onlyCategory = rename(m.onlyCategory)
-	m.budgetSel = rename(m.budgetSel)
+	m.budgetSel = rename(keyName(m.budgetSel))
+	if isGroupKey(old) {
+		m.budgetSel = groupKey(m.budgetSel)
+	}
 }
 
 // categoryDone closes the popup, loads what changed and says what was done.

@@ -980,5 +980,8 @@
   },
   "help_split": "split the selected transaction between categories (also ctrl+o in the add and edit form); a split is edited here too",
   "hint_split": "s split",
-  "split_detail": "Split between categories: e edits it, s too."
+  "split_detail": "Split between categories: e edits it, s too.",
+  "budget_group_direct": "{{.Name}} (directly)",
+  "hint_fold": "space fold",
+  "help_fold": "Budget: fold or unfold the group of the selected category (← folds it, or goes from a category to its group; → unfolds it); enter on a group lists the transactions of all its categories"
 }

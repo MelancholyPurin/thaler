@@ -335,7 +335,11 @@ func (m *Model) hintItems() (hints, tail []string) {
 	tail = []string{m.loc.T("hint_help", nil), m.loc.T("hint_quit", nil)}
 	switch {
 	case m.screen == screenBudget && m.catsFocused():
-		return []string{m.loc.T("hint_category", nil), m.loc.T("hint_enter_transactions", nil), m.loc.T("hint_target", nil), m.loc.T("hint_categories", nil), m.loc.T("hint_tab_months", nil), m.loc.T("hint_step", nil)}, tail
+		hints := []string{m.loc.T("hint_category", nil), m.loc.T("hint_enter_transactions", nil)}
+		if m.hasGroups() {
+			hints = append(hints, m.loc.T("hint_fold", nil))
+		}
+		return append(hints, m.loc.T("hint_target", nil), m.loc.T("hint_categories", nil), m.loc.T("hint_tab_months", nil), m.loc.T("hint_step", nil)), tail
 	case m.screen == screenBudget:
 		return []string{m.loc.T("hint_month", nil), m.loc.T("hint_tab_categories", nil), m.loc.T("hint_target", nil), m.loc.T("hint_categories", nil), m.loc.T("hint_copy_targets", nil), m.loc.T("hint_step", nil), m.loc.T("hint_this_month", nil), m.loc.T("hint_all_time", nil)}, tail
 	case m.screen == screenForecast:
@@ -469,6 +473,7 @@ func (m *Model) helpPopup() string {
 		{"r  c  v", m.loc.T("help_accounts_panel", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"space  ← →", m.loc.T("help_fold", nil)},
 		{"s", m.loc.T("help_split", nil)},
 		{"space  ctrl+a", m.loc.T("help_mark", nil)},
 		{"tab", m.loc.T("help_budget_tab", nil)},

@@ -1013,3 +1013,39 @@ func Test_MonthBudget_groups(t *testing.T) {
 		})
 	}
 }
+
+func Test_GroupsOf(t *testing.T) {
+	tcs := []struct {
+		name  string
+		names []string
+		want  map[string]string
+	}{
+		{name: "none", names: nil, want: map[string]string{}},
+		{
+			name:  "categories below one another",
+			names: []string{"Expenses:Food:Out", "Expenses:Food:Shop", "Expenses:Fun"},
+			want:  map[string]string{"Expenses:Food:Out": "Expenses:Food", "Expenses:Food:Shop": "Expenses:Food", "Expenses:Fun": ""},
+		},
+		{
+			name:  "the category a group is named after is in it",
+			names: []string{"Expenses:Food", "Expenses:Food:Out"},
+			want:  map[string]string{"Expenses:Food": "Expenses:Food", "Expenses:Food:Out": "Expenses:Food"},
+		},
+		{
+			name:  "without a category below it, it is in none",
+			names: []string{"Expenses:Food", "Expenses:Fun"},
+			want:  map[string]string{"Expenses:Food": "", "Expenses:Fun": ""},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := GroupsOf(tc.names)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("groups mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

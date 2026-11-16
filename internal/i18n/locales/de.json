@@ -980,5 +980,8 @@
   },
   "help_split": "die gewählte Transaktion auf Kategorien aufteilen (auch Strg+O im Formular zum Anlegen und Bearbeiten); eine Teilung wird auch hier bearbeitet",
   "hint_split": "s teilen",
-  "split_detail": "Auf Kategorien aufgeteilt: e bearbeitet sie, s auch."
+  "split_detail": "Auf Kategorien aufgeteilt: e bearbeitet sie, s auch.",
+  "budget_group_direct": "{{.Name}} (direkt)",
+  "hint_fold": "Leertaste falten",
+  "help_fold": "Budget: die Gruppe der gewählten Kategorie falten oder auffalten (← faltet sie, oder geht von einer Kategorie zu ihrer Gruppe; → faltet auf); enter auf einer Gruppe listet die Transaktionen aller ihrer Kategorien"
 }

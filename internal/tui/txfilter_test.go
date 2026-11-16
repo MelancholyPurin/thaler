@@ -152,7 +152,7 @@ func Test_filter_screen(t *testing.T) {
 		{name: "until a date", keys: "f tab tab tab text:2026-09-16 enter", shows: []string{"[ until 2026-09-16 ]"}},
 		{name: "the month is back when the filter goes", keys: "f tab tab text:2026-10-04 enter esc", shows: []string{"[ Oct 2026 ]"}, hides: []string{"from"}},
 		{name: "the other screens keep the month", keys: "f tab tab text:2026-10-04 enter B", shows: []string{"[ Oct 2026 ]"}},
-		{name: "the key help lists it", keys: "? pgdown pgdown", shows: []string{"filter the transactions by amount, dates and category"}},
+		{name: "the key help lists it", keys: "? pgdown pgdown pgdown", shows: []string{"filter the transactions by amount, dates and category"}},
 		{name: "Spanish", lang: language.Spanish, keys: "f", shows: []string{"Filtrar y ordenar", "Importe mín.", "Fecha desde", "Orden", "Fecha, la más reciente primero", "tab campo · enter aplicar · ctrl+x borrar · esc volver"}, hides: []string{"Filter and sort"}},
 		{name: "German", lang: language.German, keys: "f", shows: []string{"Filtern und sortieren", "Betrag ab", "Datum bis", "Sortierung", "Datum, neueste zuerst"}, hides: []string{"Filter and sort"}},
 		{name: "Spanish, filtered", lang: language.Spanish, keys: "f text:15 enter", shows: []string{"3 transacciones coinciden", "filtrado"}},

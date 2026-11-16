@@ -122,8 +122,9 @@ func cutIn(view string) []string {
 // terminal. The data is short on purpose, so what is cut is Thaler's own text.
 func Test_View_fits(t *testing.T) {
 	screens := []struct {
-		name string
-		keys string
+		name   string
+		keys   string
+		groups bool // books spending in two categories of a group first
 	}{
 		{name: "home", keys: ""},
 		{name: "home, left this month", keys: "B e text:30 enter L"},
@@ -166,6 +167,11 @@ func Test_View_fits(t *testing.T) {
 		{name: "budget with a target", keys: "B e text:30 enter"},
 		{name: "budget with a target passed", keys: "B e text:5 enter"},
 		{name: "budget, categories", keys: "B tab"},
+		{name: "budget, groups folded", keys: "B tab space", groups: true},
+		{name: "budget, a group with a target", keys: "B e text:30 enter tab", groups: true},
+		{name: "budget, a group with a target, folded", keys: "B e text:30 enter tab space down", groups: true},
+		{name: "budget, a group's transactions", keys: "B tab enter", groups: true},
+		{name: "budget, the category of a group", keys: "B tab down enter", groups: true},
 		{name: "budget, categories with a target", keys: "B e text:30 enter tab"},
 		{name: "budget, a category's transactions", keys: "B tab enter"},
 		{name: "budget, a category's transactions, nothing left after a move", keys: "B tab enter esc"},
@@ -365,6 +371,9 @@ func Test_View_fits(t *testing.T) {
 			t.Run(l.Code+", "+sc.name, func(t *testing.T) {
 				// given
 				m := fitModel(t, l.Tag)
+				if sc.groups {
+					bookGroup(t, m)
+				}
 
 				// when
 				play(m, sc.keys)
@@ -377,4 +386,19 @@ func Test_View_fits(t *testing.T) {
 			})
 		}
 	}
+}
+
+// bookGroup books spending in two categories of one group, and shows it.
+func bookGroup(t *testing.T, m *Model) {
+	t.Helper()
+	st, ok := m.svc.(*core.Local)
+	if !ok {
+		t.Fatalf("the service is a %T", m.svc)
+	}
+	book(t, st, "2026-10-04", "ALDI", "Assets:Bank", "Expenses:Food:Shop", -1500)
+	book(t, st, "2026-10-05", "DINER", "Assets:Bank", "Expenses:Food:Out", -1000)
+	if err := m.reload(); err != nil {
+		t.Fatal(err)
+	}
+	m.applyFilter(false)
 }

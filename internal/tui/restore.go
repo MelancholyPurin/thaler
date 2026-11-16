@@ -199,7 +199,7 @@ func (m *Model) finishRestore(msg restoreDone) (tea.Model, tea.Cmd) {
 	m.accts = listState{}
 	m.txs = listState{}
 	m.filter.SetValue("")
-	m.onlyUncat, m.onlyCategory = false, ""
+	m.onlyUncat, m.onlyCategory, m.onlyGroup = false, "", false
 	if err := m.reload(); err != nil {
 		m.fatal = fmt.Errorf("%w: %w", coded.New("reading_restored_failed", nil), err)
 		return m, tea.Quit

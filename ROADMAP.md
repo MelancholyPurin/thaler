@@ -275,7 +275,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TBU-4` Switch rollover on or off per category and see the carried amount: what is left, or overspent, carries into the next month from the month it was switched on, and the figure is worked out when shown
 - [x] `TBU-5` Copy last month's targets into this one: the service adds the targets a month lacks and keeps those it has, and the interface does it on a key and takes it back with `z`
 - [x] `TBU-6` Open a category to see the transactions behind its number
-- [ ] `TBU-7` Collapse and expand category groups
+- [x] `TBU-7` Collapse and expand category groups (with the categories in focus, a group of `BUD-7` is a row that adds up its categories, `-` while they show under it and `+` while folded, with the target, bar and what is left of a category; `space` folds or unfolds the group of the selection, `←` folds it or goes from a category to its group, `→` unfolds it, and `↑` `↓` step over a folded group; a group with a category that has a target is listed with the targets, with all of its categories, and one without with the others that have none; `enter` on a group opens the Ledger with the transactions of all of its categories, on one category with its own; folds are kept while it runs; the category a group is named after is `Housing (directly)` under it)
 - [x] `TBU-8` A "left this month" figure on the Home panel
 - [x] `TBU-9` Plan income in the target popup, and see planned income, the targets and what is still unassigned (income categories follow the spending ones in the popup; the Budget shows planned income, unassigned, and each plan against what came in)
 

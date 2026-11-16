@@ -184,6 +184,10 @@ type Model struct {
 	// onlyCategory narrows the Ledger to the transactions of one category: the ones
 	// behind a number of the Budget.
 	onlyCategory string
+	// onlyGroup says onlyCategory is a group: the categories below it count as well.
+	onlyGroup bool
+	// folds are the groups of the Budget that are shown as one row.
+	folds map[string]bool
 
 	mode   mode
 	filter textinput.Model
@@ -592,7 +596,7 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		}
 		if m.filter.Value() != "" || m.onlyCategory != "" || m.tf.active() {
 			m.filter.SetValue("")
-			m.onlyCategory = ""
+			m.onlyCategory, m.onlyGroup = "", false
 			m.tf = txFilter{sort: m.tf.sort}
 			m.applyFilter(true)
 		}
