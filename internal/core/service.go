@@ -215,16 +215,26 @@ func storeTransaction(ctx context.Context, q queries, nt NewTransaction, id int6
 
 // DeleteTransaction removes a transaction and its postings.
 func (s *Local) DeleteTransaction(ctx context.Context, id int64) error {
+	return s.DeleteTransactions(ctx, []int64{id})
+}
+
+// DeleteTransactions removes the listed transactions and their postings in one
+// database transaction: either all of them go or none does (one that does not exist,
+// one on a closed account, or one listed twice stops it). Nothing is deleted for an
+// empty list.
+func (s *Local) DeleteTransactions(ctx context.Context, ids []int64) error {
 	return s.repo.inTx(ctx, func(q queries) error {
-		if err := guardTransactionOpen(ctx, q, id); err != nil {
-			return err
-		}
-		found, err := q.deleteTransaction(ctx, id)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return coded.New("transaction_not_found", map[string]any{"ID": id})
+		for _, id := range ids {
+			if err := guardTransactionOpen(ctx, q, id); err != nil {
+				return err
+			}
+			found, err := q.deleteTransaction(ctx, id)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return coded.New("transaction_not_found", map[string]any{"ID": id})
+			}
 		}
 		return nil
 	})
@@ -278,10 +288,20 @@ func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransact
 // RestoreTransaction stores nt under the given id, which must be free. It
 // brings back a transaction deleted by mistake, with its old number.
 func (s *Local) RestoreTransaction(ctx context.Context, id int64, nt NewTransaction) error {
+	return s.RestoreTransactions(ctx, []RestoredTransaction{{ID: id, Transaction: nt}})
+}
+
+// RestoreTransactions brings back several deleted transactions, each under its old
+// number, in one database transaction: all of them or none.
+func (s *Local) RestoreTransactions(ctx context.Context, list []RestoredTransaction) error {
 	return s.repo.inTx(ctx, func(q queries) error {
-		var created []string
-		_, err := storeTransaction(ctx, q, nt, id, &created)
-		return err
+		for _, r := range list {
+			var created []string
+			if _, err := storeTransaction(ctx, q, r.Transaction, r.ID, &created); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

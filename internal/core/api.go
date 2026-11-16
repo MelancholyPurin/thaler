@@ -82,8 +82,12 @@ type Service interface {
 	// id and import hash. It returns the names of categories it created.
 	ReplaceTransaction(ctx context.Context, id int64, nt NewTransaction) ([]string, error)
 	DeleteTransaction(ctx context.Context, id int64) error
+	// DeleteTransactions removes several transactions, all or none.
+	DeleteTransactions(ctx context.Context, ids []int64) error
 	// RestoreTransaction stores nt under a free id: undo for a delete.
 	RestoreTransaction(ctx context.Context, id int64, nt NewTransaction) error
+	// RestoreTransactions is undo for DeleteTransactions: all of them or none.
+	RestoreTransactions(ctx context.Context, list []RestoredTransaction) error
 	// SetCategories re-books the category leg of each transaction, all or
 	// nothing, and returns the names of categories it created.
 	SetCategories(ctx context.Context, changes []CategoryChange) ([]string, error)
@@ -263,6 +267,12 @@ type AddResult struct {
 type CategoryChange struct {
 	TransactionID int64
 	Category      string
+}
+
+// RestoredTransaction is a deleted transaction to bring back under its old number.
+type RestoredTransaction struct {
+	ID          int64
+	Transaction NewTransaction
 }
 
 // TxFilter narrows ListTransactions. Empty fields mean "no restriction".

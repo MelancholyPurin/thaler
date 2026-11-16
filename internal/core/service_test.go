@@ -876,6 +876,82 @@ func Test_RestoreTransaction(t *testing.T) {
 	}
 }
 
+// Several transactions go together or not at all.
+func Test_DeleteTransactions(t *testing.T) {
+	setup := []given{
+		accounts("Assets:Bank EUR", "Assets:Old EUR"),
+		spending("2026-10-01", "Expenses:Food", 100),
+		spending("2026-10-02", "Expenses:Food", 200),
+		spending("2026-10-03", "Expenses:Food", 300),
+		handEntered("Assets:Old", "2026-10-04", "old", "Income:Gift", 400),
+		handEntered("Assets:Old", "2026-10-05", "old", "Expenses:Food", -400), // empty again, so it can close
+		closing("Assets:Old"),
+	}
+	tcs := []struct {
+		name    string
+		ids     []int64
+		want    []int64 // the ids left
+		wantErr string
+	}{
+		{name: "two of five", ids: []int64{1, 3}, want: []int64{2, 4, 5}},
+		{name: "an empty list changes nothing", ids: nil, want: []int64{1, 2, 3, 4, 5}},
+		{name: "one that does not exist stops all", ids: []int64{1, 99}, want: []int64{1, 2, 3, 4, 5}, wantErr: "transaction #99 does not exist"},
+		{name: "one on a closed account stops all", ids: []int64{1, 4}, want: []int64{1, 2, 3, 4, 5}, wantErr: "Assets:Old is closed: reopen it first"},
+		{name: "one listed twice stops all", ids: []int64{2, 2}, want: []int64{1, 2, 3, 4, 5}, wantErr: "transaction #2 does not exist"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, setup...)
+
+			// when
+			err := st.DeleteTransactions(t.Context(), tc.ids)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, ids(stateOf(t, st).Transactions)); diff != "" {
+				t.Errorf("remaining transactions mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_RestoreTransactions(t *testing.T) {
+	tx := func(date string, minor int64) NewTransaction {
+		return NewTransaction{Date: day(date), Payee: "shop", Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-minor)}, {Account: "Expenses:Food", Amount: eur(minor)}}}
+	}
+	unbalanced := NewTransaction{Date: day("2026-10-03"), Postings: []ledger.Posting{{Account: "Assets:Bank", Amount: eur(-5)}, {Account: "Expenses:Food", Amount: eur(4)}}}
+	setup := []given{accounts("Assets:Bank EUR"), spending("2026-10-01", "Expenses:Food", 100), spending("2026-10-02", "Expenses:Food", 200), func(t *testing.T, st *Local) {
+		if err := st.DeleteTransactions(t.Context(), []int64{1, 2}); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	tcs := []struct {
+		name    string
+		list    []RestoredTransaction
+		want    []int64
+		wantErr string
+	}{
+		{name: "both come back under their old numbers", list: []RestoredTransaction{{ID: 1, Transaction: tx("2026-10-01", 100)}, {ID: 2, Transaction: tx("2026-10-02", 200)}}, want: []int64{1, 2}},
+		{name: "one that is refused stops all", list: []RestoredTransaction{{ID: 1, Transaction: tx("2026-10-01", 100)}, {ID: 2, Transaction: unbalanced}}, want: nil, wantErr: "postings do not balance: off by EUR -0.01"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, setup...)
+
+			// when
+			err := st.RestoreTransactions(t.Context(), tc.list)
+
+			// then
+			checkErr(t, err, tc.wantErr, nil)
+			if diff := cmp.Diff(tc.want, ids(stateOf(t, st).Transactions), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("stored transactions mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func Test_SetCategories(t *testing.T) {
 	uncategorized := []given{
 		accounts("Assets:Bank EUR", "Assets:Savings EUR"),
