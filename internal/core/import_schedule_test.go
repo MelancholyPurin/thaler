@@ -52,6 +52,13 @@ func Test_Import_settlingScheduledOccurrences(t *testing.T) {
 			wantDue: []string{december},
 		},
 		{
+			name:    "a category the person chose beats the schedule's, and the date is still answered",
+			req:     ImportRequest{Rows: []importer.Row{landlord("2026-11-28")}, Categories: map[int]string{2: "Expenses:Gifts"}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Settled: settled(1, "2026-11-28"), Created: []string{"Expenses:Gifts"}},
+			wantTxs: []TxView{tv(1, "2026-11-28", "LANDLORD GMBH", "Miete", pe("Assets:Bank", -90000), pe("Expenses:Gifts", 90000))},
+			wantDue: []string{december},
+		},
+		{
 			name: "previewed: nothing is answered yet",
 			req:  ImportRequest{Rows: []importer.Row{landlord("2026-11-28")}, DryRun: true},
 			want: ImportResult{

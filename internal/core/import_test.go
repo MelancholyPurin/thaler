@@ -515,6 +515,105 @@ func Test_Import_pairingTransfers(t *testing.T) {
 	}
 }
 
+func Test_Import_chosenCategories(t *testing.T) {
+	accts := accounts("Assets:Bank EUR", "Assets:Savings EUR")
+	groceries := []importer.Rule{{Contains: "rewe", Category: "Expenses:Groceries"}}
+	rewe := row(2, "2026-10-04", "REWE", "", eur(-2000))
+	shop := row(3, "2026-10-05", "Mystery Shop", "", eur(-500))
+	out := row(2, "2026-10-10", "out", "", eur(-50000))
+	waiting := tv(1, "2026-10-10", "out", "", pe("Assets:Bank", -50000), pe(ledger.UncategorizedExpense, 50000))
+	in := row(2, "2026-10-12", "in", "", eur(50000))
+	tcs := []importCase{
+		{
+			name: "a chosen category beats the rule", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{rewe}, Rules: groceries, Categories: map[int]string{2: "Expenses:Gifts"}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Created: []string{"Expenses:Gifts"}},
+			wantTxs: []TxView{tv(1, "2026-10-04", "REWE", "", pe("Assets:Bank", -2000), pe("Expenses:Gifts", 2000))},
+		},
+		{
+			name: "only the row it names changes", setup: []given{accts},
+			req:  ImportRequest{Rows: []importer.Row{rewe, shop}, Rules: groceries, Categories: map[int]string{3: "Expenses:Gifts"}},
+			want: ImportResult{Inserted: 2, IDs: []int64{1, 2}, Created: []string{"Expenses:Groceries", "Expenses:Gifts"}},
+			wantTxs: []TxView{
+				tv(1, "2026-10-04", "REWE", "", pe("Assets:Bank", -2000), pe("Expenses:Groceries", 2000)),
+				tv(2, "2026-10-05", "Mystery Shop", "", pe("Assets:Bank", -500), pe("Expenses:Gifts", 500)),
+			},
+		},
+		{
+			name: "previewed: the row shows the chosen category", setup: []given{accts},
+			req: ImportRequest{Rows: []importer.Row{rewe}, Rules: groceries, DryRun: true, Categories: map[int]string{2: "Expenses:Gifts"}},
+			want: ImportResult{
+				Inserted: 1,
+				Rows:     []ImportedRow{{Row: rewe, Category: "Expenses:Gifts"}},
+			},
+		},
+		{
+			name: "choosing Uncategorized leaves the row for later, whatever the rule says", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{rewe}, Rules: groceries, Categories: map[int]string{2: ledger.UncategorizedExpense}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Uncategorized: 1, Created: []string{ledger.UncategorizedExpense}},
+			wantTxs: []TxView{tv(1, "2026-10-04", "REWE", "", pe("Assets:Bank", -2000), pe(ledger.UncategorizedExpense, 2000))},
+		},
+		{
+			name: "the wrong Uncategorized for the direction is the right one", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{in}, Categories: map[int]string{2: ledger.UncategorizedExpense}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Uncategorized: 1, Created: []string{ledger.UncategorizedIncome}},
+			wantTxs: []TxView{tv(1, "2026-10-12", "in", "", pe("Assets:Bank", 50000), pe(ledger.UncategorizedIncome, -50000))},
+		},
+		{
+			name: "a line that is not a row is ignored", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{shop}, Categories: map[int]string{9: "Expenses:Gifts"}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{1}, Uncategorized: 1, Created: []string{ledger.UncategorizedExpense}},
+			wantTxs: []TxView{tv(1, "2026-10-05", "Mystery Shop", "", pe("Assets:Bank", -500), pe(ledger.UncategorizedExpense, 500))},
+		},
+		{
+			name: "a choice keeps the row from being paired as a transfer", setup: []given{accts, importing("Assets:Bank", nil, out)},
+			req:     ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{row(2, "2026-10-12", "in", "", eur(50000))}, Categories: map[int]string{2: "Income:Gifts"}},
+			want:    ImportResult{Inserted: 1, IDs: []int64{2}, Created: []string{"Income:Gifts"}},
+			wantTxs: []TxView{waiting, tv(2, "2026-10-12", "in", "", pe("Assets:Savings", 50000), pe("Income:Gifts", -50000))},
+		},
+		{
+			name: "choosing Equity:Transfers pairs it", setup: []given{accts, importing("Assets:Bank", nil, out)},
+			req: ImportRequest{Account: "Assets:Savings", Rows: []importer.Row{in}, Categories: map[int]string{2: ledger.TransferAccount}},
+			want: ImportResult{
+				Inserted: 1, IDs: []int64{2}, Transfers: 1, Created: []string{ledger.TransferAccount},
+				Linked: []TransferLink{{ID: 2, OtherID: 1, OtherWas: ledger.UncategorizedExpense}},
+			},
+			wantTxs: []TxView{
+				linked(tv(1, "2026-10-10", "out", "", pe("Assets:Bank", -50000), pe(ledger.TransferAccount, 50000)), 2),
+				linked(tv(2, "2026-10-12", "in", "", pe("Assets:Savings", 50000), pe(ledger.TransferAccount, -50000)), 1),
+			},
+		},
+		{
+			name: "an entry of yours that the row takes over keeps its category", setup: []given{accts, handEntered("Assets:Bank", "2026-10-03", "REWE", "Expenses:Dining", -2000)},
+			req:     ImportRequest{Rows: []importer.Row{rewe}, Categories: map[int]string{2: "Expenses:Gifts"}},
+			want:    ImportResult{Adopted: 1, AdoptedIDs: []int64{1}},
+			wantTxs: []TxView{tv(1, "2026-10-03", "REWE", "", pe("Assets:Bank", -2000), pe("Expenses:Dining", 2000))},
+		},
+		{
+			name: "one of your accounts is not a category", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{rewe}, Categories: map[int]string{2: "Assets:Savings"}},
+			wantErr: "Assets:Savings is not a category; use an Income, Expenses or Equity account",
+		},
+		{
+			name: "a name that is not an account at all", setup: []given{accts},
+			req:     ImportRequest{Rows: []importer.Row{rewe}, Categories: map[int]string{2: "Gifts"}},
+			wantErr: `account "Gifts" must start with one of Assets, Liabilities, Income, Expenses, Equity`,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			st := newLedger(t, tc.setup...)
+
+			// when
+			got, err := st.Import(t.Context(), tc.request())
+
+			// then
+			tc.verify(t, st, got, err)
+		})
+	}
+}
+
 // ledgerView is a posting in any currency.
 func ledgerView(account string, amount ledger.Money) PostingView {
 	return PostingView{Account: account, Amount: amount}

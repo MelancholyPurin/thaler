@@ -581,11 +581,22 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		return res, coded.New("rows_rejected", map[string]any{"Count": len(res.Rejected)})
 	}
 
+	for _, c := range req.Categories {
+		if typ, err := ledger.TypeOf(c); err != nil {
+			return ImportResult{}, err
+		} else if typ.NeedsCurrency() {
+			return ImportResult{}, coded.New("not_a_category", map[string]any{"Name": c})
+		}
+	}
+
 	dedupe := importer.NewDeduper(strconv.FormatInt(acc.ID, 10))
 	txs := make([]NewTransaction, len(rows))
-	ruled := make([]bool, len(rows)) // a rule chose the category
+	ruled := make([]bool, len(rows)) // a rule or a person chose the category
 	for i, r := range rows {
 		category, ok := rules.Match(r.Payee, r.Purpose, r.BookingText)
+		if chosen, set := req.Categories[r.Line]; set {
+			category, ok = chosen, chosen != ledger.UncategorizedExpense && chosen != ledger.UncategorizedIncome
+		}
 		ruled[i] = ok
 		if !ok {
 			category = ledger.UncategorizedExpense

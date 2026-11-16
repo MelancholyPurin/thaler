@@ -401,6 +401,13 @@ type ImportRequest struct {
 	// IgnoreRejected imports the rows that fit even if others were rejected
 	// (see ImportResult.Rejected). Without it any rejected row aborts the import.
 	IgnoreRejected bool
+	// Categories sets the category of a row by its line in the file, ahead of the
+	// rules and of anything a schedule would name: it is a person's choice, so it
+	// counts as a rule that matched (a row is then paired as a transfer only when
+	// the choice is Equity:Transfers). A line that is no row of the request is
+	// ignored, so a choice made for a row that was rejected does no harm.
+	// Choosing an Uncategorized account is the same as choosing nothing.
+	Categories map[int]string
 }
 
 // ImportedRow is the outcome for one row of a dry run.
