@@ -49,6 +49,26 @@ func Test_budget(t *testing.T) {
 				"\nLeft counts the categories with a target or something carried in; 32.50 was spent on the others.\n",
 		},
 		{
+			name: "categories below one another are added up as a group",
+			setup: [][]string{addBank,
+				{"cli", "add", "-a", "Assets:Bank", "--amount=-800", "-t", "Expenses:Housing:Rent", "-d", "2026-10-01"},
+				{"cli", "add", "-a", "Assets:Bank", "--amount=-120", "-t", "Expenses:Housing:Power", "-d", "2026-10-02"},
+				spendGroceries,
+				{"cli", "budget", "set", "Expenses:Housing:Rent", "900", "--month", "2026-10"},
+				{"cli", "budget", "set", "Expenses:Housing:Power", "100", "--month", "2026-10"}},
+			args: []string{"cli", "budget", "--month", "2026-10"},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category                  Spent   Target    Left\n" +
+				"Expenses:Housing:Rent    800.00   900.00  100.00\n" +
+				"Expenses:Housing:Power   120.00   100.00  -20.00\n" +
+				"Expenses:Groceries       120.00\n" +
+				"Total                   1040.00  1000.00   80.00\n" +
+				"\nGroups (categories below one another, added up)\n\n" +
+				"Group              Spent   Target   Left\n" +
+				"Expenses:Housing  920.00  1000.00  80.00\n" +
+				"\nLeft counts the categories with a target or something carried in; 120.00 was spent on the others.\n",
+		},
+		{
 			name:  "a target passed is a negative amount left",
 			setup: [][]string{addBank, spendGroceries, {"cli", "budget", "set", "Expenses:Groceries", "100", "--month", "2026-10"}},
 			args:  []string{"cli", "budget", "-m", "2026-10"},
@@ -367,6 +387,39 @@ func Test_printMonthBudget(t *testing.T) {
 				"Expenses:Food  100.00  400.00   250.00  550.00\n" +
 				"Expenses:Fun     5.00           -20.00  -25.00\n" +
 				"Total          105.00  400.00   230.00  525.00\n",
+		},
+		{
+			name: "a group with nothing set aside has no target or left, one with a carried amount has the column",
+			in: core.MonthBudget{
+				Month: "2026-10", Base: "EUR",
+				Lines: []core.MonthBudgetLine{
+					{Name: "Expenses:Food:Out", Spent: eur(5000), HasTarget: true, Target: eur(4000), Rollover: true, Carried: eur(1000), Left: eur(0)},
+					{Name: "Expenses:Food:Shop", Spent: eur(2000), Target: eur(0), Left: eur(0)},
+					{Name: "Expenses:Home:Power", Spent: eur(500), Target: eur(0), Left: eur(0)},
+					{Name: "Expenses:Home:Water", Spent: eur(300), Target: eur(0), Left: eur(0)},
+				},
+				Groups: []core.MonthBudgetGroup{
+					{Name: "Expenses:Food", Members: []string{"Expenses:Food:Out", "Expenses:Food:Shop"}, Spent: eur(7000), Target: eur(4000), HasTarget: true, Carried: eur(1000), Left: eur(0), Unbudgeted: eur(2000), Planned: true},
+					{Name: "Expenses:Home", Members: []string{"Expenses:Home:Power", "Expenses:Home:Water"}, Spent: eur(800), Target: eur(0), Carried: eur(0), Left: eur(0), Unbudgeted: eur(800)},
+					{Name: "Expenses:Gift", Spent: eur(500), Target: eur(1000), HasTarget: true, Carried: eur(0), Left: eur(500), Planned: true},
+					{Name: "Expenses:Pet", Spent: eur(300), Target: eur(0), Carried: eur(-500), Left: eur(-800), Planned: true},
+				},
+				SpentTotal: eur(7800), TargetTotal: eur(4000), CarriedTotal: eur(1000), LeftTotal: eur(0), UnbudgetedTotal: eur(2800),
+			},
+			want: "Budget for 2026-10, in EUR\n\n" +
+				"Category             Spent  Target  Carried  Left\n" +
+				"Expenses:Food:Out    50.00   40.00    10.00  0.00\n" +
+				"Expenses:Food:Shop   20.00\n" +
+				"Expenses:Home:Power   5.00\n" +
+				"Expenses:Home:Water   3.00\n" +
+				"Total                78.00   40.00    10.00  0.00\n" +
+				"\nGroups (categories below one another, added up)\n\n" +
+				"Group          Spent  Target  Carried   Left\n" +
+				"Expenses:Food  70.00   40.00    10.00   0.00\n" +
+				"Expenses:Home   8.00\n" +
+				"Expenses:Gift   5.00   10.00            5.00\n" +
+				"Expenses:Pet    3.00            -5.00  -8.00\n" +
+				"\nLeft counts the categories with a target or something carried in; 28.00 was spent on the others.\n",
 		},
 	}
 	for _, tc := range tcs {

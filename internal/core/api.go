@@ -742,6 +742,10 @@ type MonthBudget struct {
 	Month string
 	Base  ledger.Currency
 	Lines []MonthBudgetLine
+	// Groups are the categories that sit below one another added up (see GroupOf), the
+	// largest spending first; nil when none do. Every member is also one of Lines, and
+	// the groups and the lines in none add up to the totals below.
+	Groups []MonthBudgetGroup
 	// SpentTotal is all spending; TargetTotal the sum of the targets, and
 	// CarriedTotal the sum of what is carried in.
 	SpentTotal, TargetTotal, CarriedTotal ledger.Money

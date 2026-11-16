@@ -1246,6 +1246,8 @@ func (s *Local) MonthBudget(ctx context.Context, req MonthBudgetRequest) (MonthB
 		return out.Lines[i].Name < out.Lines[j].Name
 	})
 
+	out.Groups = budgetGroups(out.Lines, base)
+
 	for _, line := range incomeByName {
 		if line.HasPlan {
 			out.PlannedIncomeTotal.Minor += line.Planned.Minor

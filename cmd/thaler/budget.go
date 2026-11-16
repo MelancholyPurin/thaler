@@ -23,6 +23,11 @@ spent. Amounts are in the base currency ("thaler cli currency"). A month with
 income planned (budget set on an Income category) also lists the income against
 its plan, and what is unassigned: the planned income less the targets.
 
+Categories below one another are a group (Expenses:Housing:Rent and
+Expenses:Housing:Power are in Expenses:Housing): a second table adds each group
+up, with the sum of its categories' targets as its target. A group has no target
+of its own to set; set the targets of its categories.
+
 A target belongs to one month and one category, in the base currency:
   thaler cli budget set Expenses:Groceries 400 --month 2026-10
   thaler cli budget clear Expenses:Groceries --month 2026-10`,
@@ -180,6 +185,24 @@ func printMonthBudget(w io.Writer, b core.MonthBudget) {
 	fmt.Fprintf(w, "Budget for %s, in %s\n\n", b.Month, b.Base)
 	if len(b.Lines) > 0 {
 		printTable(w, header, rows)
+	}
+	if len(b.Groups) > 0 {
+		var groupRows [][]string
+		for _, g := range b.Groups {
+			var target, carry, left *ledger.Money
+			if g.Planned {
+				target, carry, left = &g.Target, &g.Carried, &g.Left
+				if !g.HasTarget {
+					target = nil
+				}
+				if g.Carried.Minor == 0 {
+					carry = nil
+				}
+			}
+			groupRows = append(groupRows, row(g.Name, &g.Spent, target, carry, left))
+		}
+		fmt.Fprintf(w, "\nGroups (categories below one another, added up)\n\n")
+		printTable(w, append([]string{"Group"}, header[1:]...), groupRows)
 	}
 	if planned && b.UnbudgetedTotal.Minor != 0 {
 		fmt.Fprintf(w, "\nLeft counts the categories with a target or something carried in; %s was spent on the others.\n", b.UnbudgetedTotal.Decimal())
