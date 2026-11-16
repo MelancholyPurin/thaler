@@ -179,8 +179,8 @@
   "form_no_accounts": "todavía no hay cuentas: pulsa n para crear una",
   "cannot_edit_here": "las transferencias y las transacciones divididas no se pueden editar aquí",
   "pick_current": "actual",
-  "footer_form_enter_next": "enter sig. · tab/shift+tab campos · ctrl+s guardar · esc cancelar",
-  "footer_form_enter_save": "enter guardar · tab/shift+tab campos · ctrl+s guardar · esc cancelar",
+  "footer_form_enter_next": "enter sig. · tab campos · ctrl+s guardar · ctrl+o dividir · esc salir",
+  "footer_form_enter_save": "enter guardar · tab campos · ctrl+o dividir · esc salir",
   "form_amount_positive": "el importe debe ser mayor a cero",
   "form_no_category": "ninguna categoría coincide; escribe un nombre completo como Expenses:Gifts para crear una",
   "tx_added": "Añadida #{{.ID}}  {{.Payee}}  {{.Amount}} → {{.Category}}",
@@ -951,5 +951,34 @@
   },
   "help_mark": "marcar la transacción bajo el cursor y bajar (ctrl+a marca todas las visibles); c y d actúan entonces sobre las marcadas, esc las suelta",
   "hint_mark": "espacio marcar",
-  "hint_esc_marks": "esc desmarcar"
+  "hint_esc_marks": "esc desmarcar",
+  "cannot_split": "solo se puede dividir una transacción normal con una categoría de ingreso o gasto, o una que ya está dividida",
+  "split_title_new": "Nueva transacción dividida",
+  "split_title": "Dividir #{{.ID}}",
+  "footer_split": "ctrl+n añadir línea · ctrl+x quitar · ctrl+s guardar · esc cancelar",
+  "split_rest": "el resto",
+  "split_no_category": "la línea {{.N}} no tiene categoría",
+  "split_one_rest": "solo una línea puede quedar sin importe",
+  "split_line_amount": "línea {{.N}}: {{.Error}}",
+  "split_line_positive": "el importe de la línea {{.N}} debe ser mayor que cero",
+  "split_nothing_left": "no queda nada para la línea {{.N}}: las demás ya suman el importe o más",
+  "split_short": "a las líneas les faltan {{.Amount}} para el importe",
+  "split_long": "las líneas superan el importe en {{.Amount}}",
+  "split_balanced": "las líneas suman el importe",
+  "split_left": "quedan {{.Amount}} por repartir",
+  "split_over": "{{.Amount}} de más",
+  "split_rest_gets": "la línea sin importe recibe {{.Amount}}",
+  "split_amount_hint": "la parte de esta categoría, sin signo · vacío toma lo que dejan las demás",
+  "split_payee_hint": "a quién se pagó o quién te pagó",
+  "split_added": {
+    "one": "Se añadió la división #{{.ID}}  {{.Payee}}  {{.Amount}} en {{.Count}} categoría",
+    "other": "Se añadió la división #{{.ID}}  {{.Payee}}  {{.Amount}} en {{.Count}} categorías"
+  },
+  "split_updated": {
+    "one": "Se actualizó la división #{{.ID}}  {{.Payee}}  {{.Amount}} en {{.Count}} categoría",
+    "other": "Se actualizó la división #{{.ID}}  {{.Payee}}  {{.Amount}} en {{.Count}} categorías"
+  },
+  "help_split": "dividir la transacción seleccionada entre categorías (también ctrl+o en el formulario de añadir y editar); una división también se edita aquí",
+  "hint_split": "s dividir",
+  "split_detail": "Dividida entre categorías: e la edita, s también."
 }

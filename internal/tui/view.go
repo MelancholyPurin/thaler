@@ -34,6 +34,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.helpPopup())
 	case modeForm:
 		screen = m.centerPopup(screen, m.formPopup())
+	case modeSplit:
+		screen = m.centerPopup(screen, m.splitPopup())
 	case modeConfirm:
 		screen = m.centerPopup(screen, m.confirmPopup())
 	case modeImport:
@@ -356,7 +358,7 @@ func (m *Model) hintItems() (hints, tail []string) {
 	case paneAccounts:
 		return []string{m.loc.T("hint_pick_account", nil), m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_balance", nil), m.loc.T("hint_new", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	}
-	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_mark", nil), m.loc.T("hint_search", nil), m.loc.T("hint_categories", nil)}
+	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_mark", nil), m.loc.T("hint_split", nil), m.loc.T("hint_search", nil), m.loc.T("hint_categories", nil)}
 	if m.onlyCategory != "" {
 		hints = append([]string{m.loc.T("hint_esc_all", nil)}, hints...)
 	}
@@ -467,6 +469,7 @@ func (m *Model) helpPopup() string {
 		{"r  c  v", m.loc.T("help_accounts_panel", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"s", m.loc.T("help_split", nil)},
 		{"space  ctrl+a", m.loc.T("help_mark", nil)},
 		{"tab", m.loc.T("help_budget_tab", nil)},
 		{"e", m.loc.T("help_target", nil)},

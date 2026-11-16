@@ -298,6 +298,10 @@ func (m *Model) transactionDetail(w int) (string, []string) {
 			}
 		}
 	default:
+		if m.isSplit(r) {
+			lines = append(lines, wrapped(m.loc.T("split_detail", nil), w, dim)...)
+			break
+		}
 		lines = append(lines, wrapped(m.loc.T("transfer_or_split", nil), w, dim)...)
 	}
 	return m.loc.T("transaction_n_title", map[string]any{"ID": r.tx.ID}), lines

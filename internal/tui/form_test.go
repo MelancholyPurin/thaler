@@ -590,8 +590,8 @@ func Test_Update_form_navigation(t *testing.T) {
 		Saved  bool // the script ended by saving a change
 	}
 	const (
-		next = "enter next · tab/shift+tab fields · ctrl+s save · esc cancel"
-		save = "enter save · tab/shift+tab fields · ctrl+s save · esc cancel"
+		next = "enter next · tab fields · ctrl+s save · ctrl+o split · esc cancel"
+		save = "enter save · tab fields · ctrl+o split · esc cancel"
 	)
 	form := func(field, footer string) observed { return observed{Mode: "form", Field: field, Footer: footer} }
 	tcs := []struct {
