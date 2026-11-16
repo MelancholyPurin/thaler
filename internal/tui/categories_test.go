@@ -105,7 +105,7 @@ func Test_categoriesScreen(t *testing.T) {
 		{
 			name:  "and the key help lists it",
 			model: catModel,
-			keys:  "? pgdown pgdown pgdown",
+			keys:  "? pgdown pgdown pgdown pgdown",
 			shows: []string{"Categories: ↑ ↓ choose; r renames the category"},
 		},
 	}

@@ -57,6 +57,7 @@ const (
 	modePick                   // choosing a category for the selected transaction
 	modeHelp                   // key reference popup
 	modeForm                   // adding or editing a transaction
+	modeSplit                  // dividing a transaction between categories
 	modeConfirm                // asking before deleting a transaction
 	modeImport                 // importing a bank export
 	modeAccount                // creating an account or setting its balance
@@ -190,6 +191,7 @@ type Model struct {
 	payees      []payeeStat    // most recently used first
 	payeeDF     map[string]int // in how many payees each of their words appears
 	form        *form
+	split       *splitForm
 	lastAccount string // account of the last transaction added in this session
 	lastEntered string // account of the most recently entered transaction in the database
 	undo        []undoOp
@@ -359,6 +361,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form != nil {
 			m.sizeForm(m.form)
 		}
+		if m.split != nil {
+			m.sizeSplit(m.split)
+		}
 		if m.imp != nil {
 			m.imp.file.Width = m.importWidth()
 		}
@@ -421,6 +426,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case modeForm:
 			return m.updateForm(msg)
+		case modeSplit:
+			return m.updateSplit(msg)
 		case modeConfirm:
 			return m.updateConfirm(msg)
 		case modeImport:
@@ -626,6 +633,8 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 			return m, m.openForm(true, fieldAmount)
 		case "r":
 			return m, m.openForm(true, fieldPayee)
+		case "s":
+			return m, m.openSplit(-1)
 		case "d":
 			m.confirmDelete()
 		}

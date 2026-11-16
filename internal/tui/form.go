@@ -92,6 +92,12 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 		if !ok {
 			return nil
 		}
+		if m.isSplit(r) { // a split is edited in its own popup
+			if focus == fieldPayee {
+				return m.openSplit(splitPayee)
+			}
+			return m.openSplit(splitAmount)
+		}
 		if !r.simple {
 			m.setStatus(m.loc.T("cannot_edit_here", nil), true)
 			return nil
@@ -255,6 +261,8 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+s":
 		m.saveForm()
 		return m, nil
+	case "ctrl+o":
+		return m, m.splitFromForm()
 	case "tab":
 		return m, m.moveField(1)
 	case "shift+tab":
