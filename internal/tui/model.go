@@ -194,6 +194,9 @@ type Model struct {
 	lastEntered string // account of the most recently entered transaction in the database
 	undo        []undoOp
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
+	// confirmMany are the marked transactions waiting for it, when there are several.
+	confirmMany []core.TxView
+	marked      map[int64]bool // the marked transactions, all of them on show
 
 	loadConfig    ConfigLoader
 	opts          Options
@@ -222,7 +225,8 @@ type Model struct {
 	picker       textinput.Model
 	pickItems    []pickItem
 	pickCursor   int
-	pickTarget   int64 // transaction being categorised
+	pickTarget   int64   // transaction being categorised
+	pickMany     []int64 // the marked transactions being categorised together; empty for just pickTarget
 	pickPayee    string
 	pickIsIncome bool
 
@@ -575,6 +579,10 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 		m.mode = modeFilter
 		return m, m.filter.Focus()
 	case "esc":
+		if len(m.marked) > 0 {
+			m.marked = nil
+			return m, nil
+		}
 		if m.filter.Value() != "" || m.onlyCategory != "" || m.tf.active() {
 			m.filter.SetValue("")
 			m.onlyCategory = ""
@@ -608,6 +616,10 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch key {
+		case " ":
+			m.toggleMark()
+		case "ctrl+a":
+			m.markAll()
 		case "c", "enter":
 			return m, m.openPicker()
 		case "e":
@@ -645,6 +657,10 @@ func (m *Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyCategory(category string) {
+	if len(m.pickMany) > 0 {
+		m.applyCategoryMany(category)
+		return
+	}
 	id := m.pickTarget
 	match := clean(m.pickRule.Value())
 	var check ruleCheck
@@ -655,6 +671,7 @@ func (m *Model) applyCategory(category string) {
 		}
 	}
 	m.closePicker()
+	delete(m.marked, id)
 	previous := ""
 	if r, ok := m.findRow(id); ok {
 		previous = r.category.Account

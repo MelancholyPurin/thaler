@@ -207,6 +207,7 @@ func (m *Model) applyFilter(keep bool) {
 		m.view = append(m.view, i)
 	}
 	m.sortRows(m.view)
+	m.dropHiddenMarks()
 	if keepID >= 0 {
 		for vi, ri := range m.view {
 			if m.rows[ri].tx.ID == keepID {

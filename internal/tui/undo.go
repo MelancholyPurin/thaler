@@ -42,7 +42,16 @@ func (m *Model) undoLast() {
 
 // confirmDelete asks before deleting the selected transaction.
 func (m *Model) confirmDelete() {
+	m.confirmMany = nil
 	r, ok := m.selected()
+	switch marked := m.markedRows(); len(marked) {
+	case 0:
+	case 1:
+		r, ok = marked[0], true
+	default:
+		m.confirmDeleteMany(marked)
+		return
+	}
 	if !ok {
 		return
 	}
@@ -54,6 +63,10 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y", "enter":
 		m.mode = modeList
+		if len(m.confirmMany) > 0 {
+			m.deleteMany(m.confirmMany)
+			return m, nil
+		}
 		m.deleteTx(m.confirmTx)
 	case "n", "N", "esc":
 		m.mode = modeList

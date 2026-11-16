@@ -82,7 +82,7 @@ func Test_rulesScreen(t *testing.T) {
 		{
 			name:    "the key help lists it",
 			initial: rulesConfig,
-			keys:    "? pgdown pgdown pgdown",
+			keys:    "? pgdown pgdown pgdown pgdown",
 			shows:   []string{"Rules: ↑ ↓ choose; e edits its text and category"},
 		},
 	}

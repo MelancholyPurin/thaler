@@ -211,6 +211,9 @@ func (m *Model) transactionsPanel(l layout) string {
 	if q := strings.TrimSpace(m.filter.Value()); q != "" {
 		title += " · /" + q
 	}
+	if len(m.marked) > 0 {
+		title += " · " + m.markedLabel()
+	}
 	if m.tf.active() {
 		title += " · " + m.loc.T("panel_filtered", nil)
 	}
@@ -239,6 +242,8 @@ func (m *Model) transactionsPanel(l layout) string {
 		r := m.rows[m.view[i]]
 		marker := " "
 		switch {
+		case m.marked[r.tx.ID]:
+			marker = "✓"
 		case r.uncategorized:
 			marker = "●"
 		case !r.simple:
@@ -253,6 +258,8 @@ func (m *Model) transactionsPanel(l layout) string {
 			continue
 		}
 		switch {
+		case m.marked[r.tx.ID]:
+			marker = accent.Render(marker)
 		case r.uncategorized:
 			marker = warn.Render(marker)
 		case !r.simple, r.transfer:
@@ -349,9 +356,12 @@ func (m *Model) hintItems() (hints, tail []string) {
 	case paneAccounts:
 		return []string{m.loc.T("hint_pick_account", nil), m.loc.T("hint_add", nil), m.loc.T("hint_transfer", nil), m.loc.T("hint_balance", nil), m.loc.T("hint_new", nil), m.loc.T("hint_enter_transactions", nil)}, tail
 	}
-	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_search", nil), m.loc.T("hint_categories", nil)}
+	hints = []string{m.loc.T("hint_add", nil), m.loc.T("hint_import", nil), m.loc.T("hint_categorize", nil), m.loc.T("hint_edit", nil), m.loc.T("hint_rename", nil), m.loc.T("hint_delete", nil), m.loc.T("hint_undo", nil), m.loc.T("hint_mark", nil), m.loc.T("hint_search", nil), m.loc.T("hint_categories", nil)}
 	if m.onlyCategory != "" {
 		hints = append([]string{m.loc.T("hint_esc_all", nil)}, hints...)
+	}
+	if len(m.marked) > 0 {
+		hints = append([]string{m.loc.T("hint_esc_marks", nil)}, hints...)
 	}
 	return hints, tail
 }
@@ -366,15 +376,23 @@ func (m *Model) centerPopup(screen, popup string) string {
 
 func (m *Model) pickerPopup() string {
 	r, _ := m.findRow(m.pickTarget)
+	many := len(m.pickMany) > 0
 	w := min(max(m.width-6, 20), 66)
 	h := min(max(m.height-4, 8), 17, max(8, 6+len(m.pickItems)))
 	title := m.loc.T("categorize_title", map[string]any{"Payee": clean(r.tx.Payee), "Amount": m.loc.Signed(r.source.Amount)})
+	if many {
+		title = m.loc.T("categorize_many_title", map[string]any{"Count": len(m.pickMany)})
+	}
 
 	iw := w - 2
 
 	// The rule section sits at the bottom: tab goes there from the category. It is
 	// worked out first, because the list gets the lines it leaves.
 	footer := m.loc.T("footer_pick", nil)
+	ruleHint := m.loc.T("rule_hint", nil)
+	if many {
+		footer, ruleHint = m.loc.T("footer_pick_many", nil), m.loc.T("rule_hint_many", nil)
+	}
 	var rule []string
 	switch {
 	case m.pickRuleOn:
@@ -384,7 +402,7 @@ func (m *Model) pickerPopup() string {
 		rule = []string{dim.Render(fit("  "+m.loc.T("label_rule", nil), 8)) + m.pickRule.View()}
 	default:
 		const indent = 9
-		for i, l := range wrapped(m.loc.T("rule_hint", nil), iw-indent, dim) {
+		for i, l := range wrapped(ruleHint, iw-indent, dim) {
 			head := strings.Repeat(" ", indent)
 			if i == 0 {
 				head = dim.Render(fit("  "+fit(m.loc.T("label_rule", nil), 6)+" ", indent))
@@ -449,6 +467,7 @@ func (m *Model) helpPopup() string {
 		{"r  c  v", m.loc.T("help_accounts_panel", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"space  ctrl+a", m.loc.T("help_mark", nil)},
 		{"tab", m.loc.T("help_budget_tab", nil)},
 		{"e", m.loc.T("help_target", nil)},
 		{"c", m.loc.T("help_copy_targets", nil)},
@@ -605,6 +624,9 @@ func (m *Model) formSuggestions(w, h int) []string {
 }
 
 func (m *Model) confirmPopup() string {
+	if len(m.confirmMany) > 0 {
+		return m.confirmManyPopup()
+	}
 	tx := m.confirmTx
 	w := min(max(m.width-6, 30), 60)
 	amount := ""

@@ -157,7 +157,7 @@ func noAccountsModel(t *testing.T) (*Model, *core.Local) {
 func key(s string) tea.KeyMsg {
 	named := map[string]tea.KeyType{
 		"enter": tea.KeyEnter, "esc": tea.KeyEsc, "down": tea.KeyDown, "up": tea.KeyUp, "left": tea.KeyLeft, "right": tea.KeyRight,
-		"tab": tea.KeyTab, "shift+tab": tea.KeyShiftTab, "backspace": tea.KeyBackspace, "ctrl+s": tea.KeyCtrlS, "ctrl+u": tea.KeyCtrlU, "ctrl+r": tea.KeyCtrlR,
+		"space": tea.KeySpace, "ctrl+a": tea.KeyCtrlA, "tab": tea.KeyTab, "shift+tab": tea.KeyShiftTab, "backspace": tea.KeyBackspace, "ctrl+s": tea.KeyCtrlS, "ctrl+u": tea.KeyCtrlU, "ctrl+r": tea.KeyCtrlR,
 		"f1": tea.KeyF1, "f2": tea.KeyF2, "f3": tea.KeyF3, "f4": tea.KeyF4,
 	}
 	if k, ok := named[s]; ok {
