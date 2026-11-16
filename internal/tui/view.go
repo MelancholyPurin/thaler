@@ -429,32 +429,39 @@ func (m *Model) pickerPopup() string {
 	}
 	section := slices.Concat(rule, note)
 
-	lines := []string{m.picker.View()}
 	listH := max(h-2-1-1-len(section), 0) // minus the border, the input, the rule above the section and the section
-	start := 0
-	if m.pickCursor >= listH {
-		start = m.pickCursor - listH + 1
-	}
-	for i := start; i < len(m.pickItems) && len(lines)-1 < listH; i++ {
-		it := m.pickItems[i]
-		line := leftRight(it.name, dim.Render(it.hint), iw)
-		if it.hint == "" {
-			line = fit(it.name, iw)
-		}
-		if i == m.pickCursor {
-			line = selFocused.Render(fit(it.name+"  "+it.hint, iw))
-		}
-		lines = append(lines, line)
-	}
-	if len(m.pickItems) == 0 {
-		lines = append(lines, wrapped(m.loc.T("picker_no_match", nil), iw, dim)...)
-	}
+	lines := append([]string{m.picker.View()}, m.pickLines(m.pickItems, m.pickCursor, listH, iw)...)
 	for len(lines) < 1+listH {
 		lines = append(lines, "")
 	}
 	lines = append(lines, dim.Render(strings.Repeat("─", iw)))
 	lines = append(lines, section...)
 	return box(title, lines, w, h, true, footer)
+}
+
+// pickLines draws the categories of a picker, scrolled so that the cursor is
+// in view, or says that none fits what was typed.
+func (m *Model) pickLines(items []pickItem, cursor, h, w int) []string {
+	var lines []string
+	start := 0
+	if cursor >= h {
+		start = cursor - h + 1
+	}
+	for i := start; i < len(items) && len(lines) < h; i++ {
+		it := items[i]
+		line := leftRight(it.name, dim.Render(it.hint), w)
+		if it.hint == "" {
+			line = fit(it.name, w)
+		}
+		if i == cursor {
+			line = selFocused.Render(fit(it.name+"  "+it.hint, w))
+		}
+		lines = append(lines, line)
+	}
+	if len(items) == 0 {
+		lines = append(lines, wrapped(m.loc.T("picker_no_match", nil), w, dim)...)
+	}
+	return lines
 }
 
 func (m *Model) helpPopup() string {

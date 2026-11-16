@@ -11,6 +11,7 @@ import (
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
 const exportHeader = "Buchungstag;Verwendungszweck;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info\n"
@@ -167,6 +168,139 @@ func Test_Update_import(t *testing.T) {
 				view = m.View()
 			}
 			checkView(t, view, tc.shows, nil)
+		})
+	}
+}
+
+// Changing a row's category in the review, before anything is written.
+func Test_Update_import_category(t *testing.T) {
+	type observed struct {
+		Step       string
+		Chosen     map[int]string
+		Categories []string // of the rows of the review, in order
+		NewUncat   int
+		Err        string
+		Added      []string // what the import wrote
+	}
+	const (
+		groceries = "Expenses:Groceries"
+		unc       = ledger.UncategorizedExpense
+		incUnc    = ledger.UncategorizedIncome
+	)
+	broken := exportCSV + "07.10.26;;Broken;abc;EUR;Umsatz gebucht\n"
+	tcs := []struct {
+		name   string
+		file   string
+		setup  func(t *testing.T, m *Model, st *core.Local)
+		script string
+		want   observed
+		shows  []string
+	}{
+		{
+			name: "c on a row lists the categories", file: exportCSV, script: "i enter c",
+			want:  observed{Step: "category", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+			shows: []string{"Categorize · REWE Markt -23.47", "enter choose"},
+		},
+		{
+			name: "esc leaves it as it was", file: exportCSV, script: "i enter down c esc",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+		},
+		{
+			name: "a new category is typed in full", file: exportCSV, script: "i enter down c raw:Expenses:Gifts enter",
+			want:  observed{Step: "review", Chosen: map[int]string{3: "Expenses:Gifts"}, Categories: []string{groceries, "Expenses:Gifts", incUnc}, NewUncat: 1},
+			shows: []string{"✎ Gifts", "1 uncategorized", "Your choice"},
+		},
+		{
+			name: "it beats the rule that matched", file: exportCSV, script: "i enter c raw:Expenses:Dining enter",
+			want: observed{Step: "review", Chosen: map[int]string{2: "Expenses:Dining"}, Categories: []string{"Expenses:Dining", unc, incUnc}, NewUncat: 2},
+		},
+		{
+			name: "choosing Uncategorized gives a row back to later", file: exportCSV, script: "i enter c" + strings.Repeat(" down", 20) + " enter",
+			want: observed{Step: "review", Chosen: map[int]string{2: unc}, Categories: []string{unc, unc, incUnc}, NewUncat: 3},
+		},
+		{
+			name: "r goes back to what the rules chose", file: exportCSV, script: "i enter c raw:Expenses:Dining enter r",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+		},
+		{
+			name: "r on a row nobody changed does nothing", file: exportCSV, script: "i enter down r",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+		},
+		{
+			name: "a list with nothing to choose stays open", file: exportCSV, script: "i enter c raw:zzzz enter",
+			want:  observed{Step: "category", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+			shows: []string{"No match"},
+		},
+		{
+			name: "enter then imports with the choice", file: exportCSV, script: "i enter down c raw:Expenses:Gifts enter enter",
+			want: observed{
+				Added: []string{
+					"2026-10-02 REWE Markt | Assets:Bank -23.47 | Expenses:Groceries 23.47",
+					"2026-10-03 Mystery Shop | Assets:Bank -5.00 | Expenses:Gifts 5.00",
+					"2026-10-04 Arbeitgeber | Assets:Bank 1000.00 | Income:Uncategorized -1000.00",
+				},
+			},
+		},
+		{
+			name: "a row that was imported before cannot be changed", file: exportCSV, script: "i enter enter i enter c",
+			want: observed{
+				Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 0,
+				Err:   "Already imported: its category is set.",
+				Added: []string{},
+			},
+		},
+		{
+			name: "the choice is dropped when the file is read again", file: exportCSV, script: "i enter down c raw:Expenses:Gifts enter esc enter",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 2},
+		},
+		{
+			name: "what was said about a row goes away with the next key", file: exportCSV, script: "i enter enter i enter c down",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, Added: []string{}},
+		},
+		{
+			name: "a line that could not be read has no category", file: broken, script: "i enter c",
+			want: observed{Step: "review", Categories: []string{groceries, unc, incUnc}, NewUncat: 2, Err: "This line could not be read, so it has no category."},
+		},
+		{
+			name: "a row that takes over your entry keeps the entry's category", file: exportCSV,
+			setup: func(t *testing.T, m *Model, st *core.Local) {
+				book(t, st, "2026-10-03", "Shop", "Assets:Bank", "Expenses:Dining", -500)
+				if err := m.reload(); err != nil {
+					t.Fatal(err)
+				}
+			},
+			script: "i enter down c",
+			want:   observed{Step: "review", Categories: []string{groceries, "Expenses:Dining", incUnc}, NewUncat: 1, Err: "This row takes over your entry: the entry keeps its category."},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, st := newModel(t)
+			writeExport(t, m, "umsaetze.csv", tc.file)
+			if tc.setup != nil {
+				tc.setup(t, m, st)
+			}
+			before := storedLines(t, st)
+
+			// when
+			play(m, tc.script)
+
+			// then
+			steps := map[importStep]string{stepChoose: "choose", stepReview: "review", stepCategory: "category"}
+			var got observed
+			if f := m.imp; f != nil {
+				got = observed{Step: steps[f.step], Chosen: f.chosen, NewUncat: f.newUncat, Err: f.err}
+				for _, r := range f.res.Rows {
+					got.Categories = append(got.Categories, r.Category)
+				}
+			} else { // it was imported, and the review has gone: what it wrote is what is left to see
+				got.Added, _ = delta(before, storedLines(t, st))
+			}
+			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			checkView(t, m.View(), tc.shows, nil)
 		})
 	}
 }
