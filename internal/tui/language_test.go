@@ -212,6 +212,8 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "transfer", keys: "x"},
 		{name: "transfer, date", keys: "x tab"},
 		{name: "import", keys: "i"},
+		{name: "import, profile found", keys: "i", export: true},
+		{name: "import, profile chosen", keys: "i tab tab left", export: true},
 		{name: "import, review", keys: "i enter", export: true},
 		{name: "import, choosing a category", keys: "i enter down c", export: true},
 		{name: "import, a category chosen", keys: "i enter down c raw:Expenses:Gifts enter", export: true},

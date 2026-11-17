@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/melancholypurin/thaler/internal/config"
 	"github.com/melancholypurin/thaler/internal/core"
+	"github.com/melancholypurin/thaler/internal/importer"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -301,6 +303,157 @@ func Test_Update_import_category(t *testing.T) {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 			checkView(t, m.View(), tc.shows, nil)
+		})
+	}
+}
+
+// Which profile reads the file: found from its columns, or chosen.
+func Test_Update_import_profile(t *testing.T) {
+	type observed struct {
+		Choice   string // what the profile line is set to: "auto" or a name
+		Detected string
+		Used     string // the profile the review was made with
+		Step     string
+		Err      string
+	}
+	ing := importer.Profile{
+		Name: "Ing", Delimiter: ",", Columns: importer.Columns{Date: []string{"Date"}, Payee: []string{"Name"}, Amount: []string{"Amount"}},
+	}
+	withIng := func(m *Model) {
+		m.loadConfig = func() (*config.Config, error) { return &config.Config{Profiles: []importer.Profile{ing}}, nil }
+	}
+	const ingFile = "Date,Name,Amount\n2026-10-02,REWE,-23.47\n"
+	// A second file, older than the first, for the highlight to move to.
+	older := func(t *testing.T, m *Model, name, content string) {
+		t.Helper()
+		path := filepath.Join(m.downloads, name)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		past := time.Now().Add(-48 * time.Hour)
+		if err := os.Chtimes(path, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tcs := []struct {
+		name   string
+		file   string
+		setup  func(t *testing.T, m *Model)
+		script string
+		want   observed
+		shows  []string
+	}{
+		{
+			name: "auto is the default, and finds Sparkasse", file: exportCSV, script: "i",
+			want:  observed{Choice: "auto", Detected: "sparkasse", Step: "choose"},
+			shows: []string{"auto: sparkasse"},
+		},
+		{
+			name: "the review says which profile read the file", file: exportCSV, script: "i enter",
+			want:  observed{Choice: "auto", Detected: "sparkasse", Used: "sparkasse", Step: "review"},
+			shows: []string{"profile sparkasse", "3 new"},
+		},
+		{
+			name: "a profile of yours fits a file of another bank", file: ingFile, setup: func(t *testing.T, m *Model) { withIng(m) }, script: "i enter",
+			want:  observed{Choice: "auto", Detected: "ing", Used: "ing", Step: "review"},
+			shows: []string{"profile ing", "1 new"},
+		},
+		{
+			name: "a file no profile fits says so, and nothing is read", file: ingFile, script: "i enter",
+			want:  observed{Choice: "auto", Step: "choose", Err: "No profile fits this file. Choose one with ← →."},
+			shows: []string{"auto: none fits", "No profile fits this file"},
+		},
+		{
+			name: "choosing one by hand is not second-guessed", file: exportCSV, setup: func(t *testing.T, m *Model) { withIng(m) }, script: "i tab tab right enter",
+			want: observed{Choice: "ing", Detected: "sparkasse", Step: "choose", Err: `profile "Ing" does not match this file: need a date column (Date) and an amount column (Amount), but the header is: Buchungstag;Verwendungszweck;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info`},
+		},
+		{
+			name: "← from auto goes to the last profile", file: exportCSV, setup: func(t *testing.T, m *Model) { withIng(m) }, script: "i tab tab left",
+			want:  observed{Choice: "sparkasse", Detected: "sparkasse", Step: "choose"},
+			shows: []string{"sparkasse"},
+		},
+		{
+			name: "a profile chosen is the one offered next time", file: exportCSV, script: "i tab tab right enter esc esc i",
+			want:  observed{Choice: "sparkasse", Detected: "sparkasse", Step: "choose"},
+			shows: []string{"sparkasse"},
+		},
+		{
+			name: "auto, once used, is still what is offered next time", file: exportCSV, script: "i enter esc esc i",
+			want: observed{Choice: "auto", Detected: "sparkasse", Step: "choose"},
+		},
+		{
+			name: "highlighting another file looks again", file: exportCSV,
+			setup:  func(t *testing.T, m *Model) { withIng(m); older(t, m, "ing.csv", ingFile) },
+			script: "i down",
+			want:   observed{Choice: "auto", Detected: "ing", Step: "choose"},
+			shows:  []string{"auto: ing"},
+		},
+		{
+			name: "so does typing letters of a name", file: exportCSV,
+			setup:  func(t *testing.T, m *Model) { withIng(m); older(t, m, "ing.csv", ingFile) },
+			script: "i raw:ing.c",
+			want:   observed{Choice: "auto", Detected: "ing", Step: "choose"},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := newModel(t)
+			writeExport(t, m, "umsaetze.csv", tc.file)
+			if tc.setup != nil {
+				tc.setup(t, m)
+			}
+
+			// when
+			play(m, tc.script)
+
+			// then
+			steps := map[importStep]string{stepChoose: "choose", stepReview: "review", stepCategory: "category"}
+			f := m.imp
+			got := observed{Choice: "auto", Detected: f.detected, Used: f.used, Step: steps[f.step], Err: f.err}
+			if f.profile > 0 {
+				got.Choice = f.profiles[f.profile-1]
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+			checkView(t, m.View(), tc.shows, nil)
+		})
+	}
+}
+
+// A file that is replaced between choosing it and reviewing it is read as it is
+// then, not as it was when the profile was found.
+func Test_Update_import_fileChanged(t *testing.T) {
+	tcs := []struct {
+		name    string
+		changed string
+		want    string // the profile the review used
+	}{
+		{name: "another bank's export", changed: "Date,Name,Amount\n2026-10-02,REWE,-23.47\n", want: "ing"},
+		{name: "the same bank's", changed: exportCSV, want: "sparkasse"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			m, _ := newModel(t)
+			path := writeExport(t, m, "umsaetze.csv", exportCSV)
+			m.loadConfig = func() (*config.Config, error) {
+				ing := importer.Profile{Name: "ing", Delimiter: ",", Columns: importer.Columns{Date: []string{"Date"}, Payee: []string{"Name"}, Amount: []string{"Amount"}}}
+				return &config.Config{Profiles: []importer.Profile{ing}}, nil
+			}
+			press(m, "i")
+			if err := os.WriteFile(path, []byte(tc.changed), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			// when
+			press(m, "enter")
+
+			// then
+			if diff := cmp.Diff(tc.want, m.imp.used); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

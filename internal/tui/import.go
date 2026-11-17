@@ -55,9 +55,10 @@ type importFlow struct {
 	cfg   *config.Config
 
 	file     textinput.Model
-	account  int // index into Model.accounts
-	profiles []string
-	profile  int
+	account  int      // index into Model.accounts
+	profiles []string // the profiles there are, by name
+	profile  int      // 0 is "auto"; n is profiles[n-1]
+	detected string   // the profile that fits the file chosen, "" when none does
 	err      string
 
 	dir      string    // the folder listed while nothing is typed
@@ -72,6 +73,7 @@ type importFlow struct {
 	res      core.ImportResult
 	skipped  int      // pending rows the profile ignores
 	problems []string // rows that could not be read or do not fit the account
+	used     string   // the profile that read the file
 	newUncat int      // new rows no rule matched
 	list     listState
 
@@ -122,8 +124,8 @@ func (m *Model) openImport() tea.Cmd {
 	f.file.Width = m.importWidth()
 	f.profiles = importer.ProfileNames(cfg.Profiles)
 	for i, name := range f.profiles {
-		if name == m.lastProfile || (m.lastProfile == "" && name == "sparkasse") {
-			f.profile = i
+		if name == m.lastProfile {
+			f.profile = i + 1
 		}
 	}
 	f.dir = m.downloads
@@ -134,7 +136,33 @@ func (m *Model) openImport() tea.Cmd {
 	m.imp = f
 	m.mode = modeImport
 	f.refreshFiles()
+	f.detect()
 	return f.file.Focus()
+}
+
+// detect finds the profile that fits the file chosen, for the "auto" choice.
+// Only the start of the file is read.
+func (f *importFlow) detect() {
+	f.detected = ""
+	path := f.chosenPath()
+	if path == "" {
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	f.detected, _ = importer.Detect(file, f.cfg.Profiles)
+}
+
+// profileName is the profile the import uses, and whether it was found from the
+// file ("auto") rather than chosen. The name is empty when "auto" finds none.
+func (f *importFlow) profileName() (name string, auto bool) {
+	if f.profile == 0 {
+		return f.detected, true
+	}
+	return f.profiles[f.profile-1], false
 }
 
 // listCSVs lists the .csv files directly in dir, newest first.
@@ -291,13 +319,14 @@ func (m *Model) updateImport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case importFile:
 			if key == "up" || key == "down" {
 				f.fileCur = max(-1, min(len(f.matches)-1, f.fileCur+d))
+				f.detect()
 				return m, nil
 			}
 		case importAccount:
 			f.account = (f.account + d + len(m.accounts)) % len(m.accounts)
 			return m, nil
 		case importProfile:
-			f.profile = (f.profile + d + len(f.profiles)) % len(f.profiles)
+			f.profile = (f.profile + d + len(f.profiles) + 1) % (len(f.profiles) + 1)
 			return m, nil
 		}
 	}
@@ -308,6 +337,7 @@ func (m *Model) updateImport(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	f.file, cmd = f.file.Update(msg)
 	f.err = ""
 	f.refreshFiles()
+	f.detect()
 	return m, cmd
 }
 
@@ -322,11 +352,6 @@ func (m *Model) reviewImport() {
 		fail(m.loc.T("import_choose_file", nil))
 		return
 	}
-	profile, err := importer.FindProfile(f.profiles[f.profile], f.cfg.Profiles)
-	if err != nil {
-		fail(m.errText(err))
-		return
-	}
 	acc := m.accounts[f.account].account
 
 	file, err := os.Open(path)
@@ -339,6 +364,19 @@ func (m *Model) reviewImport() {
 		return
 	}
 	defer file.Close()
+
+	f.detect() // the file may have changed since it was chosen
+	name, auto := f.profileName()
+	if name == "" {
+		fail(m.loc.T("import_no_profile", nil))
+		return
+	}
+	profile, err := importer.FindProfile(name, f.cfg.Profiles)
+	if err != nil {
+		fail(m.errText(err))
+		return
+	}
+
 	parsed, err := importer.Parse(file, profile, acc.Currency)
 	if err != nil {
 		fail(m.errText(err))
@@ -363,13 +401,16 @@ func (m *Model) reviewImport() {
 	for _, r := range res.Rejected {
 		f.problems = append(f.problems, m.loc.T("import_line_problem", map[string]any{"Line": r.Line, "Reason": m.errText(r.Err)}))
 	}
-	f.path, f.req, f.res, f.skipped = path, req, res, parsed.Skipped
+	f.path, f.req, f.res, f.skipped, f.used = path, req, res, parsed.Skipped, name
 	f.chosen = nil
 	f.countUncategorized()
 	f.list = listState{}
 	f.err = ""
 	f.step = stepReview
-	m.lastProfile = f.profiles[f.profile]
+	m.lastProfile = ""
+	if !auto {
+		m.lastProfile = name
+	}
 }
 
 // countUncategorized counts the new rows that nobody has given a category.
@@ -621,7 +662,13 @@ func (m *Model) importPopup() string {
 	}
 	acc := m.accounts[f.account].account
 	accText := fmt.Sprintf("%s · %s", acc.Name, acc.Currency)
-	profText := f.profiles[f.profile]
+	profText := f.profiles[max(f.profile-1, 0)]
+	if f.profile == 0 {
+		profText = m.loc.T("import_profile_none", nil)
+		if f.detected != "" {
+			profText = m.loc.T("import_profile_auto", map[string]any{"Name": f.detected})
+		}
+	}
 	if f.field == importAccount {
 		accText += dim.Render("   " + m.loc.T("change_hint", nil))
 	}
@@ -692,7 +739,7 @@ func tildePath(p string) string {
 func (m *Model) importReviewPopup(w, h int) string {
 	f := m.imp
 	iw := w - 2
-	parts := []string{m.loc.T("import_sum_new", map[string]any{"Count": f.res.Inserted}), m.loc.T("import_sum_dup", map[string]any{"Count": f.res.Duplicates})}
+	parts := []string{m.loc.T("import_sum_profile", map[string]any{"Name": f.used}), m.loc.T("import_sum_new", map[string]any{"Count": f.res.Inserted}), m.loc.T("import_sum_dup", map[string]any{"Count": f.res.Duplicates})}
 	if f.res.Adopted > 0 {
 		parts = append(parts, accent.Render(m.loc.T("import_sum_matched", map[string]any{"Count": f.res.Adopted})))
 	}
