@@ -78,6 +78,8 @@ category = "Expenses:BankFees"
 # ---------------------------------------------------------------------------
 # Custom CSV profile, only needed for banks other than the built-in
 # `sparkasse` profile. Use it with: thaler cli import --profile mybank FILE ...
+# In the interface the profile is found from the file's header ("auto"): this one
+# is chosen for a file that has its date and amount columns.
 # Header names are matched ignoring case; ä/ö/ü/ß count as ae/oe/ue/ss.
 # Dates use DD, MM, YY, YYYY.
 # ---------------------------------------------------------------------------
