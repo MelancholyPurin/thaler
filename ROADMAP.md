@@ -254,7 +254,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TIM-3` See what is new, what is a duplicate and what is a transfer pair before anything is written
 - [x] `TIM-4` Take the whole import back with undo
 - [x] `TIM-5` Change a row's category in the review before committing
-- [ ] `TIM-6` Choose or auto-detect the profile for a file
+- [x] `TIM-6` Choose or auto-detect the profile for a file
 - [ ] `TIM-7` List earlier imports and undo any of them
 - [ ] `TIM-8` Notice a new export in the import folder
 

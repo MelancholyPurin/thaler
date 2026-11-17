@@ -1,0 +1,86 @@
+package importer
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+func Test_Detect(t *testing.T) {
+	type found struct {
+		Name string
+		OK   bool
+	}
+	sample := readSample(t)
+	// A bank that writes its dates and amounts in English, commas between columns.
+	ing := Profile{
+		Name: "Ing", Delimiter: ",",
+		Columns: Columns{Date: []string{"Date"}, Payee: []string{"Name"}, Amount: []string{"Amount"}, Purpose: []string{"Notes"}},
+	}
+	ingFile := "Date,Name,Amount,Notes\n2026-10-02,REWE,-23.47,food\n"
+	// Two columns of what Sparkasse names, so it fits the Sparkasse export too, but worse.
+	thin := Profile{Name: "thin", Columns: Columns{Date: []string{"Buchungstag"}, Amount: []string{"Betrag"}}}
+	umlaut := Profile{
+		Name: "Umlaut", Encoding: "windows-1252",
+		Columns: Columns{Date: []string{"Datum"}, Payee: []string{"Begünstigter"}, Amount: []string{"Betrag"}},
+	}
+	tcs := []struct {
+		name   string
+		file   string
+		custom []Profile
+		want   found
+	}{
+		{name: "the Sparkasse export", file: sample, want: found{"sparkasse", true}},
+		{name: "with a byte order mark", file: "\xef\xbb\xbf" + sample, want: found{"sparkasse", true}},
+		{name: "in Windows-1252", file: cp1252(t, sample), want: found{"sparkasse", true}},
+		{name: "a profile of yours for another bank", file: ingFile, custom: []Profile{ing}, want: found{"ing", true}},
+		{name: "a file of another bank fits no profile", file: ingFile, want: found{}},
+		{name: "the profile that names more of the columns wins", file: sample, custom: []Profile{thin}, want: found{"sparkasse", true}},
+		{
+			name: "of two that fit equally well the first written wins", file: ingFile,
+			custom: []Profile{{Name: "second", Delimiter: ",", Columns: ing.Columns}, ing}, want: found{"second", true},
+		},
+		{
+			name: "yours replaces the built-in one of the same name", file: sample,
+			custom: []Profile{{Name: "Sparkasse", Columns: Columns{Date: []string{"Datum"}, Amount: []string{"Wert"}}}},
+			want:   found{},
+		},
+		{
+			name: "a column the profile skips by counts for it", file: sample,
+			custom: []Profile{{Name: "plain", Columns: Sparkasse.Columns}, {Name: "skipping", Columns: Sparkasse.Columns, SkipColumn: "Info"}},
+			want:   found{"skipping", true},
+		},
+		{
+			name: "yours that is the same as the built-in one fits as well and comes first", file: sample,
+			custom: []Profile{{Name: "mine", Delimiter: ";", Columns: Sparkasse.Columns, SkipColumn: "Info"}}, want: found{"mine", true},
+		},
+		{name: "the wrong delimiter", file: strings.ReplaceAll(sample, ";", ","), want: found{}},
+		{name: "a header with no date column", file: "Betrag;Name\n1;x\n", want: found{}},
+		{name: "a header with no amount column", file: "Buchungstag;Name\n1;x\n", want: found{}},
+		{name: "blank lines before the header", file: "\n\n" + sample, want: found{"sparkasse", true}},
+		{name: "an empty file", file: "", want: found{}},
+		{name: "a profile that cannot be used is passed over", file: sample, custom: []Profile{{Name: "bad", Encoding: "ebcdic", Columns: Sparkasse.Columns, SkipColumn: "Info"}}, want: found{"sparkasse", true}},
+		{
+			name: "a long file is read as far as its header", file: sample + strings.Repeat("02.10.26;;ÄÖÜ;;;;;-1,00;EUR;\n", 5000),
+			want: found{"sparkasse", true},
+		},
+		{
+			name: "a long file in Windows-1252 is not cut in the middle of a letter", file: cp1252(t, "Datum;Begünstigter;Betrag\n"+strings.Repeat("02.10.26;Müller;-1,00\n", 5000)),
+			custom: []Profile{umlaut}, want: found{"umlaut", true},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.file and the profiles of the person
+
+			// when
+			name, ok := Detect(strings.NewReader(tc.file), tc.custom)
+
+			// then
+			if diff := cmp.Diff(tc.want, found{name, ok}); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

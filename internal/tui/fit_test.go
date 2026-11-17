@@ -145,6 +145,7 @@ func Test_View_fits(t *testing.T) {
 		{name: "transfer, date", keys: "x tab tab"},
 		{name: "transfer, accounts", keys: "x tab tab tab"},
 		{name: "import, files", keys: "i"},
+		{name: "import, profile chosen", keys: "i tab tab left"},
 		{name: "import, review", keys: "i enter"},
 		{name: "import, choosing a category", keys: "i enter down c"},
 		{name: "import, a category chosen", keys: "i enter down c raw:Expenses:Gifts enter"},
