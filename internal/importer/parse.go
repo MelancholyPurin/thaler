@@ -72,21 +72,8 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 			header = rec
 		}
 	}
-	index := make(map[string]int, len(header))
-	for i, h := range header {
-		key := normHeader(h)
-		if _, dup := index[key]; !dup {
-			index[key] = i
-		}
-	}
-	find := func(names []string) int {
-		for _, n := range names {
-			if i, ok := index[normHeader(n)]; ok {
-				return i
-			}
-		}
-		return -1
-	}
+	index := headerIndex(header)
+	find := func(names []string) int { return findColumn(index, names) }
 	cols := struct{ date, payee, purpose, iban, booking, amount, currency, skip int }{
 		date:     find(p.Columns.Date),
 		payee:    find(p.Columns.Payee),
@@ -173,6 +160,28 @@ func parseDate(s string, layouts []string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, coded.New("unrecognised_date", map[string]any{"Text": s})
+}
+
+// headerIndex maps each normalised header name to its first column.
+func headerIndex(header []string) map[string]int {
+	index := make(map[string]int, len(header))
+	for i, h := range header {
+		key := normHeader(h)
+		if _, dup := index[key]; !dup {
+			index[key] = i
+		}
+	}
+	return index
+}
+
+// findColumn is the first of names that the header has, or -1.
+func findColumn(index map[string]int, names []string) int {
+	for _, n := range names {
+		if i, ok := index[normHeader(n)]; ok {
+			return i
+		}
+	}
+	return -1
 }
 
 func normHeader(s string) string {
