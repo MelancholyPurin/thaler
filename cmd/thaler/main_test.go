@@ -610,6 +610,48 @@ func Test_transfer_editAndDelete(t *testing.T) {
 	}
 }
 
+func Test_transfer_link(t *testing.T) {
+	transfer := func(args ...string) []string { return append([]string{"cli", "transfer"}, args...) }
+	add := func(account, amount, date, payee string) []string {
+		return []string{"cli", "add", "-a", account, "--amount=" + amount, "-d", date, "-p", payee}
+	}
+	two := [][]string{addBank, addSavings, add("Assets:Bank", "-500", "2026-10-04", "Dauerauftrag"), add("Assets:Savings", "500", "2026-10-05", "Sparen")}
+	tcs := []cliCase{
+		{
+			name: "two that cancel", setup: two,
+			args: transfer("link", "2", "1"),
+			want: "Linked as a transfer:\n" +
+				"#1  2026-10-04  Assets:Bank  -500.00 EUR  Dauerauftrag\n" +
+				"#2  2026-10-05  Assets:Savings  +500.00 EUR  Sparen\n" +
+				"Created new account Equity:Transfers\n",
+		},
+		{
+			name: "two that do not", setup: append(two, add("Assets:Savings", "400", "2026-10-05", "Teil")),
+			args:    transfer("link", "1", "3"),
+			wantErr: "#1 and #3 do not move the same amount",
+		},
+		{
+			name: "unlinked again", setup: append(two, transfer("link", "1", "2")),
+			args: transfer("unlink", "2"),
+			want: "Unlinked #1 and #2: both are uncategorized now.\n",
+		},
+		{
+			name: "unlinking what is no transfer", setup: two,
+			args:    transfer("unlink", "1"),
+			wantErr: "transaction #1 is not one half of a transfer",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
 func Test_check(t *testing.T) {
 	tcs := []cliCase{
 		{name: "an empty ledger", args: []string{"cli", "check"}, want: "OK: the ledger is consistent.\n"},
