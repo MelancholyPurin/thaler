@@ -265,7 +265,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TTR-3` Transfer halves are marked `⇄` in the list and in the import review
 - [x] `TTR-4` Edit a transfer as one thing, and delete both halves together
 - ~~`TTR-5` Delete both halves together~~ (folded into `TTR-4`)
-- [ ] `TTR-6` Link two existing transactions as a transfer, and unlink them
+- [x] `TTR-6` Link two existing transactions as a transfer, and unlink them
 
 ### TBU: Budget tab
 
