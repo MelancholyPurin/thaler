@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/text/language"
@@ -52,6 +53,24 @@ func readSample(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(raw)
+}
+
+// utf16Text encodes s as UTF-16, the way a spreadsheet saves "Unicode text":
+// big-endian or little-endian, with a byte order mark or without.
+func utf16Text(s string, bigEndian, bom bool) string {
+	units := utf16.Encode([]rune(s))
+	if bom {
+		units = append([]uint16{0xFEFF}, units...)
+	}
+	out := make([]byte, 0, 2*len(units))
+	for _, u := range units {
+		if bigEndian {
+			out = append(out, byte(u>>8), byte(u))
+		} else {
+			out = append(out, byte(u), byte(u>>8))
+		}
+	}
+	return string(out)
 }
 
 // cp1252 encodes s the way an old banking export would.
@@ -111,14 +130,14 @@ func Test_Parse(t *testing.T) {
 			input:    readSample,
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1}, // the pending REWE booking
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ';'}, // the pending REWE booking
 		},
 		{
 			name:     "the same sample as a windows-1252 file",
 			input:    func(t *testing.T) string { return cp1252(t, readSample(t)) },
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1},
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingWindows1252, Delimiter: ';'},
 		},
 		{
 			name:     "an explicit utf-8 profile refuses windows-1252 bytes instead of guessing",
@@ -132,7 +151,7 @@ func Test_Parse(t *testing.T) {
 			input:    text("\ufeff" + `"Buchungstag";"Beguenstigter/Zahlungspflichtiger";"Betrag"` + "\n" + `"01.02.26";"Test";"1,50"` + "\n"),
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Payee: "Test", Amount: eur(150)}}},
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Payee: "Test", Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';'},
 		},
 		{
 			name: "bad rows are reported and do not stop the others; the currency column wins and is upper-cased",
@@ -152,6 +171,7 @@ func Test_Parse(t *testing.T) {
 					{Line: 3, Err: errors.New(`unrecognised date "31.02.26"`)},
 					{Line: 4, Err: errors.New(`invalid amount "abc"`)},
 				},
+				Encoding: EncodingUTF8, Delimiter: ';',
 			},
 		},
 		{
@@ -161,8 +181,78 @@ func Test_Parse(t *testing.T) {
 			fallback: "USD",
 			want: ParseResult{
 				Rows:    []Row{{Line: 2, Date: day("2026-03-04"), Payee: "Coffee", Amount: ledger.Money{Minor: -350, Currency: "USD"}}},
-				Skipped: 1,
+				Skipped: 1, Encoding: EncodingUTF8, Delimiter: ',',
 			},
+		},
+		{
+			name:     "a copy a spreadsheet saved with commas",
+			input:    func(t *testing.T) string { return strings.ReplaceAll(readSample(t), ";", ",") },
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ','},
+		},
+		{
+			name:     "a copy saved as Unicode text: UTF-16 with tabs",
+			input:    func(t *testing.T) string { return utf16Text(strings.ReplaceAll(readSample(t), ";", "\t"), false, true) },
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16LE, Delimiter: '\t'},
+		},
+		{
+			name:     "big-endian UTF-16 without a byte order mark",
+			input:    func(t *testing.T) string { return utf16Text(readSample(t), true, false) },
+			profile:  Sparkasse,
+			fallback: "EUR",
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16BE, Delimiter: ';'},
+		},
+		{
+			name:     "a delimiter inside a column name does not lead astray",
+			input:    text("Buchungstag;Betrag (EUR, gebucht);Text, frei\n01.02.26;1,50;a\n"),
+			profile:  Profile{Name: "p", DateFormats: []string{"DD.MM.YY"}, DecimalSep: ",", Columns: Columns{Date: []string{"Buchungstag"}, Amount: []string{"Betrag (EUR, gebucht)"}}},
+			fallback: "EUR",
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';'},
+		},
+		{
+			name:     "the delimiter that finds the date and the amount wins over one that splits more",
+			input:    text("Buchungstag;a;b;c\tBuchungstag\tBetrag\n"),
+			profile:  Profile{Name: "p", Columns: Columns{Date: []string{"Buchungstag"}, Amount: []string{"Betrag"}}},
+			fallback: "EUR",
+			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: '\t'},
+		},
+		{
+			name:     "of two that read the header equally well, the first of Delimiters wins",
+			input:    text("X;Y,Z\n"),
+			profile:  Profile{Name: "p", Columns: Columns{Date: []string{"X", "X;Y"}, Amount: []string{"Y,Z", "Z"}}},
+			fallback: "EUR",
+			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: ';'},
+		},
+		{
+			name:     "\"auto\" written out is the same",
+			input:    text("Date|Amount\n2026-03-04|-3.50\n"),
+			profile:  Profile{Name: "p", Delimiter: "AUTO", Columns: Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}},
+			fallback: "EUR",
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-03-04"), Amount: eur(-350)}}, Encoding: EncodingUTF8, Delimiter: '|'},
+		},
+		{
+			name:     "a delimiter that is set is kept, even when another would fit",
+			input:    text("Date,Amount\n2026-03-04,-3.50\n"),
+			profile:  Profile{Name: "p", Delimiter: ";", Columns: Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}},
+			fallback: "EUR",
+			wantErr:  `profile "p" does not match this file: need a date column (Date) and an amount column (Amount), but the header is: Date,Amount`,
+		},
+		{
+			name:     "an encoding that is set is kept, whatever the bytes look like",
+			input:    text("Datum;Betrag ü\n01.02.26;1,50\n"),
+			profile:  Profile{Name: "p", Encoding: "windows-1252", Columns: Columns{Date: []string{"Datum"}, Amount: []string{"Betrag ü"}}},
+			fallback: "EUR",
+			wantErr:  `profile "p" does not match this file: need a date column (Datum) and an amount column (Betrag ü), but the header is: Datum; Betrag Ã¼`,
+		},
+		{
+			name:     "with no delimiter fitting, the error shows the header as the one splitting it most",
+			input:    text("Datum,Text,Wert\n"),
+			profile:  Sparkasse,
+			fallback: "EUR",
+			wantErr:  `profile "sparkasse" does not match this file: need a date column (Buchungstag) and an amount column (Betrag), but the header is: Datum; Text; Wert`,
 		},
 		{
 			name:     "a header that is not this bank's names the header it found",

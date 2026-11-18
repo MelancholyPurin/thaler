@@ -26,10 +26,12 @@ type Columns struct {
 // Profile describes one bank's CSV layout.
 type Profile struct {
 	Name string `toml:"name"`
-	// Delimiter is a single character; default ";".
+	// Delimiter is a single character, or "auto" (the default): found from the
+	// header, see Delimiters.
 	Delimiter string `toml:"delimiter"`
-	// Encoding is "auto" (default: UTF-8 if valid, else Windows-1252), "utf-8"
-	// or "windows-1252" (also accepts latin1 / iso-8859-1).
+	// Encoding is "auto" (the default: UTF-16 or UTF-8 when the bytes say so, else
+	// Windows-1252), "utf-8", "utf-16", "utf-16le", "utf-16be" or "windows-1252"
+	// (also latin1 / iso-8859-1). See decodeToUTF8.
 	Encoding string `toml:"encoding"`
 	// DecimalSep is "," or "."; empty means detect per amount.
 	DecimalSep string `toml:"decimal_separator"`
@@ -46,10 +48,12 @@ type Profile struct {
 // Sparkasse is the built-in profile for the "CSV-CAMT" export that Sparkasse
 // online banking offers (semicolon separated, Windows-1252 or UTF-8, German
 // number format, two-digit years). The "CSV-MT940" export uses the same header
-// names for every column this profile needs.
+// names for every column this profile needs. The delimiter and the encoding are
+// found from the file, so the export still reads after a spreadsheet has saved
+// it again with commas or as UTF-16.
 var Sparkasse = Profile{
 	Name:        "sparkasse",
-	Delimiter:   ";",
+	Delimiter:   "auto",
 	Encoding:    "auto",
 	DecimalSep:  ",",
 	DateFormats: []string{"DD.MM.YY", "DD.MM.YYYY"},
@@ -101,16 +105,20 @@ func ProfileNames(custom []Profile) []string {
 	return names
 }
 
+// Delimiters are the characters an "auto" delimiter is chosen from, the first
+// preferred when two read the header equally well.
+var Delimiters = []rune{';', ',', '\t', '|'}
+
 type compiled struct {
-	delim    rune
+	delim    rune // 0: found from the header
 	encoding string
 	sep      byte
 	layouts  []string
 }
 
 func (p Profile) compile() (compiled, error) {
-	c := compiled{delim: ';', encoding: "auto"}
-	if p.Delimiter != "" {
+	c := compiled{encoding: "auto"}
+	if p.Delimiter != "" && !strings.EqualFold(p.Delimiter, "auto") {
 		rs := []rune(p.Delimiter)
 		if len(rs) != 1 {
 			return c, coded.New("profile_delimiter", map[string]any{"Name": p.Name})
@@ -121,7 +129,8 @@ func (p Profile) compile() (compiled, error) {
 		c.encoding = strings.ToLower(p.Encoding)
 	}
 	switch c.encoding {
-	case "auto", "utf-8", "utf8", "windows-1252", "cp1252", "latin1", "iso-8859-1":
+	case "auto", "utf-8", "utf8", "utf-16", "utf16", "utf-16le", "utf16le", "utf-16be", "utf16be",
+		"windows-1252", "cp1252", "latin1", "iso-8859-1":
 	default:
 		return c, coded.New("profile_encoding", map[string]any{"Name": p.Name, "Encoding": p.Encoding})
 	}
