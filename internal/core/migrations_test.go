@@ -33,6 +33,7 @@ var migrationScriptTimestamps = []uint{
 	20261110150000,
 	20261111100000,
 	20261115100000,
+	20261118100000,
 }
 
 func Test_migrationScriptTimestamps(t *testing.T) {

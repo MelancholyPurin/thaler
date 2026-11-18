@@ -194,9 +194,9 @@ func Test_listings_json(t *testing.T) {
 		{name: "no accounts: an empty list, not a sentence", args: []string{"cli", "account", "list", "--json"}, want: `[]`},
 		{
 			name: "transactions, with the text as it is", setup: all, args: []string{"cli", "list", "--json", "-n", "2"},
-			want: `[{"id":4,"date":"2026-10-03","payee":"","description":"","import_hash":"","transfer_with":0,"postings":[` +
+			want: `[{"id":4,"date":"2026-10-03","payee":"","description":"","import_hash":"","import_id":0,"transfer_with":0,"postings":[` +
 				`{"account":"Assets:Bank","amount":` + bank("-120.00") + `},{"account":"Expenses:Groceries","amount":` + bank("120.00") + `}]},` +
-				`{"id":5,"date":"2026-10-12","payee":"AT&T","description":"a \"q\" <b>","import_hash":"","transfer_with":0,"postings":[` +
+				`{"id":5,"date":"2026-10-12","payee":"AT&T","description":"a \"q\" <b>","import_hash":"","import_id":0,"transfer_with":0,"postings":[` +
 				`{"account":"Assets:Dollars","amount":` + money("-9.00", "USD") + `},{"account":"Expenses:Fun","amount":` + money("9.00", "USD") + `}]}]`,
 		},
 		{name: "no transactions", setup: [][]string{addBank}, args: []string{"cli", "list", "--json"}, want: `[]`},

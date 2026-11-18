@@ -178,7 +178,7 @@ func Test_Import_settlingScheduledOccurrences(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 			txs, err := st.ListTransactions(t.Context(), TxFilter{})
@@ -430,7 +430,7 @@ func Test_Import_settlingScheduledTransfers(t *testing.T) {
 
 			// then
 			check(t, err)
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 			txs, err := st.ListTransactions(t.Context(), TxFilter{})

@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -665,6 +666,17 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 		if err != nil {
 			return err
 		}
+		// The record is made with the first row that is stored, so that an import
+		// that adds nothing leaves none.
+		var importID int64
+		record := func() (int64, error) {
+			if importID != 0 {
+				return importID, nil
+			}
+			var err error
+			importID, err = q.insertImport(ctx, acc.ID, req.Source, req.Profile, s.now())
+			return importID, err
+		}
 		for i, p := range plan {
 			if p.uncategorized(ruled[i]) {
 				res.Uncategorized++
@@ -673,13 +685,26 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 				res.Duplicates++
 				continue
 			}
+			rowErr := func(err error) error {
+				return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
+			}
 			if p.adopts != nil {
 				if err := q.setImportHash(ctx, p.adopts.id, p.tx.ImportHash); err != nil {
-					return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
+					return rowErr(err)
+				}
+				id, err := record()
+				if err != nil {
+					return err
+				}
+				if err := q.adoptedByImport(ctx, id, p.adopts.id); err != nil {
+					return rowErr(err)
 				}
 				res.Adopted++
 				res.AdoptedIDs = append(res.AdoptedIDs, p.adopts.id)
 				continue
+			}
+			if p.tx.ImportID, err = record(); err != nil {
+				return err
 			}
 			id, err := storeTransaction(ctx, q, p.tx, 0, &res.Created)
 			if errors.Is(err, ErrDuplicate) {
@@ -687,13 +712,13 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
+				return rowErr(err)
 			}
 			res.Inserted++
 			res.IDs = append(res.IDs, id)
 			if p.settles != nil {
 				if err := q.putOccurrence(ctx, handled{p.settles.scheduleID, p.settles.date}, id); err != nil {
-					return fmt.Errorf("%w: %w", coded.New("import_row_error", map[string]any{"N": i + 1, "Date": p.tx.Date.Format(ledger.DateLayout), "Payee": p.tx.Payee}), err)
+					return rowErr(err)
 				}
 				res.Settled = append(res.Settled, p.settles.settled(id))
 			}
@@ -709,9 +734,13 @@ func (s *Local) Import(ctx context.Context, req ImportRequest) (ImportResult, er
 			if err := q.linkTransfer(ctx, id, p.partner.id); err != nil {
 				return err
 			}
+			if err := q.pairedByImport(ctx, p.tx.ImportID, id, p.partner.id, p.partner.category); err != nil {
+				return rowErr(err)
+			}
 			res.Transfers++
 			res.Linked = append(res.Linked, TransferLink{ID: id, OtherID: p.partner.id, OtherWas: p.partner.category})
 		}
+		res.ImportID = importID
 		return nil
 	})
 	if err != nil {
@@ -828,6 +857,127 @@ func (s *Local) DetachImport(ctx context.Context, ids []int64) error {
 		}
 		return nil
 	})
+}
+
+// ListImports is the imports that were made and not taken back, newest first.
+func (s *Local) ListImports(ctx context.Context) ([]ImportRecord, error) {
+	rows, err := s.repo.queries().imports(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ImportRecord, len(rows))
+	for i, r := range rows {
+		out[i] = r.ImportRecord
+	}
+	return out, nil
+}
+
+// UndoImport takes an import back as a whole: everything or nothing.
+func (s *Local) UndoImport(ctx context.Context, id int64) (ImportUndone, error) {
+	var out ImportUndone
+	err := s.repo.inTx(ctx, func(q queries) error {
+		rec, found, err := q.importRecord(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return coded.New("import_not_found", map[string]any{"ID": id})
+		}
+		out = ImportUndone{Record: rec.ImportRecord}
+		if name, err := q.closedAccountIn(ctx, []int64{rec.accountID}); err != nil {
+			return err
+		} else if name != "" {
+			return coded.New("account_closed", map[string]any{"Name": name})
+		}
+		added, err := q.importTransactions(ctx, id)
+		if err != nil {
+			return err
+		}
+		adopted, err := q.importAdoptions(ctx, id)
+		if err != nil {
+			return err
+		}
+		pairings, err := q.importPairings(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		// Your own entries let go of the bank rows they took over.
+		for _, tx := range adopted {
+			if err := q.clearImportHash(ctx, tx); err != nil {
+				return err
+			}
+			out.Released++
+		}
+		// The halves it paired go back to where they were, unless they were
+		// changed since: then they stay as they are now.
+		var created []string
+		restored := map[int64]bool{}
+		for _, p := range pairings {
+			restored[p.otherID] = true
+			if ok, err := inTransfers(ctx, q, p.otherID); err != nil {
+				return err
+			} else if ok && p.otherWas != ledger.TransferAccount {
+				if err := setCategory(ctx, q, CategoryChange{TransactionID: p.otherID, Category: p.otherWas}, &created); err != nil {
+					return fmt.Errorf("%w: %w", coded.New("transaction_n", map[string]any{"ID": p.otherID}), err)
+				}
+				out.Unpaired++
+			}
+		}
+		// A half that a later import paired with one of these, or that you paired by
+		// hand, would wait for a half that is not coming: it is uncategorized again.
+		for _, tx := range added {
+			partner, err := q.transferPartner(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if partner == 0 || restored[partner] || slices.Contains(added, partner) {
+				continue
+			}
+			if err := unpairHalf(ctx, q, partner, &created); err != nil {
+				return err
+			}
+			out.Unpaired++
+		}
+		for _, tx := range added {
+			if err := guardTransactionOpen(ctx, q, tx); err != nil {
+				return err
+			}
+			if _, err := q.deleteTransaction(ctx, tx); err != nil {
+				return err
+			}
+		}
+		return q.deleteImport(ctx, id)
+	})
+	if err != nil {
+		return ImportUndone{}, err
+	}
+	return out, nil
+}
+
+// inTransfers says whether the transaction is booked to Equity:Transfers on its
+// category side.
+func inTransfers(ctx context.Context, q queries, id int64) (bool, error) {
+	list, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil || len(list) != 1 {
+		return false, err
+	}
+	_, category, ok := list[0].Legs()
+	return ok && category.Account == ledger.TransferAccount, nil
+}
+
+// unpairHalf puts a half whose other half is going away back to Uncategorized,
+// when it is still booked to Equity:Transfers.
+func unpairHalf(ctx context.Context, q queries, id int64, created *[]string) error {
+	list, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil || len(list) != 1 {
+		return err
+	}
+	source, category, ok := list[0].Legs()
+	if !ok || !isClearingAccount(category.Account) {
+		return nil
+	}
+	return setCategory(ctx, q, CategoryChange{TransactionID: id, Category: uncategorizedFor(source.Amount)}, created)
 }
 
 // Recategorize runs rules over every transaction that sits in

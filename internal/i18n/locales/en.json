@@ -992,5 +992,42 @@
   "split_detail": "Split between categories: e edits it, s too.",
   "budget_group_direct": "{{.Name}} (directly)",
   "hint_fold": "space fold",
-  "help_fold": "Budget: fold or unfold the group of the selected category (← folds it, or goes from a category to its group; → unfolds it); enter on a group lists the transactions of all its categories"
+  "help_fold": "Budget: fold or unfold the group of the selected category (← folds it, or goes from a category to its group; → unfolds it); enter on a group lists the transactions of all its categories",
+  "import_not_found": "import {{.ID}} does not exist",
+  "imports_title": "Earlier imports",
+  "imports_row": "{{.When}} · {{.Account}} · {{.File}}",
+  "imports_unnamed": "import #{{.ID}}",
+  "imports_none": "No imports are recorded yet. The ones you make from now on are listed here.",
+  "imports_only_since": "Imports made before this list existed are not in it.",
+  "imports_sum_settled": {
+    "one": "{{.Count}} schedule date answered",
+    "other": "{{.Count}} schedule dates answered"
+  },
+  "footer_imports": "↑↓ choose · enter take back · esc close",
+  "footer_imports_none": "esc close",
+  "footer_imports_confirm": "enter take it back · esc keep it",
+  "imports_confirm_title": "Take this import back?",
+  "imports_confirm_deleted": {
+    "one": "{{.Count}} transaction it added is deleted.",
+    "other": "{{.Count}} transactions it added are deleted."
+  },
+  "imports_confirm_released": {
+    "one": "{{.Count}} entry of yours becomes a hand-made one again.",
+    "other": "{{.Count}} entries of yours become hand-made ones again."
+  },
+  "imports_confirm_unpaired": {
+    "one": "{{.Count}} transfer is unpaired: its other half goes back to where it was.",
+    "other": "{{.Count}} transfers are unpaired: their other halves go back to where they were."
+  },
+  "imports_confirm_settled": {
+    "one": "{{.Count}} date of a schedule is due again.",
+    "other": "{{.Count}} dates of schedules are due again."
+  },
+  "imports_confirm_edits": "What you changed on those transactions since (a category, a note) goes with them.",
+  "imports_confirm_again": "z does not bring them back; import the file again for that.",
+  "imports_undone": {
+    "one": "Took back {{.File}}: {{.Count}} transaction deleted",
+    "other": "Took back {{.File}}: {{.Count}} transactions deleted"
+  },
+  "help_imports": "list the imports you made and take one back as a whole"
 }

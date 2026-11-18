@@ -992,5 +992,42 @@
   "split_detail": "Dividida entre categorías: e la edita, s también.",
   "budget_group_direct": "{{.Name}} (directamente)",
   "hint_fold": "espacio plegar",
-  "help_fold": "Presupuesto: plegar o desplegar el grupo de la categoría seleccionada (← lo pliega, o va de una categoría a su grupo; → lo despliega); enter en un grupo lista las transacciones de todas sus categorías"
+  "help_fold": "Presupuesto: plegar o desplegar el grupo de la categoría seleccionada (← lo pliega, o va de una categoría a su grupo; → lo despliega); enter en un grupo lista las transacciones de todas sus categorías",
+  "import_not_found": "la importación {{.ID}} no existe",
+  "imports_title": "Importaciones anteriores",
+  "imports_row": "{{.When}} · {{.Account}} · {{.File}}",
+  "imports_unnamed": "importación n.º {{.ID}}",
+  "imports_none": "Todavía no hay importaciones registradas. Las que hagas a partir de ahora aparecerán aquí.",
+  "imports_only_since": "Las importaciones anteriores a esta lista no aparecen en ella.",
+  "imports_sum_settled": {
+    "one": "{{.Count}} fecha de programación respondida",
+    "other": "{{.Count}} fechas de programación respondidas"
+  },
+  "footer_imports": "↑↓ elegir · enter deshacer · esc cerrar",
+  "footer_imports_none": "esc cerrar",
+  "footer_imports_confirm": "enter deshacerla · esc conservarla",
+  "imports_confirm_title": "¿Deshacer esta importación?",
+  "imports_confirm_deleted": {
+    "one": "Se elimina {{.Count}} transacción que añadió.",
+    "other": "Se eliminan {{.Count}} transacciones que añadió."
+  },
+  "imports_confirm_released": {
+    "one": "{{.Count}} entrada tuya vuelve a ser manual.",
+    "other": "{{.Count}} entradas tuyas vuelven a ser manuales."
+  },
+  "imports_confirm_unpaired": {
+    "one": "Se desempareja {{.Count}} transferencia: su otra mitad vuelve a donde estaba.",
+    "other": "Se desemparejan {{.Count}} transferencias: sus otras mitades vuelven a donde estaban."
+  },
+  "imports_confirm_settled": {
+    "one": "{{.Count}} fecha de una programación vuelve a estar pendiente.",
+    "other": "{{.Count}} fechas de programaciones vuelven a estar pendientes."
+  },
+  "imports_confirm_edits": "Lo que hayas cambiado después en esas transacciones (una categoría, una nota) se va con ellas.",
+  "imports_confirm_again": "z no las recupera; para eso, importa el archivo otra vez.",
+  "imports_undone": {
+    "one": "Se deshizo {{.File}}: {{.Count}} transacción eliminada",
+    "other": "Se deshizo {{.File}}: {{.Count}} transacciones eliminadas"
+  },
+  "help_imports": "listar las importaciones hechas y deshacer una entera"
 }

@@ -992,5 +992,42 @@
   "split_detail": "Auf Kategorien aufgeteilt: e bearbeitet sie, s auch.",
   "budget_group_direct": "{{.Name}} (direkt)",
   "hint_fold": "Leertaste falten",
-  "help_fold": "Budget: die Gruppe der gewählten Kategorie falten oder auffalten (← faltet sie, oder geht von einer Kategorie zu ihrer Gruppe; → faltet auf); enter auf einer Gruppe listet die Transaktionen aller ihrer Kategorien"
+  "help_fold": "Budget: die Gruppe der gewählten Kategorie falten oder auffalten (← faltet sie, oder geht von einer Kategorie zu ihrer Gruppe; → faltet auf); enter auf einer Gruppe listet die Transaktionen aller ihrer Kategorien",
+  "import_not_found": "Der Import {{.ID}} existiert nicht",
+  "imports_title": "Frühere Importe",
+  "imports_row": "{{.When}} · {{.Account}} · {{.File}}",
+  "imports_unnamed": "Import Nr. {{.ID}}",
+  "imports_none": "Es sind noch keine Importe verzeichnet. Importe, die du ab jetzt machst, erscheinen hier.",
+  "imports_only_since": "Importe von vor dieser Liste stehen nicht darin.",
+  "imports_sum_settled": {
+    "one": "{{.Count}} Zeitplantermin beantwortet",
+    "other": "{{.Count}} Zeitplantermine beantwortet"
+  },
+  "footer_imports": "↑↓ wählen · enter zurücknehmen · esc schließen",
+  "footer_imports_none": "esc schließen",
+  "footer_imports_confirm": "enter zurücknehmen · esc behalten",
+  "imports_confirm_title": "Diesen Import zurücknehmen?",
+  "imports_confirm_deleted": {
+    "one": "{{.Count}} Transaktion, die er hinzugefügt hat, wird gelöscht.",
+    "other": "{{.Count}} Transaktionen, die er hinzugefügt hat, werden gelöscht."
+  },
+  "imports_confirm_released": {
+    "one": "{{.Count}} Eintrag von dir wird wieder zu einem manuellen.",
+    "other": "{{.Count}} Einträge von dir werden wieder zu manuellen."
+  },
+  "imports_confirm_unpaired": {
+    "one": "{{.Count}} Überweisung wird getrennt: ihre andere Hälfte geht dorthin zurück, wo sie war.",
+    "other": "{{.Count}} Überweisungen werden getrennt: ihre anderen Hälften gehen dorthin zurück, wo sie waren."
+  },
+  "imports_confirm_settled": {
+    "one": "{{.Count}} Termin eines Zeitplans ist wieder fällig.",
+    "other": "{{.Count}} Termine von Zeitplänen sind wieder fällig."
+  },
+  "imports_confirm_edits": "Was du an diesen Transaktionen seither geändert hast (eine Kategorie, eine Notiz), geht mit ihnen verloren.",
+  "imports_confirm_again": "z holt sie nicht zurück; dafür die Datei noch einmal importieren.",
+  "imports_undone": {
+    "one": "{{.File}} zurückgenommen: {{.Count}} Transaktion gelöscht",
+    "other": "{{.File}} zurückgenommen: {{.Count}} Transaktionen gelöscht"
+  },
+  "help_imports": "die gemachten Importe auflisten und einen ganz zurücknehmen"
 }

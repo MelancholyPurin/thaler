@@ -77,6 +77,7 @@ const (
 	modeExport                 // saving the report on show as a CSV file
 	modeCategories             // renaming or merging categories
 	modeRules                  // editing the categorization rules
+	modeImports                // the imports that were made, to take one back
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -214,6 +215,7 @@ type Model struct {
 	bkp           *backupForm
 	rst           *restoreForm
 	prn           *pruneForm
+	ims           *importList
 	lang          *languageForm
 	themeForm     *themeForm
 	theme         string // the colour theme in use: one of config.Themes
@@ -470,6 +472,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCategories(msg)
 		case modeRules:
 			return m.updateRules(msg)
+		case modeImports:
+			return m.updateImports(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -493,6 +497,9 @@ func (m *Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openCategories()
 	case "M":
 		return m, m.openRules()
+	case "I":
+		m.openImports()
+		return m, nil
 	case "S":
 		return m, m.openBackup()
 	case "ctrl+r":

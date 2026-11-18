@@ -14,6 +14,9 @@ type undoOp struct {
 	// account is the account the change was about, which the Accounts panel is left on once it
 	// is undone, if it is shown.
 	account string
+	// importID is the import this takes back, so that taking it back from the list of
+	// imports leaves no step in the list that would look for it again.
+	importID int64
 }
 
 // undoLast reverses the most recent change.

@@ -387,7 +387,7 @@ func (m *Model) reviewImport() {
 		return
 	}
 
-	req := core.ImportRequest{Account: acc.Name, Rows: parsed.Rows, Rules: f.cfg.Rules, DryRun: true, IgnoreRejected: true}
+	req := core.ImportRequest{Account: acc.Name, Rows: parsed.Rows, Rules: f.cfg.Rules, DryRun: true, IgnoreRejected: true, Source: filepath.Base(path), Profile: name}
 	res, err := m.svc.Import(m.ctx, req)
 	if err != nil {
 		fail(m.errText(err))
@@ -571,31 +571,13 @@ func (m *Model) finishImport() {
 	newUncat := f.newUncat
 	m.closeImport()
 
-	if len(res.IDs)+len(res.AdoptedIDs) > 0 {
-		ids, adopted := res.IDs, res.AdoptedIDs
-		// What the import did is taken back in reverse: your own entries let go
-		// of the bank rows they took over, the halves it paired go back to where
-		// they were, and what it added goes.
-		var unpair []core.CategoryChange
-		for _, l := range res.Linked {
-			unpair = append(unpair, core.CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
-		}
+	if res.ImportID != 0 {
+		id, count := res.ImportID, len(res.IDs)+len(res.AdoptedIDs)
+		// The service knows what the import did, and takes all of it back.
 		m.undo = append(m.undo, undoOp{
-			undone: func() string { return m.loc.T("undid_import", map[string]any{"Count": len(ids) + len(adopted)}) },
-			run: func() error {
-				var errs []error
-				if len(adopted) > 0 {
-					errs = append(errs, m.svc.DetachImport(m.ctx, adopted))
-				}
-				if len(unpair) > 0 {
-					_, err := m.svc.SetCategories(m.ctx, unpair)
-					errs = append(errs, err)
-				}
-				for _, id := range ids {
-					errs = append(errs, m.svc.DeleteTransaction(m.ctx, id))
-				}
-				return errors.Join(errs...)
-			},
+			undone:   func() string { return m.loc.T("undid_import", map[string]any{"Count": count}) },
+			run:      func() error { _, err := m.svc.UndoImport(m.ctx, id); return err },
+			importID: id,
 		})
 	}
 	m.lastAccount = acc.Name
