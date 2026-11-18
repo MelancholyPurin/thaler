@@ -75,6 +75,8 @@ func (m *Model) View() string {
 		screen = m.centerPopup(screen, m.rulesPopup())
 	case modeImports:
 		screen = m.centerPopup(screen, m.importsPopup())
+	case modeLink:
+		screen = m.centerPopup(screen, m.linkPopup())
 	case modeTarget:
 		screen = m.centerPopup(screen, m.targetPopup())
 	}
@@ -484,6 +486,7 @@ func (m *Model) helpPopup() string {
 		{"r  c  v", m.loc.T("help_accounts_panel", nil)},
 		{m.loc.T("help_keys_categorize_rule", nil), m.loc.T("help_categorize_rule", nil)},
 		{"c  e  d", m.loc.T("help_ced", nil)},
+		{"l", m.loc.T("help_link", nil)},
 		{"space  ← →", m.loc.T("help_fold", nil)},
 		{"s", m.loc.T("help_split", nil)},
 		{"space  ctrl+a", m.loc.T("help_mark", nil)},

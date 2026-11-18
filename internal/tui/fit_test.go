@@ -127,6 +127,7 @@ func Test_View_fits(t *testing.T) {
 		groups bool // books spending in two categories of a group first
 		arrive int  // new exports that arrive in the downloads folder while it runs
 		inDate bool // books a transfer first, its halves on days of their own
+		link   bool // books two that could be linked first, the newest transactions
 	}{
 		{name: "home", keys: ""},
 		{name: "home, a new export", keys: "", arrive: 1},
@@ -152,6 +153,13 @@ func Test_View_fits(t *testing.T) {
 		{name: "transfer, edit", keys: "x text:10 tab text:11 ctrl+s 3 g e"},
 		{name: "transfer, edit, the date", keys: "3 g e tab tab", inDate: true},
 		{name: "transfer, delete", keys: "x text:10 tab text:11 ctrl+s 3 g d"},
+		{name: "link", keys: "3 g l", link: true},
+		{name: "link, nothing to offer", keys: "x text:10 tab text:11 ctrl+s 3 g down down l"},
+		{name: "link, three marked", keys: "3 g space space space l", link: true},
+		{name: "linked", keys: "3 g l enter", link: true},
+		{name: "linked and undone", keys: "3 g l enter z", link: true},
+		{name: "unlinked", keys: "x text:10 tab text:11 ctrl+s 3 g l"},
+		{name: "unlinked and undone", keys: "x text:10 tab text:11 ctrl+s 3 g l z"},
 		{name: "import, files", keys: "i"},
 		{name: "import, profile chosen", keys: "i tab tab left"},
 		{name: "import, review", keys: "i enter"},
@@ -397,6 +405,9 @@ func Test_View_fits(t *testing.T) {
 				newExports(t, m, sc.arrive)
 				if sc.inDate {
 					bookTransfer(t, m, "", true)
+				}
+				if sc.link {
+					bookOpposite(t, m)
 				}
 
 				// when
