@@ -103,6 +103,20 @@ type Service interface {
 	// or neither, and says what they were. RestoreTransactions with both brings it back,
 	// linked.
 	DeleteTransfer(ctx context.Context, id int64) (TransferView, error)
+	// LinkTransfer makes two transactions that are already stored, each on one of your
+	// accounts and one category, the two halves of a transfer: both are booked to
+	// Equity:Transfers, or to Equity:Conversions when their currencies differ, and linked.
+	// They must move money on two different accounts, one out and one in, and within one
+	// currency the same amount; neither may be linked already. Nothing changes otherwise.
+	LinkTransfer(ctx context.Context, a, b int64) (LinkResult, error)
+	// UnlinkTransfer makes the halves of the transfer that id is one half of two
+	// ordinary transactions again, each in the Uncategorized account of its direction,
+	// and says what the transfer was.
+	UnlinkTransfer(ctx context.Context, id int64) (TransferView, error)
+	// TransferCandidates are the transactions that could be the other half of id within
+	// its currency: on another of your accounts, moving the opposite amount, on one
+	// category and linked to nothing; the nearest in date first, at most ten.
+	TransferCandidates(ctx context.Context, id int64) ([]TxView, error)
 	// SetOpeningBalance books (or corrects) the transaction that makes an asset
 	// or liability account hold the balance you read off your bank.
 	SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest) (OpeningBalanceResult, error)
@@ -402,6 +416,14 @@ type TransferView struct {
 	Out, In TxView // the half that leaves From, and the half that arrives in To
 	TransferEdit
 	CrossCurrency bool // the halves are booked to Equity:Conversions
+}
+
+// LinkResult is what LinkTransfer did: the half that leaves and the half that
+// arrives, and the category each had before, which SetCategories puts back.
+type LinkResult struct {
+	OutID, InID int64
+	Was         []CategoryChange
+	Created     []string // the clearing account, the first time it is used
 }
 
 // TransferEdit is what a transfer should become (see ReplaceTransfer).

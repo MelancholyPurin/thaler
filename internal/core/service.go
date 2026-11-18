@@ -533,6 +533,127 @@ func transferOf(ctx context.Context, q queries, id int64) (TransferView, error) 
 	return v, nil
 }
 
+// LinkTransfer makes two stored transactions the halves of one transfer.
+func (s *Local) LinkTransfer(ctx context.Context, a, b int64) (LinkResult, error) {
+	var res LinkResult
+	err := s.repo.inTx(ctx, func(q queries) error {
+		if a == b {
+			return coded.New("link_itself", map[string]any{"ID": a})
+		}
+		var halves [2]TxView
+		for i, id := range []int64{a, b} {
+			txs, err := q.listTransactions(ctx, TxFilter{ID: id})
+			if err != nil {
+				return err
+			}
+			if len(txs) == 0 {
+				return coded.New("transaction_not_found", map[string]any{"ID": id})
+			}
+			if txs[0].TransferWith != 0 {
+				return coded.New("already_transfer", map[string]any{"ID": id})
+			}
+			if _, _, ok := txs[0].Legs(); !ok {
+				return coded.New("link_not_simple", map[string]any{"ID": id})
+			}
+			halves[i] = txs[0]
+		}
+		sa, ca, _ := halves[0].Legs()
+		sb, cb, _ := halves[1].Legs()
+		if sa.Account == sb.Account {
+			return coded.New("transfer_same_account", nil)
+		}
+		if (sa.Amount.Minor < 0) == (sb.Amount.Minor < 0) || sa.Amount.Minor == 0 || sb.Amount.Minor == 0 {
+			return coded.New("link_same_direction", map[string]any{"A": a, "B": b})
+		}
+		clearing := ledger.ConversionAccount
+		if sa.Amount.Currency == sb.Amount.Currency {
+			if sa.Amount.Minor != -sb.Amount.Minor {
+				return coded.New("link_amounts_differ", map[string]any{"A": a, "B": b})
+			}
+			clearing = ledger.TransferAccount
+		}
+		for _, h := range []struct {
+			id  int64
+			was string
+		}{{a, ca.Account}, {b, cb.Account}} {
+			res.Was = append(res.Was, CategoryChange{TransactionID: h.id, Category: h.was})
+			if h.was == clearing {
+				continue
+			}
+			if err := setCategory(ctx, q, CategoryChange{TransactionID: h.id, Category: clearing}, &res.Created); err != nil {
+				return err
+			}
+		}
+		res.OutID, res.InID = a, b
+		if sa.Amount.Minor > 0 {
+			res.OutID, res.InID = b, a
+		}
+		return q.linkTransfer(ctx, a, b)
+	})
+	if err != nil {
+		return LinkResult{}, err
+	}
+	return res, nil
+}
+
+// UnlinkTransfer makes the halves of a transfer ordinary transactions again.
+func (s *Local) UnlinkTransfer(ctx context.Context, id int64) (TransferView, error) {
+	var v TransferView
+	err := s.repo.inTx(ctx, func(q queries) error {
+		var err error
+		if v, err = transferOf(ctx, q, id); err != nil {
+			return err
+		}
+		if err := q.unlinkTransfer(ctx, v.Out.ID, v.In.ID); err != nil {
+			return err
+		}
+		var created []string
+		for _, half := range []TxView{v.Out, v.In} {
+			source, _, _ := half.Legs()
+			if err := setCategory(ctx, q, CategoryChange{TransactionID: half.ID, Category: uncategorizedFor(source.Amount)}, &created); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return TransferView{}, err
+	}
+	return v, nil
+}
+
+// TransferCandidates are the transactions that could be the other half of id.
+func (s *Local) TransferCandidates(ctx context.Context, id int64) ([]TxView, error) {
+	q := s.repo.queries()
+	txs, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil {
+		return nil, err
+	}
+	if len(txs) == 0 {
+		return nil, coded.New("transaction_not_found", map[string]any{"ID": id})
+	}
+	if txs[0].TransferWith != 0 {
+		return nil, coded.New("already_transfer", map[string]any{"ID": id})
+	}
+	source, _, ok := txs[0].Legs()
+	if !ok {
+		return nil, coded.New("link_not_simple", map[string]any{"ID": id})
+	}
+	ids, err := q.linkCandidates(ctx, id, source.Account, source.Amount, txs[0].Date, 10)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TxView, 0, len(ids))
+	for _, c := range ids {
+		found, err := q.listTransactions(ctx, TxFilter{ID: c})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, found...)
+	}
+	return out, nil
+}
+
 // ReplaceTransfer changes both halves of a transfer together.
 func (s *Local) ReplaceTransfer(ctx context.Context, id int64, e TransferEdit) (TransferResult, error) {
 	var res TransferResult
