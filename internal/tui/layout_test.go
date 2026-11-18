@@ -138,7 +138,7 @@ func Test_Update_help_scrolls(t *testing.T) {
 		hides []string
 	}{
 		{name: "the top", keys: "?", shows: []string{"Keys", "screens: Ledger", "↑/↓ scroll"}, hides: []string{"choose the language"}},
-		{name: "the end is reachable", keys: "? pgdown pgdown pgdown", shows: []string{"choose the language", "quit"}, hides: []string{"screens: Ledger"}},
+		{name: "the end is reachable", keys: "? pgdown pgdown pgdown pgdown", shows: []string{"choose the language", "quit"}, hides: []string{"screens: Ledger"}},
 		{name: "one line down", keys: "? down", shows: []string{"previous / next month"}, hides: []string{"screens: Ledger"}},
 		{name: "up stops at the top", keys: "? up up", shows: []string{"screens: Ledger"}},
 		{name: "any other key closes it", keys: "? x", hides: []string{"screens: Ledger", "any other key closes"}},

@@ -165,7 +165,7 @@ func Test_marks_screen(t *testing.T) {
 		{name: "the picker for one marked one is the ordinary one", keys: "3 j j j space j c", shows: []string{"Categorize · Kino", "tab make a rule"}},
 		{name: "the question lists them", keys: "3 space space d", shows: []string{"Delete 2 transactions", "Hotel", "Gehalt", "Delete these transactions?", "y delete · n cancel"}},
 		{name: "and how many more", keys: "3 ctrl+a d", shows: []string{"Delete 6 transactions", "and 1 more", "Delete these transactions?"}, hides: []string{"2026-10-01  REWE"}},
-		{name: "the help lists the keys", keys: "? pgdown", shows: []string{"space  ctrl+a", "mark the transaction under the cursor"}},
+		{name: "the help lists the keys", keys: "? pgdown down down down down", shows: []string{"space  ctrl+a", "mark the transaction under the cursor"}},
 		{name: "Spanish", lang: language.Spanish, keys: "3 space space", shows: []string{"2 marcadas", "esc desmarcar"}},
 		{name: "Spanish, delete", lang: language.Spanish, keys: "3 space space d", shows: []string{"Eliminar 2 transacciones", "¿Eliminar estas transacciones?"}},
 		{name: "German", lang: language.German, keys: "3 j j j space space c", shows: []string{"2 Transaktionen kategorisieren", "enter übernehmen · esc abbrechen"}},

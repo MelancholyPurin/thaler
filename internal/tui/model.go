@@ -78,6 +78,7 @@ const (
 	modeCategories             // renaming or merging categories
 	modeRules                  // editing the categorization rules
 	modeImports                // the imports that were made, to take one back
+	modeLink                   // choosing the other half of a transfer
 )
 
 // screen is one top-level view, switched from the strip along the top.
@@ -218,6 +219,7 @@ type Model struct {
 	rst           *restoreForm
 	prn           *pruneForm
 	ims           *importList
+	lnk           *linkPick
 	watch         exportWatch // the CSV files seen in the import folder
 	lang          *languageForm
 	themeForm     *themeForm
@@ -481,6 +483,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRules(msg)
 		case modeImports:
 			return m.updateImports(msg)
+		case modeLink:
+			return m.updateLink(msg)
 		default:
 			return m.updateList(msg)
 		}
@@ -655,6 +659,8 @@ func (m *Model) updateLedger(key string) (tea.Model, tea.Cmd) {
 			return m, m.openSplit(-1)
 		case "d":
 			m.confirmDelete()
+		case "l":
+			m.link()
 		}
 	}
 	return m, nil

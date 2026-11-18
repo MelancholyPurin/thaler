@@ -1042,5 +1042,23 @@
   "delete_transfer_title": "Eliminar la transferencia #{{.Out}} y #{{.In}}",
   "delete_transfer_question": "¿Eliminar las dos mitades?",
   "deleted_transfer": "Se eliminó la transferencia #{{.Out}} y #{{.In}}  (z para deshacer)",
-  "undid_delete_transfer": "Se deshizo la eliminación de la transferencia #{{.Out}} y #{{.In}}"
+  "undid_delete_transfer": "Se deshizo la eliminación de la transferencia #{{.Out}} y #{{.In}}",
+  "link_itself": "la transacción #{{.ID}} no se puede enlazar consigo misma",
+  "already_transfer": "la transacción #{{.ID}} ya es una mitad de una transferencia",
+  "link_not_simple": "la transacción #{{.ID}} no es una cuenta y una categoría",
+  "link_same_direction": "#{{.A}} y #{{.B}} mueven el dinero en el mismo sentido",
+  "link_amounts_differ": "#{{.A}} y #{{.B}} no mueven el mismo importe",
+  "link_title": "Enlazar #{{.ID}} como transferencia",
+  "link_with": "con la otra mitad, en otra cuenta:",
+  "footer_link": "enter enlazar · esc cancelar",
+  "link_none": "No se encontró otra mitad: marca dos con espacio y pulsa l",
+  "link_mark_two": {
+    "one": "Hay {{.Count}} transacción marcada: marca dos para enlazarlas",
+    "other": "Hay {{.Count}} transacciones marcadas: marca dos para enlazarlas"
+  },
+  "linked": "#{{.Out}} y #{{.In}} enlazadas como transferencia",
+  "unlinked": "#{{.Out}} y #{{.In}} desenlazadas: ahora las dos están sin categoría",
+  "undid_link": "Se deshizo el enlace de #{{.Out}} y #{{.In}}",
+  "undid_unlink": "#{{.Out}} y #{{.In}} enlazadas de nuevo",
+  "help_link": "enlazar la transacción seleccionada con su otra mitad en otra cuenta, como transferencia (con dos marcadas: esas dos); en una transferencia, desenlazar las dos mitades"
 }

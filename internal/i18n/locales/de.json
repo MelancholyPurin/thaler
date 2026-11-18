@@ -1042,5 +1042,23 @@
   "delete_transfer_title": "Überweisung #{{.Out}} und #{{.In}} löschen",
   "delete_transfer_question": "Beide Hälften löschen?",
   "deleted_transfer": "Überweisung #{{.Out}} und #{{.In}} gelöscht  (z macht rückgängig)",
-  "undid_delete_transfer": "Löschen der Überweisung #{{.Out}} und #{{.In}} rückgängig gemacht"
+  "undid_delete_transfer": "Löschen der Überweisung #{{.Out}} und #{{.In}} rückgängig gemacht",
+  "link_itself": "die Transaktion #{{.ID}} kann nicht mit sich selbst verknüpft werden",
+  "already_transfer": "die Transaktion #{{.ID}} ist schon eine Hälfte einer Überweisung",
+  "link_not_simple": "die Transaktion #{{.ID}} ist nicht ein Konto und eine Kategorie",
+  "link_same_direction": "#{{.A}} und #{{.B}} bewegen Geld in dieselbe Richtung",
+  "link_amounts_differ": "#{{.A}} und #{{.B}} bewegen nicht denselben Betrag",
+  "link_title": "#{{.ID}} als Überweisung verknüpfen",
+  "link_with": "mit der anderen Hälfte, auf einem anderen Konto:",
+  "footer_link": "enter verknüpfen · esc abbrechen",
+  "link_none": "Keine andere Hälfte gefunden: zwei mit Leertaste markieren, dann l",
+  "link_mark_two": {
+    "one": "{{.Count}} Transaktion ist markiert: markiere zwei, um sie zu verknüpfen",
+    "other": "{{.Count}} Transaktionen sind markiert: markiere zwei, um sie zu verknüpfen"
+  },
+  "linked": "#{{.Out}} und #{{.In}} als Überweisung verknüpft",
+  "unlinked": "Verknüpfung von #{{.Out}} und #{{.In}} gelöst: beide sind jetzt unkategorisiert",
+  "undid_link": "Verknüpfung von #{{.Out}} und #{{.In}} rückgängig gemacht",
+  "undid_unlink": "#{{.Out}} und #{{.In}} wieder verknüpft",
+  "help_link": "die gewählte Transaktion mit ihrer anderen Hälfte auf einem anderen Konto als Überweisung verknüpfen (mit zwei markierten: diese beiden); bei einer Überweisung die beiden Hälften trennen"
 }

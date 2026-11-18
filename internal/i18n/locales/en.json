@@ -1042,5 +1042,23 @@
   "delete_transfer_title": "Delete transfer #{{.Out}} and #{{.In}}",
   "delete_transfer_question": "Delete both halves?",
   "deleted_transfer": "Deleted the transfer #{{.Out}} and #{{.In}}  (z to undo)",
-  "undid_delete_transfer": "Undid deleting the transfer #{{.Out}} and #{{.In}}"
+  "undid_delete_transfer": "Undid deleting the transfer #{{.Out}} and #{{.In}}",
+  "link_itself": "transaction #{{.ID}} cannot be linked with itself",
+  "already_transfer": "transaction #{{.ID}} is already one half of a transfer",
+  "link_not_simple": "transaction #{{.ID}} is not one account and one category",
+  "link_same_direction": "#{{.A}} and #{{.B}} move money the same way",
+  "link_amounts_differ": "#{{.A}} and #{{.B}} do not move the same amount",
+  "link_title": "Link #{{.ID}} as a transfer",
+  "link_with": "with the other half, on another account:",
+  "footer_link": "enter link · esc cancel",
+  "link_none": "No other half found: mark two with space, then press l",
+  "link_mark_two": {
+    "one": "{{.Count}} transaction is marked: mark two to link them",
+    "other": "{{.Count}} transactions are marked: mark two to link them"
+  },
+  "linked": "Linked #{{.Out}} and #{{.In}} as a transfer",
+  "unlinked": "Unlinked #{{.Out}} and #{{.In}}: both are uncategorized now",
+  "undid_link": "Undid linking #{{.Out}} and #{{.In}}",
+  "undid_unlink": "Linked #{{.Out}} and #{{.In}} again",
+  "help_link": "link the selected transaction with its other half on another account, as a transfer (with two marked: those two); on a transfer, unlink the two halves"
 }

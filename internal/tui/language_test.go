@@ -205,6 +205,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		// not English (the ones Thaler writes, "Transfer to Dollars", are stored in English);
 		// apart gives its halves days of their own.
 		transfer, apart bool
+		link            bool // books two that could be linked, the newest transactions
 	}{
 		{name: "home", keys: ""},
 		{name: "home, a new export", keys: "", export: true, arrive: 1},
@@ -224,6 +225,12 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "transfer, edited", keys: "3 g e ctrl+u text:12 ctrl+s", transfer: true},
 		{name: "transfer, edited and undone", keys: "3 g e ctrl+s z", transfer: true},
 		{name: "transfer, delete", keys: "3 g d", transfer: true},
+		{name: "link", keys: "3 g l", link: true},
+		{name: "link, three marked", keys: "3 g space space space l", link: true},
+		{name: "linked", keys: "3 g l enter", link: true},
+		{name: "linked and undone", keys: "3 g l enter z", link: true},
+		{name: "unlinked", keys: "3 g l", transfer: true},
+		{name: "unlinked and undone", keys: "3 g l z", transfer: true},
 		{name: "transfer, deleted", keys: "3 g d y", transfer: true},
 		{name: "transfer, deleted and undone", keys: "3 g d y z", transfer: true},
 		{name: "import, profile found", keys: "i", export: true},
@@ -421,6 +428,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			newExports(t, m, tc.arrive)
 			if tc.transfer {
 				bookTransfer(t, m, "Umbuchung", tc.apart)
+			}
+			if tc.link {
+				bookOpposite(t, m)
 			}
 
 			// when

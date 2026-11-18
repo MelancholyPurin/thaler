@@ -189,7 +189,7 @@ on its own and a transfer is neither income nor spending.`,
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")
 	_ = cmd.MarkFlagRequired("amount")
-	cmd.AddCommand(a.transferEditCmd(), a.transferDeleteCmd())
+	cmd.AddCommand(a.transferEditCmd(), a.transferDeleteCmd(), a.transferLinkCmd(), a.transferUnlinkCmd())
 	return cmd
 }
 
@@ -350,4 +350,76 @@ or neither. Without --yes nothing is deleted: the two halves are listed.`,
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "delete both halves, instead of only listing them")
 	return cmd
+}
+
+func (a *app) transferLinkCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "link A B",
+		Short: "Make two transactions you already have the two halves of a transfer",
+		Long: `Make two stored transactions the two halves of one transfer: money that left one
+of your accounts (A or B) and arrived in another, entered or imported separately.
+Both are booked to Equity:Transfers (Equity:Conversions when the currencies
+differ) and linked, so that the move is neither spending nor income. Within one
+currency they must move the same amount, one out and one in; each must be on one
+account and one category, and neither may be a half already.`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			first, err := transferID(args[0])
+			if err != nil {
+				return err
+			}
+			second, err := transferID(args[1])
+			if err != nil {
+				return err
+			}
+			res, err := svc.LinkTransfer(ctx, first, second)
+			if err != nil {
+				return err
+			}
+			v, err := svc.GetTransfer(ctx, res.OutID)
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			fmt.Fprintln(w, "Linked as a transfer:")
+			printHalves(w, v)
+			for _, name := range res.Created {
+				fmt.Fprintf(w, "Created new account %s\n", name)
+			}
+			return nil
+		},
+	}
+}
+
+func (a *app) transferUnlinkCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unlink ID",
+		Short: "Make the two halves of a transfer ordinary transactions again",
+		Long: `Take the link between the two halves of a transfer away, given either half's
+number. Both stay, each in Expenses:Uncategorized or Income:Uncategorized, so that
+they can be categorized.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			id, err := transferID(args[0])
+			if err != nil {
+				return err
+			}
+			v, err := svc.UnlinkTransfer(ctx, id)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Unlinked #%d and #%d: both are uncategorized now.\n", v.Out.ID, v.In.ID)
+			return nil
+		},
+	}
 }

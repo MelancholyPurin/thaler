@@ -814,6 +814,26 @@ func (q queries) transferCandidates(ctx context.Context, accountID int64, amount
 	return out, rows.Err()
 }
 
+// linkCandidates are the ids of the transactions that could be the other half of id,
+// which moves amount on the account named account on date: on another own account,
+// the opposite amount, two postings, linked to nothing; the nearest in date first.
+func (q queries) linkCandidates(ctx context.Context, id int64, account string, amount ledger.Money, date string, limit int) ([]int64, error) {
+	return q.ids(ctx, `
+		SELECT t.id
+		FROM transactions t
+		JOIN postings pm ON pm.transaction_id = t.id
+		JOIN accounts own ON own.id = pm.account_id AND own.type IN ('Assets', 'Liabilities') AND own.name <> ?
+		WHERE t.id <> ? AND t.transfer_with IS NULL
+		  AND pm.amount = ? AND pm.currency = ?
+		  AND (SELECT COUNT(*) FROM postings WHERE transaction_id = t.id) = 2
+		  AND NOT EXISTS (
+		      SELECT 1 FROM postings po JOIN accounts ao ON ao.id = po.account_id
+		      WHERE po.transaction_id = t.id AND po.id <> pm.id AND ao.type IN ('Assets', 'Liabilities'))
+		ORDER BY ABS(julianday(t.date) - julianday(?)), t.id
+		LIMIT ?`,
+		account, id, -amount.Minor, string(amount.Currency), date, limit)
+}
+
 // adoptionCandidate is a hand-entered transaction that an imported bank row
 // could be the other record of.
 type adoptionCandidate struct {
