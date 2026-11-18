@@ -257,6 +257,15 @@ func (s *Local) ReplaceTransaction(ctx context.Context, id int64, nt NewTransact
 }
 
 func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransaction, created *[]string) error {
+	if err := rewriteTransaction(ctx, q, id, nt, created); err != nil {
+		return err
+	}
+	return reconcileTransferLink(ctx, q, id, created)
+}
+
+// rewriteTransaction is replaceTransaction without looking at the transfer link: for
+// a change to both halves at once, which are not a transfer in between.
+func rewriteTransaction(ctx context.Context, q queries, id int64, nt NewTransaction, created *[]string) error {
 	found, err := q.transactionExists(ctx, id)
 	if err != nil {
 		return err
@@ -280,10 +289,7 @@ func replaceTransaction(ctx context.Context, q queries, id int64, nt NewTransact
 	if err := q.deletePostings(ctx, id); err != nil {
 		return err
 	}
-	if err := q.insertPostings(ctx, id, nt.Postings, accountIDs); err != nil {
-		return err
-	}
-	return reconcileTransferLink(ctx, q, id, created)
+	return q.insertPostings(ctx, id, nt.Postings, accountIDs)
 }
 
 // RestoreTransaction stores nt under the given id, which must be free. It
@@ -302,8 +308,34 @@ func (s *Local) RestoreTransactions(ctx context.Context, list []RestoredTransact
 				return err
 			}
 		}
+		// The halves of a transfer are linked again once both are back.
+		for _, r := range list {
+			if r.Transaction.TransferWith == 0 {
+				continue
+			}
+			if err := relink(ctx, q, r.ID, r.Transaction.TransferWith); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+// relink links id with other when other is there, is linked to nothing else, and the
+// two still make a transfer.
+func relink(ctx context.Context, q queries, id, other int64) error {
+	mine, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil || len(mine) != 1 {
+		return err
+	}
+	theirs, err := q.listTransactions(ctx, TxFilter{ID: other})
+	if err != nil || len(theirs) != 1 {
+		return err
+	}
+	if mine[0].TransferWith != 0 || (theirs[0].TransferWith != 0 && theirs[0].TransferWith != id) || !transferHalves(mine[0], theirs[0]) {
+		return nil
+	}
+	return q.linkTransfer(ctx, id, other)
 }
 
 // GetTransaction returns one transaction with its postings.
@@ -453,6 +485,116 @@ func (s *Local) Transfer(ctx context.Context, req TransferRequest) (TransferResu
 		return TransferResult{}, err
 	}
 	return res, nil
+}
+
+// GetTransfer is the transfer that id is one half of.
+func (s *Local) GetTransfer(ctx context.Context, id int64) (TransferView, error) {
+	return transferOf(ctx, s.repo.queries(), id)
+}
+
+// transferOf finds both halves of the transfer that id is one half of.
+func transferOf(ctx context.Context, q queries, id int64) (TransferView, error) {
+	mine, err := q.listTransactions(ctx, TxFilter{ID: id})
+	if err != nil {
+		return TransferView{}, err
+	}
+	if len(mine) == 0 {
+		return TransferView{}, coded.New("transaction_not_found", map[string]any{"ID": id})
+	}
+	notOne := coded.New("not_a_transfer", map[string]any{"ID": id})
+	if mine[0].TransferWith == 0 {
+		return TransferView{}, notOne
+	}
+	theirs, err := q.listTransactions(ctx, TxFilter{ID: mine[0].TransferWith})
+	if err != nil {
+		return TransferView{}, err
+	}
+	if len(theirs) == 0 || !transferHalves(mine[0], theirs[0]) {
+		return TransferView{}, notOne
+	}
+	out, in := mine[0], theirs[0]
+	outSrc, outCat, _ := out.Legs()
+	if outSrc.Amount.Minor > 0 {
+		out, in = in, out
+		outSrc, outCat, _ = out.Legs()
+	}
+	inSrc, _, _ := in.Legs()
+	v := TransferView{Out: out, In: in, CrossCurrency: outCat.Account == ledger.ConversionAccount}
+	v.From, v.To, v.Amount = outSrc.Account, inSrc.Account, outSrc.Amount.Neg()
+	if v.CrossCurrency {
+		v.ToAmount = inSrc.Amount
+	}
+	if v.Date, err = ledger.ParseDate(out.Date); err != nil {
+		return TransferView{}, err
+	}
+	if v.InDate, err = ledger.ParseDate(in.Date); err != nil {
+		return TransferView{}, err
+	}
+	return v, nil
+}
+
+// ReplaceTransfer changes both halves of a transfer together.
+func (s *Local) ReplaceTransfer(ctx context.Context, id int64, e TransferEdit) (TransferResult, error) {
+	var res TransferResult
+	err := s.repo.inTx(ctx, func(q queries) error {
+		was, err := transferOf(ctx, q, id)
+		if err != nil {
+			return err
+		}
+		plan, err := planTransfer(ctx, q, TransferRequest{From: e.From, To: e.To, Amount: e.Amount, ToAmount: e.ToAmount, Date: e.Date, Memo: e.Memo})
+		if err != nil {
+			return err
+		}
+		out, in := plan.out, plan.in
+		if !e.InDate.IsZero() {
+			in.Date = e.InDate
+		}
+		// A payee Thaler wrote follows the accounts; one of the bank's stays.
+		if was.Out.Payee != "Transfer to "+shortAccountName(was.To) {
+			out.Payee = was.Out.Payee
+		}
+		if was.In.Payee != "Transfer from "+shortAccountName(was.From) {
+			in.Payee = was.In.Payee
+		}
+		if e.Memo == "" {
+			out.Description, in.Description = was.Out.Description, was.In.Description
+		}
+		out.ImportHash, in.ImportHash = was.Out.ImportHash, was.In.ImportHash
+		res = plan.res
+		res.ID, res.InID = was.Out.ID, was.In.ID
+		if err := rewriteTransaction(ctx, q, was.Out.ID, out, &res.Created); err != nil {
+			return err
+		}
+		return rewriteTransaction(ctx, q, was.In.ID, in, &res.Created)
+	})
+	if err != nil {
+		return TransferResult{}, err
+	}
+	return res, nil
+}
+
+// DeleteTransfer deletes both halves of a transfer together.
+func (s *Local) DeleteTransfer(ctx context.Context, id int64) (TransferView, error) {
+	var v TransferView
+	err := s.repo.inTx(ctx, func(q queries) error {
+		var err error
+		if v, err = transferOf(ctx, q, id); err != nil {
+			return err
+		}
+		for _, half := range []int64{v.Out.ID, v.In.ID} {
+			if err := guardTransactionOpen(ctx, q, half); err != nil {
+				return err
+			}
+			if _, err := q.deleteTransaction(ctx, half); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return TransferView{}, err
+	}
+	return v, nil
 }
 
 // transferPlan is a transfer that has been checked and not yet stored: its two

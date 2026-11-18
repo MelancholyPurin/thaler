@@ -1033,5 +1033,6 @@
   "export_new": {
     "one": "neuer Export {{.Name}} · i importiert ihn",
     "other": "{{.Count}} neue Exporte · i importiert sie"
-  }
+  },
+  "not_a_transfer": "die Transaktion #{{.ID}} ist keine Hälfte einer Überweisung"
 }

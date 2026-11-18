@@ -92,6 +92,17 @@ type Service interface {
 	// nothing, and returns the names of categories it created.
 	SetCategories(ctx context.Context, changes []CategoryChange) ([]string, error)
 	Transfer(ctx context.Context, req TransferRequest) (TransferResult, error)
+	// GetTransfer is the transfer that the transaction id is one half of.
+	GetTransfer(ctx context.Context, id int64) (TransferView, error)
+	// ReplaceTransfer changes both halves of the transfer that id is one half of, in
+	// one step: the accounts, the amounts and the dates. They keep their numbers,
+	// their link and their import hashes, and each its payee, unless the payee is the
+	// one Thaler wrote ("Transfer to Savings"), which then names the new account.
+	ReplaceTransfer(ctx context.Context, id int64, e TransferEdit) (TransferResult, error)
+	// DeleteTransfer deletes both halves of the transfer that id is one half of, both
+	// or neither, and says what they were. RestoreTransactions with both brings it back,
+	// linked.
+	DeleteTransfer(ctx context.Context, id int64) (TransferView, error)
 	// SetOpeningBalance books (or corrects) the transaction that makes an asset
 	// or liability account hold the balance you read off your bank.
 	SetOpeningBalance(ctx context.Context, req OpeningBalanceRequest) (OpeningBalanceResult, error)
@@ -268,7 +279,11 @@ type NewTransaction struct {
 	// restore sets it, to bring back a transaction that was part of one; an import
 	// sets it itself. An id that is no import any more is ignored.
 	ImportID int64
-	Postings []ledger.Posting
+	// TransferWith is the other half of the transfer the transaction was one half
+	// of. Only a restore sets it: the two are linked again when the other is there,
+	// linked to nothing else, and the two still make a transfer. Otherwise it is ignored.
+	TransferWith int64
+	Postings     []ledger.Posting
 }
 
 // AddResult describes a stored transaction.
@@ -346,7 +361,7 @@ func (t TxView) NewTransaction() (NewTransaction, error) {
 	if err != nil {
 		return NewTransaction{}, err
 	}
-	nt := NewTransaction{Date: d, Payee: t.Payee, Description: t.Description, ImportHash: t.ImportHash, ImportID: t.ImportID}
+	nt := NewTransaction{Date: d, Payee: t.Payee, Description: t.Description, ImportHash: t.ImportHash, ImportID: t.ImportID, TransferWith: t.TransferWith}
 	for _, p := range t.Postings {
 		nt.Postings = append(nt.Postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
 	}
@@ -378,6 +393,31 @@ type TransferResult struct {
 	In ledger.Money
 	// CrossCurrency is true when the transfer went through Equity:Conversions.
 	CrossCurrency bool
+}
+
+// TransferView is a transfer as it is stored: its two halves, and what it moved
+// from which account to which. Its fields that are also TransferEdit's can be
+// changed and given to ReplaceTransfer.
+type TransferView struct {
+	Out, In TxView // the half that leaves From, and the half that arrives in To
+	TransferEdit
+	CrossCurrency bool // the halves are booked to Equity:Conversions
+}
+
+// TransferEdit is what a transfer should become (see ReplaceTransfer).
+type TransferEdit struct {
+	From, To string
+	Amount   ledger.Money // what leaves From, in its currency
+	// ToAmount is what arrives in To, in its currency, when the two hold different
+	// currencies; zero when they hold the same one, as in TransferRequest.
+	ToAmount ledger.Money
+	// Date is the day of the half that leaves, InDate the day of the half that
+	// arrives: the two bank statements of a real transfer can be days apart. A zero
+	// InDate is Date.
+	Date, InDate time.Time
+	// Memo becomes the description of both halves. Empty keeps the description each
+	// half has (an imported half's is the bank's purpose text).
+	Memo string
 }
 
 // OpeningBalanceRequest says what an account held at the end of a day, as the

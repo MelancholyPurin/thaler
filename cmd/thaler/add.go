@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -187,5 +189,165 @@ on its own and a transfer is neither income nor spending.`,
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")
 	_ = cmd.MarkFlagRequired("amount")
+	cmd.AddCommand(a.transferEditCmd(), a.transferDeleteCmd())
+	return cmd
+}
+
+// transferID reads the number of either half of a transfer.
+func transferID(s string) (int64, error) {
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("%q is not a transaction number", s)
+	}
+	return id, nil
+}
+
+// printHalves lists the two halves of a transfer, one line each.
+func printHalves(w io.Writer, v core.TransferView) {
+	for _, half := range []core.TxView{v.Out, v.In} {
+		source, _, _ := half.Legs()
+		fmt.Fprintf(w, "#%d  %s  %s  %s  %s\n", half.ID, half.Date, source.Account, signed(source.Amount), half.Payee)
+	}
+}
+
+func (a *app) transferEditCmd() *cobra.Command {
+	var from, to, amount, toAmount, date, inDate, memo string
+	cmd := &cobra.Command{
+		Use:   "edit ID",
+		Short: "Change both halves of a transfer: only the flags you give are changed",
+		Long: `Change a transfer, given the number of either of its halves. Only the flags you
+give change; the rest stays. Both halves change together and keep their numbers,
+so the transfer stays one. --date moves both halves to one day, --in-date gives
+the half that arrives a day of its own (the two bank statements of a transfer can
+be days apart). Without either, each half keeps its day. A payee that Thaler wrote
+("Transfer to Savings") follows a new account; one from the bank stays.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			id, err := transferID(args[0])
+			if err != nil {
+				return err
+			}
+			cur, err := svc.GetTransfer(ctx, id)
+			if err != nil {
+				return err
+			}
+			f := cmd.Flags()
+			changes := 0
+			for _, flag := range []string{"from", "to", "amount", "to-amount", "date", "in-date", "memo"} {
+				if f.Changed(flag) {
+					changes++
+				}
+			}
+			if changes == 0 {
+				return errors.New("nothing to change: give at least one of --from, --to, --amount, --to-amount, --date, --in-date, --memo")
+			}
+			e := cur.TransferEdit
+			if f.Changed("from") {
+				e.From = from
+			}
+			if f.Changed("to") {
+				e.To = to
+			}
+			src, err := svc.GetAccount(ctx, e.From)
+			if err != nil {
+				return err
+			}
+			dst, err := svc.GetAccount(ctx, e.To)
+			if err != nil {
+				return err
+			}
+			if f.Changed("amount") {
+				if e.Amount, err = ledger.ParseAmount(amount, src.Currency, 0); err != nil {
+					return fmt.Errorf("--amount: %w", err)
+				}
+			}
+			switch {
+			case f.Changed("to-amount"):
+				if e.ToAmount, err = ledger.ParseAmount(toAmount, dst.Currency, 0); err != nil {
+					return fmt.Errorf("--to-amount: %w", err)
+				}
+			case src.Currency == dst.Currency:
+				e.ToAmount = ledger.Money{}
+			}
+			if f.Changed("date") {
+				if e.Date, err = a.parseDateFlag(date); err != nil {
+					return err
+				}
+				e.InDate = e.Date
+			}
+			if f.Changed("in-date") {
+				if e.InDate, err = a.parseDateFlag(inDate); err != nil {
+					return err
+				}
+			}
+			if f.Changed("memo") {
+				e.Memo = memo
+			}
+			if _, err := svc.ReplaceTransfer(ctx, id, e); err != nil {
+				return err
+			}
+			now, err := svc.GetTransfer(ctx, id)
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			fmt.Fprintln(w, "Changed the transfer:")
+			printHalves(w, now)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&from, "from", "", "the account the money leaves")
+	cmd.Flags().StringVar(&to, "to", "", "the account the money arrives in")
+	cmd.Flags().StringVar(&amount, "amount", "", "what leaves, in the source account's currency")
+	cmd.Flags().StringVar(&toAmount, "to-amount", "", "what arrives, when the currencies differ")
+	cmd.Flags().StringVarP(&date, "date", "d", "", "the day of both halves")
+	cmd.Flags().StringVar(&inDate, "in-date", "", "the day of the half that arrives")
+	cmd.Flags().StringVarP(&memo, "memo", "m", "", "the description of both halves")
+	return cmd
+}
+
+func (a *app) transferDeleteCmd() *cobra.Command {
+	var yes bool
+	cmd := &cobra.Command{
+		Use:   "delete ID",
+		Short: "Delete both halves of a transfer, with --yes",
+		Long: `Delete a transfer, given the number of either of its halves: both halves go,
+or neither. Without --yes nothing is deleted: the two halves are listed.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			svc, err := a.service(ctx)
+			if err != nil {
+				return err
+			}
+			id, err := transferID(args[0])
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			if !yes {
+				v, err := svc.GetTransfer(ctx, id)
+				if err != nil {
+					return err
+				}
+				printHalves(w, v)
+				fmt.Fprintln(w, "\nNothing was deleted. Run it again with --yes to delete both halves.")
+				return nil
+			}
+			v, err := svc.DeleteTransfer(ctx, id)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(w, "Deleted the transfer:")
+			printHalves(w, v)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&yes, "yes", false, "delete both halves, instead of only listing them")
 	return cmd
 }
