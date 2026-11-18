@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -90,6 +91,8 @@ Use --dry-run first to see what would happen without writing anything.`,
 				Rules:          cfg.Rules,
 				DryRun:         dryRun,
 				IgnoreRejected: ignoreErrors,
+				Source:         filepath.Base(args[0]),
+				Profile:        profile.Name,
 			})
 			for _, r := range res.Rejected {
 				problems = append(problems, a.cli().T("import_line_problem", map[string]any{"Line": r.Line, "Reason": a.cli().Error(r.Err)}))
