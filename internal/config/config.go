@@ -21,6 +21,9 @@ import (
 type Config struct {
 	// ImportDir is the folder the TUI lists bank exports from; default ~/Downloads.
 	ImportDir string `toml:"import_dir"`
+	// WatchImportDir says whether the TUI looks at that folder while it runs, to say
+	// when a new export has arrived. Nil means not set: see WatchesImportDir.
+	WatchImportDir *bool `toml:"watch_import_dir"`
 	// Language is the language of the messages: en, es or de. Empty means that the
 	// environment decides (see i18n.Detect).
 	Language string `toml:"language"`
@@ -49,6 +52,12 @@ const DefaultBackupReminderDays = 7
 // DefaultKeepBackups is how many backups are kept in each folder when config.toml
 // does not say.
 const DefaultKeepBackups = 10
+
+// WatchesImportDir says whether the interface notices new exports in the import
+// folder: it does, unless config.toml switches it off.
+func (c *Config) WatchesImportDir() bool {
+	return c == nil || c.WatchImportDir == nil || *c.WatchImportDir
+}
 
 // KeepCount is how many of the newest backups in each folder to keep, or 0 to
 // keep them all. Nothing is ever removed without asking, whatever this is.
