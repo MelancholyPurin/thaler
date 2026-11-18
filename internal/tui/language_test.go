@@ -217,6 +217,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "import, review", keys: "i enter", export: true},
 		{name: "import, choosing a category", keys: "i enter down c", export: true},
 		{name: "import, a category chosen", keys: "i enter down c raw:Expenses:Gifts enter", export: true},
+		{name: "imports, none", keys: "I"},
+		{name: "imports, listed", keys: "i enter enter I", export: true},
+		{name: "imports, asked about", keys: "i enter enter I enter", export: true},
+		{name: "imports, taken back", keys: "i enter enter I enter enter", export: true},
 		{name: "new account", keys: "n"},
 		{name: "new account, type", keys: "n tab"},
 		{name: "new account, balance", keys: "n tab tab tab"},
@@ -484,6 +488,8 @@ func Test_View_translated(t *testing.T) {
 		{name: "German, targets copied", tag: language.German, keys: "B c", shows: []string{"1 Ziel von Sep 2026 nach Okt 2026 kopiert"}, hides: []string{"copied"}},
 		{name: "German, nothing to copy", tag: language.German, keys: "B c c", shows: []string{"nichts zu kopieren: jedes Ziel von Sep 2026 ist in Okt 2026 schon gesetzt"}, hides: []string{"nothing to copy"}},
 		{name: "German, the target popup", tag: language.German, keys: "B e", shows: []string{"Ziele für Okt 2026", "In EUR, der Basiswährung", "enter speichern"}, hides: []string{"Targets for", "base currency"}},
+		{name: "Spanish, no imports yet", tag: language.Spanish, keys: "I", shows: []string{"Importaciones anteriores", "Todavía no hay importaciones registradas", "esc cerrar"}, hides: []string{"Earlier imports", "No imports"}},
+		{name: "German, no imports yet", tag: language.German, keys: "I", shows: []string{"Frühere Importe", "Es sind noch keine Importe verzeichnet", "esc schließen"}, hides: []string{"Earlier imports", "No imports"}},
 		{name: "German, the budget", tag: language.German, keys: "B", shows: []string{"Budget · Okt 2026", "Einnahmen", "Ausgegeben"}, hides: []string{"Income", "Spent"}},
 	}
 	for _, tc := range tcs {
