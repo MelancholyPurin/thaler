@@ -36,6 +36,10 @@ type ParseResult struct {
 	Rows    []Row
 	Skipped int // rows ignored by the profile's skip rule (pending bookings)
 	Errors  []RowError
+	// Encoding and Delimiter are how the file was read: the profile's, or what was
+	// found when the profile says "auto". Encoding is one of the Encoding constants.
+	Encoding  string
+	Delimiter rune
 }
 
 // Parse reads a CSV export according to profile p. fallback is the currency
@@ -49,29 +53,11 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 	if err != nil {
 		return nil, err
 	}
-	text, err := decodeToUTF8(raw, cp.encoding)
+	tab, err := openTable(raw, p, cp)
 	if err != nil {
 		return nil, err
 	}
-
-	cr := csv.NewReader(strings.NewReader(text))
-	cr.Comma = cp.delim
-	cr.LazyQuotes = true
-	cr.FieldsPerRecord = -1
-
-	var header []string
-	for header == nil {
-		rec, err := cr.Read()
-		if errors.Is(err, io.EOF) {
-			return nil, coded.New("file_empty", nil)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", coded.New("reading_header", nil), err)
-		}
-		if !blank(rec) {
-			header = rec
-		}
-	}
+	cr, header := tab.cr, tab.header
 	index := headerIndex(header)
 	find := func(names []string) int { return findColumn(index, names) }
 	cols := struct{ date, payee, purpose, iban, booking, amount, currency, skip int }{
@@ -94,7 +80,7 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 	}
 	skipNeedle := strings.ToLower(strings.TrimSpace(p.SkipContains))
 
-	res := &ParseResult{}
+	res := &ParseResult{Encoding: tab.encoding, Delimiter: tab.delim}
 	for {
 		rec, err := cr.Read()
 		if errors.Is(err, io.EOF) {
@@ -151,6 +137,71 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 		res.Rows = append(res.Rows, row)
 	}
 	return res, nil
+}
+
+// table is a decoded export ready to be read, its header read already.
+type table struct {
+	cr       *csv.Reader
+	header   []string
+	encoding string
+	delim    rune
+}
+
+// openTable decodes raw and reads its header: the first line that is not blank.
+// With an "auto" delimiter it tries each of Delimiters and keeps the one under which
+// the header has the profile's date and amount columns; when none does, the one that
+// splits the header into the most columns, so that an error can show it.
+func openTable(raw []byte, p Profile, cp compiled) (table, error) {
+	text, encoding, err := decodeToUTF8(raw, cp.encoding)
+	if err != nil {
+		return table{}, err
+	}
+	if cp.delim != 0 {
+		return readHeader(text, encoding, cp.delim)
+	}
+	var (
+		best               table
+		bestFits, bestCols = false, 0
+		firstErr           error
+	)
+	for _, d := range Delimiters {
+		tab, err := readHeader(text, encoding, d)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		index := headerIndex(tab.header)
+		fits := findColumn(index, p.Columns.Date) >= 0 && findColumn(index, p.Columns.Amount) >= 0
+		if (fits && !bestFits) || (fits == bestFits && len(tab.header) > bestCols) {
+			best, bestFits, bestCols = tab, fits, len(tab.header)
+		}
+	}
+	if best.cr == nil {
+		return table{}, firstErr
+	}
+	return best, nil
+}
+
+// readHeader starts reading text with the delimiter d, up to and including the header.
+func readHeader(text, encoding string, d rune) (table, error) {
+	cr := csv.NewReader(strings.NewReader(text))
+	cr.Comma = d
+	cr.LazyQuotes = true
+	cr.FieldsPerRecord = -1
+	for {
+		rec, err := cr.Read()
+		if errors.Is(err, io.EOF) {
+			return table{}, coded.New("file_empty", nil)
+		}
+		if err != nil {
+			return table{}, fmt.Errorf("%w: %w", coded.New("reading_header", nil), err)
+		}
+		if !blank(rec) {
+			return table{cr: cr, header: rec, encoding: encoding, delim: d}, nil
+		}
+	}
 }
 
 func parseDate(s string, layouts []string) (time.Time, error) {

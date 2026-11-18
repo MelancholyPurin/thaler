@@ -130,6 +130,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 				printColumns(out, "", lines)
 				fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
 					res.Inserted, res.Duplicates, parsed.Skipped)
+				fmt.Fprintf(out, "The file was read as %s, its columns separated by %s.\n", parsed.Encoding, delimiterName(parsed.Delimiter))
 				if res.Adopted > 0 {
 					fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
 				}
@@ -170,4 +171,12 @@ Use --dry-run first to see what would happen without writing anything.`,
 	cmd.Flags().BoolVar(&ignoreErrors, "ignore-errors", false, "import the readable rows even if some rows are broken")
 	_ = cmd.MarkFlagRequired("account")
 	return cmd
+}
+
+// delimiterName is how the dry run names the character between columns.
+func delimiterName(d rune) string {
+	if d == '\t' {
+		return "tabs"
+	}
+	return fmt.Sprintf("%q", string(d))
 }

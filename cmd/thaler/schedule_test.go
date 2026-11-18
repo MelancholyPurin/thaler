@@ -357,6 +357,7 @@ func Test_schedule_importSettles(t *testing.T) {
 			args: imp("--dry-run"),
 			want: "new  2026-08-29  Expenses:Rent                 Landlord  -900.00 EUR\n\n" +
 				"Dry run: 1 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as utf-8, its columns separated by \";\".\n" +
 				"1 row(s) are the bank's booking of a scheduled transaction and would answer it (see thaler cli schedule due).\n",
 		},
 		{

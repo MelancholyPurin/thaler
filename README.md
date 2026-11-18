@@ -72,6 +72,8 @@ For development, `make` lists the shortcuts: `make test`, `make lint` (gofmt and
 
 Export your transactions from Sparkasse online banking as CSV, choosing the **CSV-CAMT** format (the CSV-MT940 variant uses the same column names that thaler reads).
 
+**How a file is read.** The character between the columns and the encoding are found from the file, not assumed. The delimiter is whichever of `;`, `,`, tab and `|` splits the header into the columns the profile needs (when none does, the one that splits it most, so that the error shows the header sensibly). The encoding is UTF-8, UTF-16 (with a byte order mark, or recognised by its zero bytes; what a spreadsheet saves as "Unicode text") or, for anything else, Windows-1252, which German banks still use. So an export that a spreadsheet opened and saved again with commas, or as UTF-16 with tabs, still imports with the `sparkasse` profile and is still recognised by `auto`. `thaler cli import --dry-run` says how the file was read. A profile of yours can fix either: `delimiter = ";"`, `encoding = "utf-8"` (or `"utf-16"`, `"utf-16le"`, `"utf-16be"`, `"windows-1252"`); both default to `"auto"`.
+
 Data lives in `~/.local/share/thaler/thaler.db`, config in `~/.config/thaler/config.toml`. Override with `--db` / `--config`, or `THALER_DB`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME`.
 
 Your financial data never belongs in this repository: `.gitignore` excludes databases, CSV exports (except the invented test fixture) and `config.toml`.
@@ -312,7 +314,7 @@ Write negative amounts as `--amount=-12.50`. Amounts accept `12.50`, `12,50` and
 ```
 cmd/thaler/           cobra commands (thin: parse flags, call core.Service, print) and wiring
 internal/ledger/      Money, account naming, double-entry validation, FX rates   (stdlib only)
-internal/importer/    CSV profiles, Windows-1252 decoding, dedupe keys, rules    (stdlib only)
+internal/importer/    CSV profiles, encoding and delimiter detection, dedupe keys, rules (stdlib only)
 internal/core/        the application layer, see below
 internal/config/      config.toml loading and default paths
 internal/i18n/        the messages in English, Spanish and German (locales/*.json) and the language lookup

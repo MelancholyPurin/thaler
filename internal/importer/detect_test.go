@@ -55,7 +55,19 @@ func Test_Detect(t *testing.T) {
 			name: "yours that is the same as the built-in one fits as well and comes first", file: sample,
 			custom: []Profile{{Name: "mine", Delimiter: ";", Columns: Sparkasse.Columns, SkipColumn: "Info"}}, want: found{"mine", true},
 		},
-		{name: "the wrong delimiter", file: strings.ReplaceAll(sample, ";", ","), want: found{}},
+		{name: "a copy saved with commas is still found", file: strings.ReplaceAll(sample, ";", ","), want: found{"sparkasse", true}},
+		{name: "or with tabs", file: strings.ReplaceAll(sample, ";", "\t"), want: found{"sparkasse", true}},
+		{name: "or as UTF-16 with a byte order mark", file: utf16Text(sample, false, true), want: found{"sparkasse", true}},
+		{name: "or as UTF-16 without one", file: utf16Text(sample, false, false), want: found{"sparkasse", true}},
+		{name: "or as big-endian UTF-16", file: utf16Text(sample, true, false), want: found{"sparkasse", true}},
+		{
+			name: "a profile with a delimiter of its own reads no other", file: ingFile,
+			custom: []Profile{{Name: "fixed", Delimiter: ";", Columns: ing.Columns}}, want: found{},
+		},
+		{
+			name: "a profile with an encoding of its own reads no other", file: utf16Text(ingFile, false, true),
+			custom: []Profile{{Name: "fixed", Encoding: "utf-8", Delimiter: ",", Columns: ing.Columns}}, want: found{},
+		},
 		{name: "a header with no date column", file: "Betrag;Name\n1;x\n", want: found{}},
 		{name: "a header with no amount column", file: "Buchungstag;Name\n1;x\n", want: found{}},
 		{name: "blank lines before the header", file: "\n\n" + sample, want: found{"sparkasse", true}},
@@ -63,6 +75,10 @@ func Test_Detect(t *testing.T) {
 		{name: "a profile that cannot be used is passed over", file: sample, custom: []Profile{{Name: "bad", Encoding: "ebcdic", Columns: Sparkasse.Columns, SkipColumn: "Info"}}, want: found{"sparkasse", true}},
 		{
 			name: "a long file is read as far as its header", file: sample + strings.Repeat("02.10.26;;ÄÖÜ;;;;;-1,00;EUR;\n", 5000),
+			want: found{"sparkasse", true},
+		},
+		{
+			name: "a long file in UTF-16 is read as far as its header", file: utf16Text(sample+strings.Repeat("02.10.26;;ÄÖÜ;;;;;-1,00;EUR;\n", 5000), true, true),
 			want: found{"sparkasse", true},
 		},
 		{

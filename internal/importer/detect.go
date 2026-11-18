@@ -2,7 +2,6 @@ package importer
 
 import (
 	"bytes"
-	"encoding/csv"
 	"io"
 	"sort"
 	"strings"
@@ -70,24 +69,11 @@ func (p Profile) headerScore(raw []byte) int {
 	if err != nil {
 		return 0
 	}
-	text, err := decodeToUTF8(raw, cp.encoding)
-	if err != nil {
+	tab, err := openTable(raw, p, cp)
+	if err != nil { // including a file with no header
 		return 0
 	}
-	cr := csv.NewReader(strings.NewReader(text))
-	cr.Comma = cp.delim
-	cr.LazyQuotes = true
-	cr.FieldsPerRecord = -1
-	var header []string
-	for header == nil {
-		rec, err := cr.Read()
-		if err != nil { // including the end of a file with no header
-			return 0
-		}
-		if !blank(rec) {
-			header = rec
-		}
-	}
+	header := tab.header
 	index := headerIndex(header)
 	if findColumn(index, p.Columns.Date) < 0 || findColumn(index, p.Columns.Amount) < 0 {
 		return 0
