@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -312,6 +313,15 @@ func Test_balance(t *testing.T) {
 	}
 }
 
+// utf16LE is s as little-endian UTF-16 with a byte order mark.
+func utf16LE(s string) string {
+	out := []byte{0xFF, 0xFE}
+	for _, u := range utf16.Encode([]rune(s)) {
+		out = append(out, byte(u), byte(u>>8))
+	}
+	return string(out)
+}
+
 func Test_import(t *testing.T) {
 	importFile := func(file, account string, extra ...string) []string {
 		return append([]string{"cli", "import", "{dir}/" + file, "-a", account}, extra...)
@@ -337,7 +347,17 @@ func Test_import(t *testing.T) {
 			args: importFile("export.csv", "Assets:Bank", "--dry-run"),
 			want: "new  2026-10-01  Expenses:Uncategorized        Some Shop   0.00 EUR\n" +
 				"new  2026-10-02  Expenses:Uncategorized        Some Shop  -3.20 EUR\n\n" +
-				"Dry run: 2 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n",
+				"Dry run: 2 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as utf-8, its columns separated by \";\".\n",
+		},
+		{
+			name: "a copy a spreadsheet saved as Unicode text: UTF-16 with tabs", files: map[string]string{"export.csv": utf16LE(strings.ReplaceAll(zeroRowCSV, ";", "\t"))},
+			setup: [][]string{addBank},
+			args:  importFile("export.csv", "Assets:Bank", "--dry-run"),
+			want: "new  2026-10-01  Expenses:Uncategorized        Some Shop   0.00 EUR\n" +
+				"new  2026-10-02  Expenses:Uncategorized        Some Shop  -3.20 EUR\n\n" +
+				"Dry run: 2 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as utf-16le, its columns separated by tabs.\n",
 		},
 		{
 			name: "the other half of a transfer: previewed", files: transferFiles,
@@ -345,6 +365,7 @@ func Test_import(t *testing.T) {
 			args:  importFile("savings.csv", "Assets:Savings", "--dry-run"),
 			want: "new  2026-10-05  ⇄ #1 Assets:Bank              Umbuchung  +500.00 EUR\n\n" +
 				"Dry run: 1 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as utf-8, its columns separated by \";\".\n" +
 				"1 new row(s) would be paired as the other half of a transfer with a transaction on another account.\n",
 		},
 		{
@@ -361,6 +382,7 @@ func Test_import(t *testing.T) {
 			args:  importFile("bank.csv", "Assets:Bank", "--dry-run"),
 			want: "new  2026-10-05  ↔ #1 REWE                     REWE Markt  -23.47 EUR\n\n" +
 				"Dry run: 0 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as utf-8, its columns separated by \";\".\n" +
 				"1 row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n",
 		},
 		{
