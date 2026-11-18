@@ -47,6 +47,7 @@ const (
 type csvFile struct {
 	path, name string
 	modified   time.Time
+	size       int64
 }
 
 type importFlow struct {
@@ -128,11 +129,9 @@ func (m *Model) openImport() tea.Cmd {
 			f.profile = i + 1
 		}
 	}
-	f.dir = m.downloads
-	if cfg.ImportDir != "" {
-		f.dir = expandHome(cfg.ImportDir)
-	}
+	f.dir = m.importDir(cfg)
 	f.files = listCSVs(f.dir)
+	m.watch.fresh = nil // it is on the list now
 	m.imp = f
 	m.mode = modeImport
 	f.refreshFiles()
@@ -180,7 +179,7 @@ func listCSVs(dir string) []csvFile {
 		if err != nil {
 			continue
 		}
-		out = append(out, csvFile{path: filepath.Join(dir, e.Name()), name: e.Name(), modified: info.ModTime()})
+		out = append(out, csvFile{path: filepath.Join(dir, e.Name()), name: e.Name(), modified: info.ModTime(), size: info.Size()})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].modified.After(out[j].modified) })
 	return out
