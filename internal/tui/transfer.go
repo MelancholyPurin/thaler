@@ -32,6 +32,8 @@ type transferForm struct {
 
 	amount, received, date textinput.Model
 	err                    string
+	// editing is the transfer being changed, as it was; nil for a new one.
+	editing *core.TransferView
 }
 
 func (m *Model) transferWidth() int {
@@ -73,6 +75,29 @@ func (m *Model) openTransferForm() tea.Cmd {
 	}
 	f.amount, f.received = newInput(""), newInput("")
 	f.date = newInput(m.loc.Date(m.now()))
+	f.received.Placeholder = m.loc.T("transfer_received_placeholder", nil)
+	for _, in := range []*textinput.Model{&f.amount, &f.received, &f.date} {
+		in.Width = m.transferWidth()
+	}
+	m.xfer = f
+	m.mode = modeTransfer
+	return m.focusTransferField(tfAmount)
+}
+
+// openTransferEdit opens the transfer popup on the transfer that the transaction id
+// is one half of, filled in, so that both halves change together.
+func (m *Model) openTransferEdit(id int64) tea.Cmd {
+	v, err := m.svc.GetTransfer(m.ctx, id)
+	if err != nil {
+		m.setStatus(m.errText(err), true)
+		return nil
+	}
+	f := &transferForm{from: m.accountIndex(v.From), to: m.accountIndex(v.To), editing: &v}
+	f.amount, f.received = newInput(m.loc.Amount(v.Amount)), newInput("")
+	if v.CrossCurrency {
+		f.received.SetValue(m.loc.Amount(v.ToAmount))
+	}
+	f.date = newInput(m.loc.Date(v.Date))
 	f.received.Placeholder = m.loc.T("transfer_received_placeholder", nil)
 	for _, in := range []*textinput.Model{&f.amount, &f.received, &f.date} {
 		in.Width = m.transferWidth()
@@ -197,6 +222,10 @@ func (m *Model) saveTransfer() {
 		fail(m.loc.T("error_date", map[string]any{"Error": m.errText(err)}))
 		return
 	}
+	if f.editing != nil {
+		m.saveTransferEdit(core.TransferEdit{From: src.Name, To: dst.Name, Amount: out, ToAmount: in, Date: when})
+		return
+	}
 	res, err := m.svc.Transfer(m.ctx, core.TransferRequest{From: src.Name, To: dst.Name, Amount: out, ToAmount: in, Date: when})
 	if err != nil {
 		f.err = m.errText(err)
@@ -226,6 +255,45 @@ func (m *Model) saveTransfer() {
 	parts := []string{m.loc.T("transferred", map[string]any{"Amount": m.loc.Money(out), "From": m.loc.ShortName(src.Name), "To": m.loc.ShortName(dst.Name)})}
 	if res.CrossCurrency {
 		parts = append(parts, m.loc.T("transferred_arrived", map[string]any{"Arrived": m.loc.Money(res.In), "Rate": m.impliedRate(out, res.In)}))
+	}
+	parts = append(parts, m.loc.T("hint_z_undoes", nil))
+	m.setStatus(m.statusLine(parts), false)
+}
+
+// saveTransferEdit changes both halves of the transfer being edited, and z changes
+// them back.
+func (m *Model) saveTransferEdit(e core.TransferEdit) {
+	f := m.xfer
+	was := *f.editing
+	// The half that arrives keeps a day of its own unless the date was changed.
+	e.InDate = e.Date
+	if e.Date.Equal(was.Date) {
+		e.InDate = was.InDate
+	}
+	res, err := m.svc.ReplaceTransfer(m.ctx, was.Out.ID, e)
+	if err != nil {
+		f.err = m.errText(err)
+		return
+	}
+	m.mode, m.xfer = modeList, nil
+	outID, inID := res.ID, res.InID
+	m.undo = append(m.undo, undoOp{
+		undone: func() string { return m.loc.T("undid_transfer_edit", map[string]any{"Out": outID, "In": inID}) },
+		run: func() error {
+			_, err := m.svc.ReplaceTransfer(m.ctx, outID, was.TransferEdit)
+			return err
+		},
+		account: was.From,
+	})
+	if err := m.reload(); err != nil {
+		m.setStatus(m.errText(err), true)
+		return
+	}
+	m.clampAll()
+	m.applyFilter(true)
+	parts := []string{m.loc.T("transfer_changed", map[string]any{"Out": outID, "In": inID})}
+	if res.CrossCurrency {
+		parts = append(parts, m.loc.T("transferred_arrived", map[string]any{"Arrived": m.loc.Money(res.In), "Rate": m.impliedRate(e.Amount, res.In)}))
 	}
 	parts = append(parts, m.loc.T("hint_z_undoes", nil))
 	m.setStatus(m.statusLine(parts), false)
@@ -274,12 +342,16 @@ func (m *Model) transferPopup() string {
 		dim.Render(strings.Repeat("─", iw)),
 	)
 	lines = append(lines, m.transferHints(iw)...)
-	h := 14
+	h := max(14, len(lines)+3) // the border and the message line; a long hint makes it taller
 	for len(lines) < h-3 {
 		lines = append(lines, "")
 	}
 	lines = append(lines, errStyle.Render(fit(f.err, iw)))
-	return box(m.loc.T("transfer_title", nil), lines, w, h, true, m.loc.T("footer_form_next", nil))
+	title := m.loc.T("transfer_title", nil)
+	if f.editing != nil {
+		title = m.loc.T("transfer_edit_title", map[string]any{"Out": f.editing.Out.ID, "In": f.editing.In.ID})
+	}
+	return box(title, lines, w, h, true, m.loc.T("footer_form_next", nil))
 }
 
 // transferHints explains the field being edited and, across currencies, shows
@@ -300,7 +372,11 @@ func (m *Model) transferHints(w int) []string {
 		}
 		return hint
 	case tfDate:
-		return wrapped(m.loc.T("date_hint", nil), w, dim)
+		hint := wrapped(m.loc.T("date_hint", nil), w, dim)
+		if e := f.editing; e != nil && !e.InDate.Equal(e.Date) {
+			hint = append(hint, wrapped(m.loc.T("transfer_hint_in_date", map[string]any{"Date": m.loc.Date(e.InDate)}), w, dim)...)
+		}
+		return hint
 	default:
 		return wrapped(m.loc.T("transfer_hint_account", nil), w, dim)
 	}

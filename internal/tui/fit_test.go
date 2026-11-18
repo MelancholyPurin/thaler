@@ -126,6 +126,7 @@ func Test_View_fits(t *testing.T) {
 		keys   string
 		groups bool // books spending in two categories of a group first
 		arrive int  // new exports that arrive in the downloads folder while it runs
+		inDate bool // books a transfer first, its halves on days of their own
 	}{
 		{name: "home", keys: ""},
 		{name: "home, a new export", keys: "", arrive: 1},
@@ -148,6 +149,9 @@ func Test_View_fits(t *testing.T) {
 		{name: "transfer across currencies", keys: "x tab text:10 tab text:11"},
 		{name: "transfer, date", keys: "x tab tab"},
 		{name: "transfer, accounts", keys: "x tab tab tab"},
+		{name: "transfer, edit", keys: "x text:10 tab text:11 ctrl+s 3 g e"},
+		{name: "transfer, edit, the date", keys: "3 g e tab tab", inDate: true},
+		{name: "transfer, delete", keys: "x text:10 tab text:11 ctrl+s 3 g d"},
 		{name: "import, files", keys: "i"},
 		{name: "import, profile chosen", keys: "i tab tab left"},
 		{name: "import, review", keys: "i enter"},
@@ -336,6 +340,10 @@ func Test_View_fits(t *testing.T) {
 		{name: "transferred", keys: "x text:10 enter ctrl+s"},
 		{name: "transferred across currencies", keys: "x text:10 tab text:11 ctrl+s"},
 		{name: "transferred and undone", keys: "x text:10 tab text:11 ctrl+s z"},
+		{name: "transfer edited", keys: "x text:10 tab text:11 ctrl+s 3 g e ctrl+u text:12 ctrl+s"},
+		{name: "transfer edited and undone", keys: "x text:10 tab text:11 ctrl+s 3 g e ctrl+s z"},
+		{name: "transfer deleted", keys: "x text:10 tab text:11 ctrl+s 3 g d y"},
+		{name: "transfer deleted and undone", keys: "x text:10 tab text:11 ctrl+s 3 g d y z"},
 		{name: "imported", keys: "i enter enter"},
 		{name: "imported and undone", keys: "i enter enter z"},
 		{name: "import taken back from the list", keys: "i enter enter I enter enter"},
@@ -387,6 +395,9 @@ func Test_View_fits(t *testing.T) {
 					bookGroup(t, m)
 				}
 				newExports(t, m, sc.arrive)
+				if sc.inDate {
+					bookTransfer(t, m, "", true)
+				}
 
 				// when
 				play(m, sc.keys)

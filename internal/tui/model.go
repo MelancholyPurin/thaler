@@ -203,6 +203,8 @@ type Model struct {
 	confirmTx   core.TxView // transaction waiting for a delete confirmation
 	// confirmMany are the marked transactions waiting for it, when there are several.
 	confirmMany []core.TxView
+	// confirmXfer is the transfer waiting for it, when the transaction is one half of one.
+	confirmXfer *core.TransferView
 	marked      map[int64]bool // the marked transactions, all of them on show
 
 	loadConfig    ConfigLoader

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/melancholypurin/thaler/internal/core"
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
@@ -641,9 +642,25 @@ func (m *Model) formSuggestions(w, h int) []string {
 	}
 }
 
+// confirmTransferPopup asks before deleting both halves of a transfer, showing both.
+func (m *Model) confirmTransferPopup() string {
+	v := m.confirmXfer
+	w := min(max(m.width-6, 30), 60)
+	lines := []string{""}
+	for _, half := range []core.TxView{v.Out, v.In} {
+		source, _, _ := half.Legs()
+		lines = append(lines, fit(fmt.Sprintf("  #%d  %s  %s  %s", half.ID, m.loc.StoredDate(half.Date), m.loc.ShortName(source.Account), m.loc.Signed(source.Amount)), w-2))
+	}
+	lines = append(lines, "", fit("  "+warn.Render(m.loc.T("delete_transfer_question", nil))+dim.Render("  "+m.loc.T("delete_undo_hint", nil)), w-2))
+	return box(m.loc.T("delete_transfer_title", map[string]any{"Out": v.Out.ID, "In": v.In.ID}), lines, w, 7, true, m.loc.T("footer_delete", nil))
+}
+
 func (m *Model) confirmPopup() string {
 	if len(m.confirmMany) > 0 {
 		return m.confirmManyPopup()
+	}
+	if m.confirmXfer != nil {
+		return m.confirmTransferPopup()
 	}
 	tx := m.confirmTx
 	w := min(max(m.width-6, 30), 60)

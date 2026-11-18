@@ -58,7 +58,15 @@ func (m *Model) confirmDelete() {
 	if !ok {
 		return
 	}
-	m.confirmTx = r.tx
+	m.confirmTx, m.confirmXfer = r.tx, nil
+	if r.tx.TransferWith != 0 { // both halves go
+		v, err := m.svc.GetTransfer(m.ctx, r.tx.ID)
+		if err != nil {
+			m.setStatus(m.errText(err), true)
+			return
+		}
+		m.confirmXfer = &v
+	}
 	m.mode = modeConfirm
 }
 
@@ -68,6 +76,10 @@ func (m *Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeList
 		if len(m.confirmMany) > 0 {
 			m.deleteMany(m.confirmMany)
+			return m, nil
+		}
+		if m.confirmXfer != nil {
+			m.deleteTransfer(*m.confirmXfer)
 			return m, nil
 		}
 		m.deleteTx(m.confirmTx)
@@ -97,4 +109,32 @@ func (m *Model) deleteTx(tx core.TxView) {
 	}
 	m.applyFilter(true)
 	m.setStatus(m.loc.T("deleted_tx", map[string]any{"ID": tx.ID}), false)
+}
+
+// deleteTransfer deletes both halves of a transfer, and z brings both back, linked.
+func (m *Model) deleteTransfer(v core.TransferView) {
+	var restore []core.RestoredTransaction
+	for _, half := range []core.TxView{v.Out, v.In} {
+		nt, err := half.NewTransaction()
+		if err != nil {
+			m.setStatus(m.errText(err), true)
+			return
+		}
+		restore = append(restore, core.RestoredTransaction{ID: half.ID, Transaction: nt})
+	}
+	if _, err := m.svc.DeleteTransfer(m.ctx, v.Out.ID); err != nil {
+		m.setStatus(m.errText(err), true)
+		return
+	}
+	outID, inID := v.Out.ID, v.In.ID
+	m.undo = append(m.undo, undoOp{
+		undone: func() string { return m.loc.T("undid_delete_transfer", map[string]any{"Out": outID, "In": inID}) },
+		run:    func() error { return m.svc.RestoreTransactions(m.ctx, restore) },
+	})
+	if err := m.reload(); err != nil {
+		m.setStatus(m.errText(err), true)
+		return
+	}
+	m.applyFilter(true)
+	m.setStatus(m.loc.T("deleted_transfer", map[string]any{"Out": outID, "In": inID}), false)
 }
