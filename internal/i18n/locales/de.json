@@ -1029,5 +1029,9 @@
     "one": "{{.File}} zurückgenommen: {{.Count}} Transaktion gelöscht",
     "other": "{{.File}} zurückgenommen: {{.Count}} Transaktionen gelöscht"
   },
-  "help_imports": "die gemachten Importe auflisten und einen ganz zurücknehmen"
+  "help_imports": "die gemachten Importe auflisten und einen ganz zurücknehmen",
+  "export_new": {
+    "one": "neuer Export {{.Name}} · i importiert ihn",
+    "other": "{{.Count}} neue Exporte · i importiert sie"
+  }
 }

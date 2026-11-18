@@ -1029,5 +1029,9 @@
     "one": "Took back {{.File}}: {{.Count}} transaction deleted",
     "other": "Took back {{.File}}: {{.Count}} transactions deleted"
   },
-  "help_imports": "list the imports you made and take one back as a whole"
+  "help_imports": "list the imports you made and take one back as a whole",
+  "export_new": {
+    "one": "new export {{.Name}} · i imports it",
+    "other": "{{.Count}} new exports · i imports them"
+  }
 }

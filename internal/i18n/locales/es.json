@@ -1029,5 +1029,9 @@
     "one": "Se deshizo {{.File}}: {{.Count}} transacción eliminada",
     "other": "Se deshizo {{.File}}: {{.Count}} transacciones eliminadas"
   },
-  "help_imports": "listar las importaciones hechas y deshacer una entera"
+  "help_imports": "listar las importaciones hechas y deshacer una entera",
+  "export_new": {
+    "one": "nueva exportación {{.Name}} · i la importa",
+    "other": "{{.Count}} exportaciones nuevas · i las importa"
+  }
 }
