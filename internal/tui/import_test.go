@@ -810,7 +810,7 @@ func Test_Update_import_pairingTransfers(t *testing.T) {
 		selectPayee(t, m, "Umbuchung")
 
 		// when
-		play(m, "e enter text:_Sparplan ctrl+s")
+		play(m, "r text:_Sparplan ctrl+s")
 
 		// then
 		half := txByPayee(t, st, "Umbuchung Sparplan")

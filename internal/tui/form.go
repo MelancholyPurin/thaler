@@ -98,6 +98,9 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 			}
 			return m.openSplit(splitAmount)
 		}
+		if r.tx.TransferWith != 0 && focus == fieldAmount { // both halves, in the transfer popup
+			return m.openTransferEdit(r.tx.ID)
+		}
 		if !r.simple {
 			m.setStatus(m.loc.T("cannot_edit_here", nil), true)
 			return nil

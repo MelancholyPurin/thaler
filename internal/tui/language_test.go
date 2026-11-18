@@ -201,6 +201,10 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		export bool // puts a bank export in the downloads folder
 		groups bool // and spending in two categories of a group
 		arrive int  // new exports that arrive in the downloads folder while it runs
+		// transfer books a transfer first, the newest transaction, with payees that are
+		// not English (the ones Thaler writes, "Transfer to Dollars", are stored in English);
+		// apart gives its halves days of their own.
+		transfer, apart bool
 	}{
 		{name: "home", keys: ""},
 		{name: "home, a new export", keys: "", export: true, arrive: 1},
@@ -215,6 +219,13 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		{name: "transfer", keys: "x"},
 		{name: "transfer, date", keys: "x tab"},
 		{name: "import", keys: "i"},
+		{name: "transfer, edit", keys: "3 g e", transfer: true},
+		{name: "transfer, edit, the date", keys: "3 g e tab tab", transfer: true, apart: true},
+		{name: "transfer, edited", keys: "3 g e ctrl+u text:12 ctrl+s", transfer: true},
+		{name: "transfer, edited and undone", keys: "3 g e ctrl+s z", transfer: true},
+		{name: "transfer, delete", keys: "3 g d", transfer: true},
+		{name: "transfer, deleted", keys: "3 g d y", transfer: true},
+		{name: "transfer, deleted and undone", keys: "3 g d y z", transfer: true},
 		{name: "import, profile found", keys: "i", export: true},
 		{name: "import, profile chosen", keys: "i tab tab left", export: true},
 		{name: "import, review", keys: "i enter", export: true},
@@ -408,6 +419,9 @@ func Test_View_pseudoLanguage(t *testing.T) {
 				writeExport(t, m, "umsaetze.csv", exportCSV)
 			}
 			newExports(t, m, tc.arrive)
+			if tc.transfer {
+				bookTransfer(t, m, "Umbuchung", tc.apart)
+			}
 
 			// when
 			play(m, tc.keys)

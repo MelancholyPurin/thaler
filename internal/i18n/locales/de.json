@@ -392,7 +392,7 @@
   "help_import": "einen Bankexport (CSV) in ein Konto importieren",
   "help_new_account": "neues Konto / Kontostand des gewählten Kontos setzen",
   "help_categorize_rule": "kategorisieren und eine Regel anlegen, damit dieser Empfänger immer so kategorisiert wird",
-  "help_ced": "die gewählte Transaktion kategorisieren / bearbeiten / löschen",
+  "help_ced": "die gewählte Transaktion kategorisieren / bearbeiten / löschen (eine Überweisung: e und d nehmen beide Hälften)",
   "help_rename": "die gewählte Transaktion umbenennen: bearbeiten, beginnend beim Titel",
   "help_undo": "die letzte Änderung rückgängig machen",
   "help_search": "Fuzzy-Suche in den Transaktionen (esc löscht sie)",
@@ -1034,5 +1034,13 @@
     "one": "neuer Export {{.Name}} · i importiert ihn",
     "other": "{{.Count}} neue Exporte · i importiert sie"
   },
-  "not_a_transfer": "die Transaktion #{{.ID}} ist keine Hälfte einer Überweisung"
+  "not_a_transfer": "die Transaktion #{{.ID}} ist keine Hälfte einer Überweisung",
+  "transfer_edit_title": "Überweisung #{{.Out}} und #{{.In}}",
+  "transfer_hint_in_date": "Die ankommende Hälfte ist vom {{.Date}}; sie behält diesen Tag, außer du änderst diesen hier.",
+  "transfer_changed": "Überweisung #{{.Out}} und #{{.In}} geändert",
+  "undid_transfer_edit": "Änderung der Überweisung #{{.Out}} und #{{.In}} rückgängig gemacht",
+  "delete_transfer_title": "Überweisung #{{.Out}} und #{{.In}} löschen",
+  "delete_transfer_question": "Beide Hälften löschen?",
+  "deleted_transfer": "Überweisung #{{.Out}} und #{{.In}} gelöscht  (z macht rückgängig)",
+  "undid_delete_transfer": "Löschen der Überweisung #{{.Out}} und #{{.In}} rückgängig gemacht"
 }

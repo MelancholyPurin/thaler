@@ -145,8 +145,19 @@ func (m *Model) applyCategoryMany(category string) {
 // confirmDeleteMany asks before deleting the marked transactions.
 func (m *Model) confirmDeleteMany(rows []row) {
 	m.confirmMany = m.confirmMany[:0]
+	listed := map[int64]bool{}
+	add := func(tx core.TxView) {
+		if !listed[tx.ID] {
+			listed[tx.ID] = true
+			m.confirmMany = append(m.confirmMany, tx)
+		}
+	}
 	for _, r := range rows {
-		m.confirmMany = append(m.confirmMany, r.tx)
+		add(r.tx)
+		// A transfer goes as a whole: the other half with it, marked or not.
+		if partner, ok := m.findRow(r.tx.TransferWith); ok && r.tx.TransferWith != 0 {
+			add(partner.tx)
+		}
 	}
 	m.mode = modeConfirm
 }
