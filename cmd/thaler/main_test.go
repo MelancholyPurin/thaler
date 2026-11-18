@@ -528,6 +528,88 @@ func Test_transfer(t *testing.T) {
 	}
 }
 
+func Test_transfer_editAndDelete(t *testing.T) {
+	transfer := func(args ...string) []string { return append([]string{"cli", "transfer"}, args...) }
+	moved := [][]string{addBank, addSavings, addDollars,
+		transfer("--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "500", "-d", "2026-10-05")}
+	tcs := []cliCase{
+		{
+			name: "the amount of both halves", setup: moved,
+			args: transfer("edit", "2", "--amount", "600"),
+			want: "Changed the transfer:\n" +
+				"#1  2026-10-05  Assets:Bank  -600.00 EUR  Transfer to Savings\n" +
+				"#2  2026-10-05  Assets:Savings  +600.00 EUR  Transfer from Bank\n",
+		},
+		{
+			name: "the day of both, then of the half that arrives", setup: moved,
+			args: transfer("edit", "1", "--date", "2026-10-07", "--in-date", "2026-10-08"),
+			want: "Changed the transfer:\n" +
+				"#1  2026-10-07  Assets:Bank  -500.00 EUR  Transfer to Savings\n" +
+				"#2  2026-10-08  Assets:Savings  +500.00 EUR  Transfer from Bank\n",
+		},
+		{
+			name: "to another currency, with what arrived", setup: moved,
+			args: transfer("edit", "1", "--to", "Assets:Dollars", "--to-amount", "540"),
+			want: "Changed the transfer:\n" +
+				"#1  2026-10-05  Assets:Bank  -500.00 EUR  Transfer to Dollars\n" +
+				"#2  2026-10-05  Assets:Dollars  +540.00 USD  Transfer from Bank\n",
+		},
+		{
+			name: "to another currency, without what arrived", setup: moved,
+			args:    transfer("edit", "1", "--to", "Assets:Dollars"),
+			wantErr: "EUR -> USD crosses currencies; say how much arrives in USD",
+		},
+		{
+			name: "from an account in another currency, keeping the amount", setup: moved,
+			args:    transfer("edit", "1", "--from", "Assets:Dollars"),
+			wantErr: "amount is in EUR, but Assets:Dollars holds USD",
+		},
+		{
+			name: "with nothing to change", setup: moved,
+			args:    transfer("edit", "1"),
+			wantErr: "nothing to change: give at least one of --from, --to, --amount, --to-amount, --date, --in-date, --memo",
+		},
+		{
+			name: "not a transfer", setup: append(moved, []string{"cli", "add", "-a", "Assets:Bank", "--amount=-5", "-t", "Expenses:Food", "-d", "2026-10-06"}),
+			args:    transfer("edit", "3", "--amount", "1"),
+			wantErr: "transaction #3 is not one half of a transfer",
+		},
+		{
+			name: "not a number", setup: moved,
+			args:    transfer("delete", "x"),
+			wantErr: `"x" is not a transaction number`,
+		},
+		{
+			name: "delete without --yes lists the halves and deletes nothing", setup: moved,
+			args: transfer("delete", "1"),
+			want: "#1  2026-10-05  Assets:Bank  -500.00 EUR  Transfer to Savings\n" +
+				"#2  2026-10-05  Assets:Savings  +500.00 EUR  Transfer from Bank\n" +
+				"\nNothing was deleted. Run it again with --yes to delete both halves.\n",
+		},
+		{
+			name: "delete with --yes deletes both", setup: moved,
+			args: transfer("delete", "2", "--yes"),
+			want: "Deleted the transfer:\n" +
+				"#1  2026-10-05  Assets:Bank  -500.00 EUR  Transfer to Savings\n" +
+				"#2  2026-10-05  Assets:Savings  +500.00 EUR  Transfer from Bank\n",
+		},
+		{
+			name: "after a delete, nothing is left of it", setup: append(moved, transfer("delete", "2", "--yes")),
+			args:    transfer("delete", "1"),
+			wantErr: "transaction #1 does not exist",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
 func Test_check(t *testing.T) {
 	tcs := []cliCase{
 		{name: "an empty ledger", args: []string{"cli", "check"}, want: "OK: the ledger is consistent.\n"},
