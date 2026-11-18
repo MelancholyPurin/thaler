@@ -200,8 +200,11 @@ func Test_View_pseudoLanguage(t *testing.T) {
 		salary bool // books Income:Salary first
 		export bool // puts a bank export in the downloads folder
 		groups bool // and spending in two categories of a group
+		arrive int  // new exports that arrive in the downloads folder while it runs
 	}{
 		{name: "home", keys: ""},
+		{name: "home, a new export", keys: "", export: true, arrive: 1},
+		{name: "home, new exports", keys: "", export: true, arrive: 2},
 		{name: "the transactions", keys: "tab tab down"},
 		{name: "one transaction", keys: "tab tab down enter"},
 		{name: "add form", keys: "a"},
@@ -404,6 +407,7 @@ func Test_View_pseudoLanguage(t *testing.T) {
 			if tc.export {
 				writeExport(t, m, "umsaetze.csv", exportCSV)
 			}
+			newExports(t, m, tc.arrive)
 
 			// when
 			play(m, tc.keys)

@@ -125,8 +125,12 @@ func Test_View_fits(t *testing.T) {
 		name   string
 		keys   string
 		groups bool // books spending in two categories of a group first
+		arrive int  // new exports that arrive in the downloads folder while it runs
 	}{
 		{name: "home", keys: ""},
+		{name: "home, a new export", keys: "", arrive: 1},
+		{name: "home, new exports", keys: "", arrive: 2},
+		{name: "transactions, a new export", keys: "tab tab", arrive: 1},
 		{name: "home, left this month", keys: "B e text:30 enter L"},
 		{name: "home, left this month, passed", keys: "B e text:5 enter L"},
 		{name: "accounts", keys: "tab"},
@@ -382,6 +386,7 @@ func Test_View_fits(t *testing.T) {
 				if sc.groups {
 					bookGroup(t, m)
 				}
+				newExports(t, m, sc.arrive)
 
 				// when
 				play(m, sc.keys)

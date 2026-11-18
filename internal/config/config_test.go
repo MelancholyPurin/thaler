@@ -82,6 +82,9 @@ amount = ["Amount"]
 		{name: "0 switches the reminder off", file: ptr("backup_reminder_days = 0\n"), want: Config{BackupReminderDays: intPtr(0)}},
 		{name: "a negative interval is refused", file: ptr("backup_reminder_days = -1\n"), wantErr: "{path}: backup_reminder_days is -1: use a number of days, or 0 for no reminder"},
 		{name: "a text is not a number of days", file: ptr("backup_reminder_days = \"weekly\"\n"), wantErr: "reading {path}: toml: line 1 (last key \"backup_reminder_days\"): incompatible types: TOML value has type string; destination has type integer"},
+		{name: "watching the import folder can be switched off", file: ptr("watch_import_dir = false\n"), want: Config{WatchImportDir: boolPtr(false)}},
+		{name: "or on", file: ptr("watch_import_dir = true\n"), want: Config{WatchImportDir: boolPtr(true)}},
+		{name: "a text is not a switch", file: ptr("watch_import_dir = \"no\"\n"), wantErr: "reading {path}: toml: line 1 (last key \"watch_import_dir\"): incompatible types: TOML value has type string; destination has type boolean"},
 		{name: "how many backups to keep", file: ptr("keep_backups = 3\n"), want: Config{KeepBackups: intPtr(3)}},
 		{name: "0 keeps them all", file: ptr("keep_backups = 0\n"), want: Config{KeepBackups: intPtr(0)}},
 		{name: "a negative count is refused", file: ptr("keep_backups = -2\n"), wantErr: "{path}: keep_backups is -2: use a number of backups to keep, or 0 to keep them all"},
@@ -120,6 +123,8 @@ func ptr(s string) *string { return &s }
 
 func intPtr(n int) *int { return &n }
 
+func boolPtr(b bool) *bool { return &b }
+
 func Test_Config_KeepCount(t *testing.T) {
 	tcs := []struct {
 		name string
@@ -135,6 +140,30 @@ func Test_Config_KeepCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// when
 			got := tc.cfg.KeepCount()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Config_WatchesImportDir(t *testing.T) {
+	tcs := []struct {
+		name string
+		cfg  *Config
+		want bool
+	}{
+		{name: "no config", cfg: nil, want: true},
+		{name: "not set", cfg: &Config{}, want: true},
+		{name: "on", cfg: &Config{WatchImportDir: boolPtr(true)}, want: true},
+		{name: "off", cfg: &Config{WatchImportDir: boolPtr(false)}, want: false},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// when
+			got := tc.cfg.WatchesImportDir()
 
 			// then
 			if diff := cmp.Diff(tc.want, got); diff != "" {

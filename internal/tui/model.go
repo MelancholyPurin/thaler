@@ -216,6 +216,7 @@ type Model struct {
 	rst           *restoreForm
 	prn           *pruneForm
 	ims           *importList
+	watch         exportWatch // the CSV files seen in the import folder
 	lang          *languageForm
 	themeForm     *themeForm
 	theme         string // the colour theme in use: one of config.Themes
@@ -354,7 +355,7 @@ func (m *Model) setFocus(p pane) {
 // ---- Bubble Tea ------------------------------------------------------------
 
 // Init implements tea.Model.
-func (m *Model) Init() tea.Cmd { return nil }
+func (m *Model) Init() tea.Cmd { return m.scanExports() }
 
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -400,6 +401,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.busy.frame++
 		return m, spinTick()
+	case exportTick:
+		return m, m.scanExports()
+	case exportsSeen:
+		return m, m.noticeExports(msg)
 	case backupDone:
 		return m, m.finishBackup(msg)
 	case restoreDone:

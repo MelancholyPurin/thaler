@@ -309,7 +309,7 @@ func (m *Model) bottomBar() string {
 		return fit(accent.Render(m.status), m.width)
 	}
 	hints, tail := m.hintItems()
-	notes := m.backupNotes()
+	notes := append(m.exportNotes(), m.backupNotes()...)
 	// Everything that fits, most urgent first: the notes, then the hints in their
 	// order, with "? help · q quit" kept as long as there is room for it. What does
 	// not fit is left out, not cut in half.

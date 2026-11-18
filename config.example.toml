@@ -18,6 +18,11 @@
 # (default: ~/Downloads). You can always type or drop another file or folder.
 # import_dir = "~/Documents/bank-exports"
 
+# While it runs, the interface looks at that folder every few seconds, only at the
+# names and times of its CSV files, and says in the bottom bar when a new one has
+# arrived (default: true). false stops it looking.
+# watch_import_dir = false
+
 # The interface reminds you to back up when the newest backup in the backups
 # folder is this many days old, or there is none and you have transactions
 # (default: 7). 0 switches the reminder off.
