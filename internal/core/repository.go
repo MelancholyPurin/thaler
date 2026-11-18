@@ -214,9 +214,11 @@ func (q queries) insertTransaction(ctx context.Context, id int64, nt NewTransact
 	if id != 0 {
 		rowID = id
 	}
+	// An import that is gone (taken back since) leaves the transaction without one.
 	res, err := q.db.ExecContext(ctx,
-		`INSERT INTO transactions (id, uuid, date, payee, description, import_hash) VALUES (?, ?, ?, ?, ?, ?)`,
-		rowID, uuid.NewV4().String(), nt.Date.Format(ledger.DateLayout), nt.Payee, nt.Description, hash)
+		`INSERT INTO transactions (id, uuid, date, payee, description, import_hash, import_id)
+		 VALUES (?, ?, ?, ?, ?, ?, (SELECT id FROM imports WHERE id = ?))`,
+		rowID, uuid.NewV4().String(), nt.Date.Format(ledger.DateLayout), nt.Payee, nt.Description, hash, nt.ImportID)
 	if err != nil {
 		return 0, err
 	}
@@ -336,7 +338,7 @@ func (q queries) listTransactions(ctx context.Context, f TxFilter) ([]TxView, er
 	}
 	args = append(args, limit)
 
-	query := `SELECT t.id, t.date, t.payee, t.description, COALESCE(t.import_hash, ''), COALESCE(t.transfer_with, 0), a.name, p.amount, p.currency
+	query := `SELECT t.id, t.date, t.payee, t.description, COALESCE(t.import_hash, ''), COALESCE(t.transfer_with, 0), COALESCE(t.import_id, 0), a.name, p.amount, p.currency
 	      FROM transactions t
 	      JOIN postings p ON p.transaction_id = t.id
 	      JOIN accounts a ON a.id = p.account_id
@@ -352,15 +354,15 @@ func (q queries) listTransactions(ctx context.Context, f TxFilter) ([]TxView, er
 	var out []TxView
 	for rows.Next() {
 		var (
-			id, transferWith                   int64
+			id, transferWith, importID         int64
 			date, payee, desc, hash, acct, cur string
 			amount                             int64
 		)
-		if err := rows.Scan(&id, &date, &payee, &desc, &hash, &transferWith, &acct, &amount, &cur); err != nil {
+		if err := rows.Scan(&id, &date, &payee, &desc, &hash, &transferWith, &importID, &acct, &amount, &cur); err != nil {
 			return nil, err
 		}
 		if len(out) == 0 || out[len(out)-1].ID != id {
-			out = append(out, TxView{ID: id, Date: date, Payee: payee, Description: desc, ImportHash: hash, TransferWith: transferWith})
+			out = append(out, TxView{ID: id, Date: date, Payee: payee, Description: desc, ImportHash: hash, TransferWith: transferWith, ImportID: importID})
 		}
 		last := &out[len(out)-1]
 		last.Postings = append(last.Postings, PostingView{
@@ -871,8 +873,12 @@ func (q queries) setImportHash(ctx context.Context, id int64, hash string) error
 	return nil
 }
 
-// clearImportHash makes a transaction a hand-entered one again.
+// clearImportHash makes a transaction a hand-entered one again, and no import's
+// record says that it took it over.
 func (q queries) clearImportHash(ctx context.Context, id int64) error {
+	if _, err := q.db.ExecContext(ctx, `DELETE FROM import_adoptions WHERE transaction_id = ?`, id); err != nil {
+		return err
+	}
 	_, err := q.db.ExecContext(ctx, `
 		UPDATE transactions SET import_hash = NULL, version = version + 1, updated_at = `+nowSQL+`
 		WHERE id = ?`, id)
@@ -1433,5 +1439,147 @@ func (q queries) putOccurrence(ctx context.Context, h handled, txID int64) error
 	_, err := q.db.ExecContext(ctx,
 		`INSERT INTO schedule_occurrences (schedule_id, date, status, transaction_id) VALUES (?, ?, ?, ?)`,
 		h.schedule, h.date, status, tx)
+	return err
+}
+
+// ---- the record of imports ---------------------------------------------------
+
+// importRow is a stored import, with the account's id for the checks.
+type importRow struct {
+	ImportRecord
+	accountID int64
+}
+
+// insertImport records an import and returns its id.
+func (q queries) insertImport(ctx context.Context, accountID int64, source, profile string, at time.Time) (int64, error) {
+	res, err := q.db.ExecContext(ctx,
+		`INSERT INTO imports (account_id, source, profile, imported_at) VALUES (?, ?, ?, ?)`,
+		accountID, source, profile, at.UTC().Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// adoptedByImport records that a bank row of the import took over an entry made by hand.
+func (q queries) adoptedByImport(ctx context.Context, importID, txID int64) error {
+	_, err := q.db.ExecContext(ctx, `INSERT INTO import_adoptions (transaction_id, import_id) VALUES (?, ?)`, txID, importID)
+	return err
+}
+
+// pairedByImport records that txID, added by the import, was paired with otherID,
+// which was booked to otherWas until then.
+func (q queries) pairedByImport(ctx context.Context, importID, txID, otherID int64, otherWas string) error {
+	_, err := q.db.ExecContext(ctx,
+		`INSERT INTO import_links (transaction_id, import_id, other_id, other_was) VALUES (?, ?, ?, ?)`,
+		txID, importID, otherID, otherWas)
+	return err
+}
+
+const importSelect = `
+	SELECT i.id, i.account_id, a.name, i.source, i.profile, i.imported_at,
+	       (SELECT COUNT(*) FROM transactions t WHERE t.import_id = i.id),
+	       (SELECT COUNT(*) FROM import_adoptions d WHERE d.import_id = i.id),
+	       (SELECT COUNT(*) FROM import_links l WHERE l.import_id = i.id),
+	       (SELECT COUNT(*) FROM schedule_occurrences o JOIN transactions t ON t.id = o.transaction_id WHERE t.import_id = i.id)
+	FROM imports i JOIN accounts a ON a.id = i.account_id`
+
+func scanImport(row interface{ Scan(...any) error }) (importRow, error) {
+	var (
+		r  importRow
+		at string
+	)
+	if err := row.Scan(&r.ID, &r.accountID, &r.Account, &r.Source, &r.Profile, &at, &r.Added, &r.Adopted, &r.Paired, &r.Settled); err != nil {
+		return importRow{}, err
+	}
+	t, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return importRow{}, err
+	}
+	r.At = t
+	return r, nil
+}
+
+// imports lists the records, newest first. The id says which is newest: two can
+// share a second.
+func (q queries) imports(ctx context.Context) ([]importRow, error) {
+	rows, err := q.db.QueryContext(ctx, importSelect+` ORDER BY i.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []importRow
+	for rows.Next() {
+		r, err := scanImport(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// importRecord is one record, or found false.
+func (q queries) importRecord(ctx context.Context, id int64) (importRow, bool, error) {
+	r, err := scanImport(q.db.QueryRowContext(ctx, importSelect+` WHERE i.id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return importRow{}, false, nil
+	}
+	return r, err == nil, err
+}
+
+// importTransactions is the ids of what the import added and still stands.
+func (q queries) importTransactions(ctx context.Context, importID int64) ([]int64, error) {
+	return q.ids(ctx, `SELECT id FROM transactions WHERE import_id = ? ORDER BY id`, importID)
+}
+
+// importAdoptions is the ids of the entries of yours the import took over.
+func (q queries) importAdoptions(ctx context.Context, importID int64) ([]int64, error) {
+	return q.ids(ctx, `SELECT transaction_id FROM import_adoptions WHERE import_id = ? ORDER BY transaction_id`, importID)
+}
+
+// importPairing is a pairing the import made.
+type importPairing struct {
+	otherID  int64
+	otherWas string
+}
+
+func (q queries) importPairings(ctx context.Context, importID int64) ([]importPairing, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT other_id, other_was FROM import_links WHERE import_id = ? ORDER BY transaction_id`, importID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []importPairing
+	for rows.Next() {
+		var p importPairing
+		if err := rows.Scan(&p.otherID, &p.otherWas); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (q queries) ids(ctx context.Context, query string, args ...any) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// deleteImport removes the record. What belonged to it is gone or has let go of it.
+func (q queries) deleteImport(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `DELETE FROM imports WHERE id = ?`, id)
 	return err
 }

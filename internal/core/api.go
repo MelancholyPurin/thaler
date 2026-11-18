@@ -104,6 +104,16 @@ type Service interface {
 	// forgetting which bank row they stand for. It undoes the adoption an import
 	// made; the transactions themselves stay.
 	DetachImport(ctx context.Context, ids []int64) error
+	// ListImports is the imports that were made and not taken back, newest first.
+	// Imports made before they were recorded are not in it.
+	ListImports(ctx context.Context) ([]ImportRecord, error)
+	// UndoImport takes an import back as a whole, in one step or not at all: the
+	// transactions it added are deleted (so a date of a schedule it answered is due
+	// again), your own entries that it took over are hand-entered again, and the
+	// transactions of other accounts it paired go back to the category they had.
+	// Anything of those changed since is taken as it is now. The rows can be
+	// imported again from the file.
+	UndoImport(ctx context.Context, id int64) (ImportUndone, error)
 	// Recategorize applies rules to transactions still in an Uncategorized
 	// account.
 	Recategorize(ctx context.Context, req RecategorizeRequest) (RecategorizeResult, error)
@@ -254,7 +264,11 @@ type NewTransaction struct {
 	Payee       string
 	Description string
 	ImportHash  string // optional; a second transaction with the same hash is rejected
-	Postings    []ledger.Posting
+	// ImportID is the import the transaction belongs to (see ListImports). Only a
+	// restore sets it, to bring back a transaction that was part of one; an import
+	// sets it itself. An id that is no import any more is ignored.
+	ImportID int64
+	Postings []ledger.Posting
 }
 
 // AddResult describes a stored transaction.
@@ -297,6 +311,7 @@ type TxView struct {
 	Payee       string
 	Description string
 	ImportHash  string // empty for manual entries
+	ImportID    int64  // the import that brought it (see ListImports); 0 for any other
 	// TransferWith is the other half when this is one half of a transfer between
 	// your own accounts (both booked to Equity:Transfers); 0 otherwise.
 	TransferWith int64
@@ -331,7 +346,7 @@ func (t TxView) NewTransaction() (NewTransaction, error) {
 	if err != nil {
 		return NewTransaction{}, err
 	}
-	nt := NewTransaction{Date: d, Payee: t.Payee, Description: t.Description, ImportHash: t.ImportHash}
+	nt := NewTransaction{Date: d, Payee: t.Payee, Description: t.Description, ImportHash: t.ImportHash, ImportID: t.ImportID}
 	for _, p := range t.Postings {
 		nt.Postings = append(nt.Postings, ledger.Posting{Account: p.Account, Amount: p.Amount})
 	}
@@ -408,6 +423,10 @@ type ImportRequest struct {
 	// ignored, so a choice made for a row that was rejected does no harm.
 	// Choosing an Uncategorized account is the same as choosing nothing.
 	Categories map[int]string
+	// Source and Profile say where the rows came from, for the record of the import
+	// (see ListImports): the name of the file, not the folder it was in, and the
+	// profile that read it. Both are optional and have no effect on the import.
+	Source, Profile string
 }
 
 // ImportedRow is the outcome for one row of a dry run.
@@ -492,6 +511,32 @@ type ImportResult struct {
 	Created       []string
 	Rejected      []RejectedRow
 	Rows          []ImportedRow // dry run only
+	// ImportID is the record of this import, which UndoImport takes back as a
+	// whole. It is 0 in a dry run and when the import added and took over nothing,
+	// which leaves no record.
+	ImportID int64
+}
+
+// ImportRecord is an import that was made: what it was, and what of it is still
+// there. A transaction that was deleted since, or an entry of yours that was deleted,
+// is no longer counted.
+type ImportRecord struct {
+	ID      int64
+	Account string
+	Source  string // the name of the file; empty if it was not given
+	Profile string // empty if it was not given
+	At      time.Time
+	Added   int // transactions it added
+	Adopted int // entries you made by hand that a bank row took over
+	Paired  int // rows paired with a transaction of another account as a transfer
+	Settled int // dates of schedules a row answered
+}
+
+// ImportUndone is what taking an import back changed.
+type ImportUndone struct {
+	Record   ImportRecord
+	Released int // entries of yours that are hand-entered again
+	Unpaired int // transactions of another account that went back to where they were
 }
 
 // RecategorizeRequest applies Rules to every uncategorized transaction.

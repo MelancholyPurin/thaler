@@ -102,7 +102,7 @@ func Test_Transfer(t *testing.T) {
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 			state := stateOf(t, st)
@@ -279,7 +279,7 @@ func Test_SetOpeningBalance(t *testing.T) {
 
 			// then
 			checkErr(t, err, tc.wantErr, tc.wantIs)
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.wantTxs, stateOf(t, st).Transactions, equalEmpty); diff != "" {
@@ -462,9 +462,8 @@ func Test_DeleteTransaction_transferLink(t *testing.T) {
 	}
 }
 
-// What the interface does to take back an import that paired a transfer: put
-// the paired half back where it was, then delete what the import added. It must
-// leave the ledger as it was before the import.
+// Taking back an import that paired a transfer puts the paired half back where it
+// was. It must leave the ledger as it was before the import.
 func Test_importUndo_afterPairing(t *testing.T) {
 	out := row(2, "2026-10-04", "out", "", eur(-50000))
 	in := row(2, "2026-10-04", "in", "", eur(50000))
@@ -496,18 +495,9 @@ func Test_importUndo_afterPairing(t *testing.T) {
 			}
 
 			// when
-			var back []CategoryChange
-			for _, l := range res.Linked {
-				back = append(back, CategoryChange{TransactionID: l.OtherID, Category: l.OtherWas})
-			}
-			_, err = st.SetCategories(t.Context(), back)
+			_, err = st.UndoImport(t.Context(), res.ImportID)
 			if err != nil {
 				t.Fatal(err)
-			}
-			for _, id := range res.IDs {
-				if err := st.DeleteTransaction(t.Context(), id); err != nil {
-					t.Fatal(err)
-				}
 			}
 
 			// then

@@ -13,7 +13,11 @@ import (
 
 // ignoreHashes leaves out import hashes, which are long digests; a re-import
 // proves they are stored.
-var ignoreHashes = cmpopts.IgnoreFields(TxView{}, "ImportHash")
+// ignoreImportID leaves the id of the record out of a comparison of results: it is
+// asserted on its own, in Test_ListImports, where it is the point.
+var ignoreImportID = cmpopts.IgnoreFields(ImportResult{}, "ImportID")
+
+var ignoreHashes = cmpopts.IgnoreFields(TxView{}, "ImportHash", "ImportID")
 
 // tv is a stored transaction as it is listed.
 func tv(id int64, date, payee, description string, postings ...PostingView) TxView {
@@ -51,7 +55,7 @@ func (tc importCase) request() ImportRequest {
 func (tc importCase) verify(t *testing.T, st *Local, got ImportResult, err error) {
 	t.Helper()
 	checkErr(t, err, tc.wantErr, tc.wantIs)
-	if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+	if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff(tc.wantTxs, stateOf(t, st).Transactions, equalEmpty, ignoreHashes); diff != "" {
@@ -675,7 +679,7 @@ func Test_DetachImport(t *testing.T) {
 
 		// then
 		checkErr(t, err, "", nil)
-		if diff := cmp.Diff(ImportResult{Adopted: 1, AdoptedIDs: []int64{1}}, got, equalEmpty); diff != "" {
+		if diff := cmp.Diff(ImportResult{Adopted: 1, AdoptedIDs: []int64{1}, ImportID: 2}, got, equalEmpty); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -742,7 +746,7 @@ func Test_Recategorize(t *testing.T) {
 
 			// then
 			checkErr(t, err, tc.wantErr, nil)
-			if diff := cmp.Diff(tc.want, got, equalEmpty); diff != "" {
+			if diff := cmp.Diff(tc.want, got, equalEmpty, ignoreImportID); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 			var cats []string
