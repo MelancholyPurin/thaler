@@ -392,7 +392,7 @@
   "help_import": "import a bank export (CSV) into an account",
   "help_new_account": "new account / set the selected account's balance",
   "help_categorize_rule": "categorize, and make a rule so this payee is always categorized this way",
-  "help_ced": "categorize / edit / delete the selected transaction",
+  "help_ced": "categorize / edit / delete the selected transaction (a transfer: e and d take both halves)",
   "help_rename": "rename the selected transaction: edit it, starting on its title",
   "help_undo": "undo the last change",
   "help_search": "fuzzy search the transactions (esc clears)",
@@ -1034,5 +1034,13 @@
     "one": "new export {{.Name}} · i imports it",
     "other": "{{.Count}} new exports · i imports them"
   },
-  "not_a_transfer": "transaction #{{.ID}} is not one half of a transfer"
+  "not_a_transfer": "transaction #{{.ID}} is not one half of a transfer",
+  "transfer_edit_title": "Transfer #{{.Out}} and #{{.In}}",
+  "transfer_hint_in_date": "The half that arrives is dated {{.Date}}; it keeps that day unless you change this one.",
+  "transfer_changed": "Changed the transfer #{{.Out}} and #{{.In}}",
+  "undid_transfer_edit": "Undid the change to the transfer #{{.Out}} and #{{.In}}",
+  "delete_transfer_title": "Delete transfer #{{.Out}} and #{{.In}}",
+  "delete_transfer_question": "Delete both halves?",
+  "deleted_transfer": "Deleted the transfer #{{.Out}} and #{{.In}}  (z to undo)",
+  "undid_delete_transfer": "Undid deleting the transfer #{{.Out}} and #{{.In}}"
 }
