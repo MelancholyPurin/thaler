@@ -256,7 +256,7 @@ Getting every transaction into the right category with as little typing as possi
 - [x] `TIM-5` Change a row's category in the review before committing
 - [x] `TIM-6` Choose or auto-detect the profile for a file
 - [x] `TIM-7` List earlier imports and undo any of them
-- [ ] `TIM-8` Notice a new export in the import folder
+- [x] `TIM-8` Notice a new export in the import folder
 
 ### TTR: Transfers in the TUI
 
