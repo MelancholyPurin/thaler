@@ -120,7 +120,7 @@ Turning bank exports into transactions without duplicating or double-counting an
 - [x] `IMP-7` An imported row claims the matching transaction you entered by hand instead of duplicating it
 - [x] `IMP-8` Pair the two halves of a transfer between your own accounts, in either import order
 - [ ] `IMP-9` Run against real exports and fix what the sample file did not cover
-- [ ] `IMP-10` Detect encoding and delimiter instead of assuming them
+- [x] `IMP-10` Detect encoding and delimiter instead of assuming them
 - [ ] `IMP-11` The CAMT.053 XML statement format
 - [ ] `IMP-12` OFX and QIF files
 
