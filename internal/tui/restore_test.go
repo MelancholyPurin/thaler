@@ -37,32 +37,45 @@ func makeBackup(t *testing.T, dir string, b seeded) {
 	t.Helper()
 	dest := filepath.Join(dir, "backups", b.name)
 	if b.payee == "damaged" {
-		if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(dest, []byte("this is not a database, at all, not even close"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		writeDamaged(t, dest)
 	} else {
-		st, err := core.Open(t.Context(), filepath.Join(t.TempDir(), "source.db"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		openAccounts(t, st, "Assets:Bank EUR")
-		book(t, st, "2026-10-01", b.payee, "Assets:Bank", "Expenses:Fun", -500)
-		if strings.HasSuffix(b.name, ".age") {
-			err = st.BackupEncrypted(t.Context(), dest, "pw")
-		} else {
-			err = st.Backup(t.Context(), dest)
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := st.Close(); err != nil {
-			t.Fatal(err)
-		}
+		writeBackup(t, dest, b)
 	}
 	if err := os.Chtimes(dest, b.when, b.when); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeDamaged writes a file at dest that is not a database.
+func writeDamaged(t *testing.T, dest string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dest, []byte("this is not a database, at all, not even close"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeBackup writes a backup of a ledger with one transaction by b.payee to dest,
+// encrypted when the name ends in .age.
+func writeBackup(t *testing.T, dest string, b seeded) {
+	t.Helper()
+	st, err := core.Open(t.Context(), filepath.Join(t.TempDir(), "source.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	openAccounts(t, st, "Assets:Bank EUR")
+	book(t, st, "2026-10-01", b.payee, "Assets:Bank", "Expenses:Fun", -500)
+	if strings.HasSuffix(b.name, ".age") {
+		err = st.BackupEncrypted(t.Context(), dest, "pw")
+	} else {
+		err = st.Backup(t.Context(), dest)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}
 }
