@@ -10,8 +10,8 @@ import (
 )
 
 // While the interface runs it looks at the import folder every few seconds and says,
-// in the bottom bar, when a CSV file has arrived that was not there before: the
-// export that was just downloaded. Only names, sizes and times are read, never the
+// in the bottom bar, when a bank export (CSV, OFX or QIF) has arrived that was not
+// there before: the export that was just downloaded. Only names, sizes and times are read, never the
 // content, and `watch_import_dir = false` in config.toml stops it. What was in the
 // folder when the interface started, or when the folder changed, is not new.
 
@@ -24,18 +24,18 @@ type exportTick struct{}
 // exportsSeen is what a look at the folder found. dir is empty when watching is off.
 type exportsSeen struct {
 	dir   string
-	files []csvFile
+	files []bankFile
 }
 
 // exportWatch is what has been seen in the import folder.
 type exportWatch struct {
 	dir   string
 	known map[string]bool // the files seen so far, by exportKey
-	fresh []csvFile       // the ones that arrived since, newest first, until the import is opened
+	fresh []bankFile      // the ones that arrived since, newest first, until the import is opened
 }
 
 // exportKey names a file as it is now: a file saved again under the same name is another.
-func exportKey(f csvFile) string {
+func exportKey(f bankFile) string {
 	return fmt.Sprintf("%s|%d|%d", f.path, f.size, f.modified.UnixNano())
 }
 
@@ -58,7 +58,7 @@ func (m *Model) scanExports() tea.Cmd {
 	if !cfg.WatchesImportDir() || dir == "" {
 		return func() tea.Msg { return exportsSeen{} }
 	}
-	return func() tea.Msg { return exportsSeen{dir: dir, files: listCSVs(dir)} }
+	return func() tea.Msg { return exportsSeen{dir: dir, files: listExports(dir)} }
 }
 
 // noticeExports takes in what a look at the folder found, and returns the command for
@@ -74,7 +74,7 @@ func (m *Model) noticeExports(seen exportsSeen) tea.Cmd {
 		}
 		return next
 	}
-	var arrived []csvFile
+	var arrived []bankFile
 	present := map[string]bool{}
 	for _, f := range seen.files {
 		k := exportKey(f)
@@ -85,7 +85,7 @@ func (m *Model) noticeExports(seen exportsSeen) tea.Cmd {
 		}
 	}
 	// A file that arrived and was taken away again, or saved again since, is offered as it is now, once.
-	var fresh []csvFile
+	var fresh []bankFile
 	for _, f := range append(arrived, w.fresh...) {
 		if present[exportKey(f)] {
 			fresh = append(fresh, f)

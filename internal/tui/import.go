@@ -43,8 +43,8 @@ const (
 	numImportFields
 )
 
-// csvFile is a candidate export found in a folder.
-type csvFile struct {
+// bankFile is a candidate export found in a folder.
+type bankFile struct {
 	path, name string
 	modified   time.Time
 	size       int64
@@ -62,11 +62,11 @@ type importFlow struct {
 	detected string   // the profile that fits the file chosen, "" when none does
 	err      string
 
-	dir      string    // the folder listed while nothing is typed
-	files    []csvFile // its CSV files, newest first
-	browsing string    // a folder typed into the field, whose files are listed instead
-	matches  []csvFile // the files that fit what has been typed
-	fileCur  int       // highlighted match, -1 for none
+	dir      string     // the folder listed while nothing is typed
+	files    []bankFile // its bank exports, newest first
+	browsing string     // a folder typed into the field, whose files are listed instead
+	matches  []bankFile // the files that fit what has been typed
+	fileCur  int        // highlighted match, -1 for none
 
 	// the review step
 	path     string
@@ -130,7 +130,7 @@ func (m *Model) openImport() tea.Cmd {
 		}
 	}
 	f.dir = m.importDir(cfg)
-	f.files = listCSVs(f.dir)
+	f.files = listExports(f.dir)
 	m.watch.fresh = nil // it is on the list now
 	m.imp = f
 	m.mode = modeImport
@@ -164,22 +164,37 @@ func (f *importFlow) profileName() (name string, auto bool) {
 	return f.profiles[f.profile-1], false
 }
 
-// listCSVs lists the .csv files directly in dir, newest first.
-func listCSVs(dir string) []csvFile {
+// exportExtensions are the files a bank export may be: CSV, OFX (also .qfx, Quicken's
+// name for it) and QIF.
+var exportExtensions = []string{".csv", ".ofx", ".qfx", ".qif"}
+
+// isExport says whether the file name is one of a bank export.
+func isExport(name string) bool {
+	ext := filepath.Ext(name)
+	for _, e := range exportExtensions {
+		if strings.EqualFold(ext, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// listExports lists the bank exports directly in dir, newest first.
+func listExports(dir string) []bankFile {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	var out []csvFile
+	var out []bankFile
 	for _, e := range entries {
-		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".csv") {
+		if e.IsDir() || !isExport(e.Name()) {
 			continue
 		}
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
-		out = append(out, csvFile{path: filepath.Join(dir, e.Name()), name: e.Name(), modified: info.ModTime(), size: info.Size()})
+		out = append(out, bankFile{path: filepath.Join(dir, e.Name()), name: e.Name(), modified: info.ModTime(), size: info.Size()})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].modified.After(out[j].modified) })
 	return out
@@ -224,7 +239,7 @@ func looksLikePath(s string) bool {
 }
 
 // refreshFiles recomputes which files fit what has been typed. A typed path
-// that is a folder lists that folder's CSV files; any other path is taken as it
+// that is a folder lists that folder's bank exports; any other path is taken as it
 // is, and plain letters search the files of the default folder.
 func (f *importFlow) refreshFiles() {
 	typed := f.typedPath()
@@ -236,11 +251,11 @@ func (f *importFlow) refreshFiles() {
 	case looksLikePath(typed):
 		if info, err := os.Stat(typed); err == nil && info.IsDir() {
 			f.browsing = typed
-			f.matches = append(f.matches, listCSVs(typed)...)
+			f.matches = append(f.matches, listExports(typed)...)
 		}
 	default:
 		type scored struct {
-			csvFile
+			bankFile
 			score int
 		}
 		var hits []scored
@@ -251,7 +266,7 @@ func (f *importFlow) refreshFiles() {
 		}
 		sort.SliceStable(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
 		for _, h := range hits {
-			f.matches = append(f.matches, h.csvFile)
+			f.matches = append(f.matches, h.bankFile)
 		}
 	}
 	f.fileCur = -1
