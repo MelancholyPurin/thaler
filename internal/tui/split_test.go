@@ -233,7 +233,8 @@ func Test_split_screen(t *testing.T) {
 	}
 }
 
-func Test_splitLegs(t *testing.T) {
+// splitOf is core.TxView.Split, for two lines or more: one is an ordinary transaction.
+func Test_splitOf(t *testing.T) {
 	pv := func(account string, minor int64) core.PostingView {
 		return core.PostingView{Account: account, Amount: ledger.Money{Minor: minor, Currency: "EUR"}}
 	}
@@ -257,10 +258,10 @@ func Test_splitLegs(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			tx := core.TxView{Postings: tc.postings}
+			tx := core.TxView{Date: "2026-10-04", Postings: tc.postings}
 
 			// when
-			_, _, got := splitLegs(tx)
+			_, got := splitOf(tx)
 
 			// then
 			if diff := cmp.Diff(tc.want, got); diff != "" {

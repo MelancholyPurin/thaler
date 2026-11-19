@@ -82,6 +82,12 @@ type Service interface {
 	// id and import hash. It returns the names of categories it created.
 	ReplaceTransaction(ctx context.Context, id int64, nt NewTransaction) ([]string, error)
 	DeleteTransaction(ctx context.Context, id int64) error
+	// AddSplit stores a transaction divided between categories, after checking that its
+	// lines add up to its amount (one line may take the rest).
+	AddSplit(ctx context.Context, s Split) (AddResult, error)
+	// ReplaceSplit writes a split over the transaction id, keeping its number and import
+	// hash, with the same checks. It returns the names of categories it created.
+	ReplaceSplit(ctx context.Context, id int64, s Split) ([]string, error)
 	// DeleteTransactions removes several transactions, all or none.
 	DeleteTransactions(ctx context.Context, ids []int64) error
 	// RestoreTransaction stores nt under a free id: undo for a delete.

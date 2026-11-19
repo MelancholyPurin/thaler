@@ -73,51 +73,21 @@ type splitSeed struct {
 	focus   int
 }
 
-// splitLegs reads a transaction as a split: one posting on your own account and two or
-// more on Income or Expenses accounts, all in the currency of the first and each taking
-// from it (money out is spent, money in is earned). Anything else, a transfer or a line
-// that gives something back, is not one this popup can write again as it was.
-func splitLegs(tx core.TxView) (source core.PostingView, cats []core.PostingView, ok bool) {
-	found := false
-	for _, p := range tx.Postings {
-		typ, err := ledger.TypeOf(p.Account)
-		if err != nil {
-			return source, nil, false
-		}
-		if typ.NeedsCurrency() {
-			if found {
-				return source, nil, false
-			}
-			source, found = p, true
-			continue
-		}
-		cats = append(cats, p)
-	}
-	if !found || len(cats) < 2 {
-		return source, nil, false
-	}
-	for _, c := range cats {
-		if !strings.HasPrefix(c.Account, "Income:") && !strings.HasPrefix(c.Account, "Expenses:") {
-			return source, nil, false
-		}
-		if c.Amount.Currency != source.Amount.Currency || c.Amount.Minor == 0 || (c.Amount.Minor > 0) == (source.Amount.Minor > 0) {
-			return source, nil, false
-		}
-	}
-	return source, cats, source.Amount.Minor != 0
+// splitOf reads a transaction as a split of two or more lines (see core.TxView.Split).
+func splitOf(tx core.TxView) (core.Split, bool) {
+	sp, ok := tx.Split()
+	return sp, ok && len(sp.Lines) >= 2
 }
 
 // splittable says whether s works on the transaction: an ordinary one with a category of
 // income or spending, or one that already is a split.
 func splittable(r row) bool {
-	if _, _, ok := splitLegs(r.tx); ok {
-		return true
-	}
-	return r.simple && (strings.HasPrefix(r.category.Account, "Income:") || strings.HasPrefix(r.category.Account, "Expenses:"))
+	_, ok := r.tx.Split()
+	return ok
 }
 
 func (m *Model) isSplit(r row) bool {
-	_, _, ok := splitLegs(r.tx)
+	_, ok := splitOf(r.tx)
 	return ok
 }
 
@@ -140,22 +110,19 @@ func (m *Model) openSplit(focus int) tea.Cmd {
 		m.setStatus(m.loc.T("cannot_split", nil), true)
 		return nil
 	}
-	source := r.source
-	if s, _, isSplit := splitLegs(r.tx); isSplit {
-		source = s
-	}
-	if m.isClosed(source.Account) {
-		m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": source.Account})), true)
+	sp, _ := r.tx.Split()
+	if m.isClosed(sp.Account) {
+		m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": sp.Account})), true)
 		return nil
 	}
-	seed := splitSeed{editing: r.tx.ID, old: r.tx, account: m.accountIndex(source.Account), amount: m.signedText(source.Amount),
+	seed := splitSeed{editing: r.tx.ID, old: r.tx, account: m.accountIndex(sp.Account), amount: m.signedText(sp.Amount),
 		payee: r.tx.Payee, date: m.loc.StoredDate(r.tx.Date), desc: r.tx.Description, focus: focus}
-	if _, cats, isSplit := splitLegs(r.tx); isSplit {
-		for _, c := range cats {
-			seed.lines = append(seed.lines, [2]string{c.Account, m.loc.Amount(c.Amount.Neg())})
+	if len(sp.Lines) >= 2 {
+		for _, l := range sp.Lines {
+			seed.lines = append(seed.lines, [2]string{l.Category, m.loc.Amount(l.Amount)})
 		}
 	} else {
-		seed.lines = [][2]string{{r.category.Account, m.loc.Amount(source.Amount.Neg())}, {"", ""}}
+		seed.lines = [][2]string{{sp.Lines[0].Category, m.loc.Amount(sp.Lines[0].Amount)}, {"", ""}}
 		if seed.focus < 0 {
 			seed.focus = splitHead + 1 // the amount of the first line, to be made smaller
 		}
@@ -497,16 +464,9 @@ func (m *Model) saveSplit() {
 	if !income {
 		source.Minor = -source.Minor
 	}
-	nt := core.NewTransaction{
-		Date: when, Payee: clean(f.payee.Value()), Description: clean(f.desc.Value()),
-		Postings: []ledger.Posting{{Account: acc.Name, Amount: source}},
-	}
+	sp := core.Split{Date: when, Payee: clean(f.payee.Value()), Description: clean(f.desc.Value()), Account: acc.Name, Amount: source}
 	for i, l := range f.lines {
-		amount := sizes[i] // spending is booked to its categories as a plus, income as a minus
-		if income {
-			amount = amount.Neg()
-		}
-		nt.Postings = append(nt.Postings, ledger.Posting{Account: l.chosen, Amount: amount})
+		sp.Lines = append(sp.Lines, core.SplitLine{Category: l.chosen, Amount: sizes[i]})
 	}
 
 	var id int64
@@ -518,7 +478,7 @@ func (m *Model) saveSplit() {
 			fail(m.errText(err))
 			return
 		}
-		if _, err := m.svc.ReplaceTransaction(m.ctx, id, nt); err != nil {
+		if _, err := m.svc.ReplaceSplit(m.ctx, id, sp); err != nil {
 			fail(m.errText(err))
 			return
 		}
@@ -527,7 +487,7 @@ func (m *Model) saveSplit() {
 			run:    func() error { _, err := m.svc.ReplaceTransaction(m.ctx, id, old); return err },
 		}
 	} else {
-		res, err := m.svc.AddTransaction(m.ctx, nt)
+		res, err := m.svc.AddSplit(m.ctx, sp)
 		if err != nil {
 			fail(m.errText(err))
 			return
@@ -549,7 +509,7 @@ func (m *Model) saveSplit() {
 	m.applyFilter(true)
 	visible := m.selectTx(id)
 
-	args := map[string]any{"ID": id, "Payee": nt.Payee, "Amount": m.loc.Signed(source), "Count": len(f.lines)}
+	args := map[string]any{"ID": id, "Payee": sp.Payee, "Amount": m.loc.Signed(source), "Count": len(f.lines)}
 	parts := []string{m.loc.T("split_added", args)}
 	if editing {
 		parts[0] = m.loc.T("split_updated", args)
