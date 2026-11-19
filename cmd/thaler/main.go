@@ -181,6 +181,7 @@ and one-off commands use "thaler cli"; see "thaler cli --help".`,
 	cli.AddCommand(
 		a.accountCmd(),
 		a.addCmd(),
+		a.splitCmd(),
 		a.transferCmd(),
 		a.listCmd(),
 		a.importCmd(),

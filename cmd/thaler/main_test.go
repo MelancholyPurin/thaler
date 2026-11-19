@@ -652,6 +652,77 @@ func Test_transfer_link(t *testing.T) {
 	}
 }
 
+func Test_split(t *testing.T) {
+	split := func(args ...string) []string { return append([]string{"cli", "split"}, args...) }
+	shop := [][]string{addBank, {"cli", "add", "-a", "Assets:Bank", "--amount=-30", "-d", "2026-10-04", "-p", "REWE", "-t", "Expenses:Food"}}
+	tcs := []cliCase{
+		{
+			name: "an ordinary transaction divided, the last line taking the rest", setup: shop,
+			args: split("1", "--line", "Expenses:Food=20", "--line", "Expenses:Household"),
+			want: "#1  2026-10-04  Assets:Bank  -30.00 EUR  REWE\n" +
+				"  Expenses:Food  20.00 EUR\n" +
+				"  Expenses:Household  10.00 EUR\n" +
+				"Created new account Expenses:Household\n",
+		},
+		{
+			name: "the amount and the lines changed together", setup: append(shop, split("1", "--line", "Expenses:Food=20", "--line", "Expenses:Household")),
+			args: split("1", "--amount=-35", "--line", "Expenses:Food=25", "--line", "Expenses:Household"),
+			want: "#1  2026-10-04  Assets:Bank  -35.00 EUR  REWE\n" +
+				"  Expenses:Food  25.00 EUR\n" +
+				"  Expenses:Household  10.00 EUR\n",
+		},
+		{
+			name: "only the payee changes, the lines stay", setup: append(shop, split("1", "--line", "Expenses:Food=20", "--line", "Expenses:Household")),
+			args: split("1", "-p", "Rewe Markt"),
+			want: "#1  2026-10-04  Assets:Bank  -30.00 EUR  Rewe Markt\n" +
+				"  Expenses:Food  20.00 EUR\n" +
+				"  Expenses:Household  10.00 EUR\n",
+		},
+		{
+			name: "one line is an ordinary transaction again", setup: append(shop, split("1", "--line", "Expenses:Food=20", "--line", "Expenses:Household")),
+			args: split("1", "--line", "Expenses:Household"),
+			want: "#1  2026-10-04  Assets:Bank  -30.00 EUR  REWE\n" +
+				"  Expenses:Household  30.00 EUR\n",
+		},
+		{
+			name: "lines that do not add up", setup: shop,
+			args:    split("1", "--line", "Expenses:Food=20", "--line", "Expenses:Household=5"),
+			wantErr: "the lines are 5.00 EUR short of the amount",
+		},
+		{
+			name: "a new amount the lines do not fit", setup: shop,
+			args:    split("1", "--amount=-35"),
+			wantErr: "the lines are 5.00 EUR short of the amount",
+		},
+		{
+			name: "a share that is no amount", setup: shop,
+			args:    split("1", "--line", "Expenses:Food=abc"),
+			wantErr: `--line Expenses:Food=abc: invalid amount "abc"`,
+		},
+		{
+			name: "a share of nothing", setup: shop,
+			args:    split("1", "--line", "Expenses:Food=0", "--line", "Expenses:Household"),
+			wantErr: "--line Expenses:Food=0: a share of nothing; leave it out for the line that takes the rest",
+		},
+		{name: "nothing to change", setup: shop, args: split("1"), wantErr: "nothing to change: give --line, --amount, --date, --payee or --memo"},
+		{
+			name: "a transfer", setup: [][]string{addBank, addSavings, {"cli", "transfer", "--from", "Assets:Bank", "--to", "Assets:Savings", "--amount", "5"}},
+			args:    split("1", "--line", "Expenses:Food"),
+			wantErr: "transaction #1 cannot be split: only one on an account of yours with income or expense categories can",
+		},
+		{name: "one that does not exist", setup: shop, args: split("9", "--line", "Expenses:Food"), wantErr: "transaction #9 does not exist"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			e := newCLIEnv(t, tc.files, tc.setup...)
+
+			// when, then
+			tc.check(t, e)
+		})
+	}
+}
+
 func Test_check(t *testing.T) {
 	tcs := []cliCase{
 		{name: "an empty ledger", args: []string{"cli", "check"}, want: "OK: the ledger is consistent.\n"},
