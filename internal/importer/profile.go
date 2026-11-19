@@ -1,4 +1,4 @@
-// Package importer turns bank CSV exports into ledger rows. It depends only on
+// Package importer turns bank exports (CSV, OFX and QIF) into ledger rows. It depends only on
 // the standard library and the ledger package; reading config files and
 // writing to the database happen elsewhere.
 package importer
@@ -23,9 +23,14 @@ type Columns struct {
 	Currency    []string `toml:"currency"`
 }
 
-// Profile describes one bank's CSV layout.
+// Profile describes one bank's export: the layout of its CSV, or that it is an OFX
+// or a QIF file.
 type Profile struct {
 	Name string `toml:"name"`
+	// Format is "csv" (the default), "ofx" or "qif". An OFX file needs nothing else
+	// from the profile; a QIF file takes DateFormats and DecimalSep. Columns,
+	// Delimiter and the skip rule are for CSV alone.
+	Format string `toml:"format"`
 	// Delimiter is a single character, or "auto" (the default): found from the
 	// header, see Delimiters.
 	Delimiter string `toml:"delimiter"`
@@ -70,7 +75,31 @@ var Sparkasse = Profile{
 	SkipContains: "vorgemerkt",
 }
 
-var builtin = map[string]Profile{"sparkasse": Sparkasse}
+// The formats of a profile.
+const (
+	FormatCSV = "csv"
+	FormatOFX = "ofx"
+	FormatQIF = "qif"
+)
+
+// OFX is the built-in profile for OFX statements (also QFX, Quicken's name for them):
+// version 1, the SGML one, and version 2, the XML one. Each transaction of the statement
+// is a row, with its booking date, amount, name, memo and type; the currency is the one
+// the statement names.
+var OFX = Profile{Name: FormatOFX, Format: FormatOFX, Encoding: "auto"}
+
+// QIF is the built-in profile for QIF files (Quicken Interchange Format) of a bank,
+// cash or credit card account. A QIF date has no fixed order, so the first of these
+// formats that reads every date of the file is used: the European ones first, then the
+// American ones Quicken writes (1/31'26 is read as 01/31/26). A file whose days are all
+// 12 or less reads either way; a profile of yours with format = "qif" and the
+// date_formats of your bank settles it.
+var QIF = Profile{
+	Name: FormatQIF, Format: FormatQIF, Encoding: "auto",
+	DateFormats: []string{"DD.MM.YYYY", "DD.MM.YY", "YYYY-MM-DD", "MM/DD/YYYY", "MM/DD/YY", "DD/MM/YYYY", "DD/MM/YY"},
+}
+
+var builtin = map[string]Profile{"sparkasse": Sparkasse, FormatOFX: OFX, FormatQIF: QIF}
 
 // FindProfile looks a profile up by name (case-insensitive). Custom profiles
 // from the config file take precedence over built-in ones.
@@ -110,14 +139,22 @@ func ProfileNames(custom []Profile) []string {
 var Delimiters = []rune{';', ',', '\t', '|'}
 
 type compiled struct {
-	delim    rune // 0: found from the header
+	format   string // FormatCSV, FormatOFX or FormatQIF
+	delim    rune   // 0: found from the header
 	encoding string
 	sep      byte
 	layouts  []string
 }
 
 func (p Profile) compile() (compiled, error) {
-	c := compiled{encoding: "auto"}
+	c := compiled{encoding: "auto", format: strings.ToLower(strings.TrimSpace(p.Format))}
+	switch c.format {
+	case "":
+		c.format = FormatCSV
+	case FormatCSV, FormatOFX, FormatQIF:
+	default:
+		return c, coded.New("profile_format", map[string]any{"Name": p.Name, "Format": p.Format})
+	}
 	if p.Delimiter != "" && !strings.EqualFold(p.Delimiter, "auto") {
 		rs := []rune(p.Delimiter)
 		if len(rs) != 1 {
@@ -150,7 +187,7 @@ func (p Profile) compile() (compiled, error) {
 	for _, f := range formats {
 		c.layouts = append(c.layouts, toLayout(f))
 	}
-	if len(p.Columns.Date) == 0 || len(p.Columns.Amount) == 0 {
+	if c.format == FormatCSV && (len(p.Columns.Date) == 0 || len(p.Columns.Amount) == 0) {
 		return c, coded.New("profile_columns", map[string]any{"Name": p.Name})
 	}
 	return c, nil

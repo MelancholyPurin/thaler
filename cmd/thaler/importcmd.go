@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -33,8 +34,10 @@ func (a *app) importCmd() *cobra.Command {
 	var dryRun, ignoreErrors bool
 	cmd := &cobra.Command{
 		Use:   "import FILE",
-		Short: "Import a bank CSV export into an account",
-		Long: `Import a CSV export from your bank into one account.
+		Short: "Import a bank export (CSV, OFX or QIF) into an account",
+		Long: `Import an export from your bank into one account: a CSV file, an OFX
+statement (also .qfx) or a QIF file. --profile auto (the default) finds how to
+read it from the file itself; name a profile to choose one.
 
 Every row becomes a transaction between the account and a category chosen by
 the rules in config.toml (see config.example.toml); rows that match no rule go
@@ -55,7 +58,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 			if err != nil {
 				return err
 			}
-			profile, err := importer.FindProfile(profileName, cfg.Profiles)
+			profile, err := findImportProfile(profileName, args[0], cfg.Profiles)
 			if err != nil {
 				return err
 			}
@@ -136,7 +139,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 		},
 	}
 	cmd.Flags().StringVarP(&account, "account", "a", "", "account to import into, e.g. Assets:Sparkasse (required)")
-	cmd.Flags().StringVar(&profileName, "profile", "sparkasse", "CSV profile: built-in \"sparkasse\" or one defined in config.toml")
+	cmd.Flags().StringVar(&profileName, "profile", "auto", "how to read the file: \"auto\" finds it from the file; built-in \"sparkasse\" (CSV), \"ofx\" and \"qif\", or a profile defined in config.toml")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be imported without writing anything")
 	cmd.Flags().BoolVar(&ignoreErrors, "ignore-errors", false, "import the readable rows even if some rows are broken")
 	_ = cmd.MarkFlagRequired("account")
@@ -166,7 +169,11 @@ func printDryRun(out io.Writer, res core.ImportResult, parsed *importer.ParseRes
 	printColumns(out, "", lines)
 	fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
 		res.Inserted, res.Duplicates, parsed.Skipped)
-	fmt.Fprintf(out, "The file was read as %s, its columns separated by %s.\n", parsed.Encoding, delimiterName(parsed.Delimiter))
+	if parsed.Format == importer.FormatCSV {
+		fmt.Fprintf(out, "The file was read as %s, its columns separated by %s.\n", parsed.Encoding, delimiterName(parsed.Delimiter))
+	} else {
+		fmt.Fprintf(out, "The file was read as %s, as %s.\n", strings.ToUpper(parsed.Format), parsed.Encoding)
+	}
 	if res.Adopted > 0 {
 		fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
 	}
@@ -184,4 +191,21 @@ func delimiterName(d rune) string {
 		return "tabs"
 	}
 	return fmt.Sprintf("%q", string(d))
+}
+
+// findImportProfile is the profile named, or for "auto" the one that fits the file best.
+func findImportProfile(name, path string, custom []importer.Profile) (importer.Profile, error) {
+	if !strings.EqualFold(strings.TrimSpace(name), "auto") {
+		return importer.FindProfile(name, custom)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return importer.Profile{}, err
+	}
+	defer f.Close()
+	found, ok := importer.Detect(f, custom)
+	if !ok {
+		return importer.Profile{}, fmt.Errorf("no import profile fits %s; choose one with --profile (available: %s)", filepath.Base(path), strings.Join(importer.ProfileNames(custom), ", "))
+	}
+	return importer.FindProfile(found, custom)
 }

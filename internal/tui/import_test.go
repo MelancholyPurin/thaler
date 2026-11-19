@@ -38,6 +38,57 @@ func writeExport(t *testing.T, m *Model, name, content string) string {
 	return filepath.Join(dir, name)
 }
 
+// statementOFX is an OFX statement of two transactions, made up for the tests.
+const statementOFX = "OFXHEADER:100\nDATA:OFXSGML\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>EUR<BANKTRANLIST>\n" +
+	"<STMTTRN><TRNTYPE>POS<DTPOSTED>20261004<TRNAMT>-23.47<FITID>1<NAME>REWE Markt</STMTTRN>\n" +
+	"<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261001<TRNAMT>2450.00<FITID>2<NAME>Muster GmbH</STMTTRN>\n" +
+	"</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n"
+
+// onlyFile makes name, with content, the only export in the import folder.
+func onlyFile(t *testing.T, m *Model, name, content string) {
+	t.Helper()
+	entries, err := os.ReadDir(m.downloads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if err := os.Remove(filepath.Join(m.downloads, e.Name())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(m.downloads, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_isExport(t *testing.T) {
+	tcs := []struct {
+		name string
+		want bool
+	}{
+		{name: "umsaetze.csv", want: true},
+		{name: "statement.ofx", want: true},
+		{name: "statement.QFX", want: true},
+		{name: "konto.qif", want: true},
+		{name: "statement.pdf"},
+		{name: "notes.txt"},
+		{name: "csv"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.name
+
+			// when
+			got := isExport(tc.name)
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func Test_cleanPath(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	tcs := []struct{ name, in, want string }{
@@ -136,7 +187,7 @@ func Test_Update_import(t *testing.T) {
 		},
 		{
 			name: "with no file to pick, enter asks for one", file: "", script: "i enter",
-			want: observed{Flow: Flow{Mode: "import", Err: "choose a CSV file: paste its path, or pick one from the list"}},
+			want: observed{Flow: Flow{Mode: "import", Err: "choose an export (CSV, OFX or QIF): paste its path, or pick one from the list"}},
 		},
 		{
 			name: "a path that does not exist", file: "", script: "i raw:/no/such/file.csv enter",
@@ -373,9 +424,23 @@ func Test_Update_import_profile(t *testing.T) {
 			shows: []string{"sparkasse"},
 		},
 		{
-			name: "a profile chosen is the one offered next time", file: exportCSV, script: "i tab tab right enter esc esc i",
+			name: "a profile chosen is the one offered next time", file: exportCSV, script: "i tab tab left enter esc esc i",
 			want:  observed{Choice: "sparkasse", Detected: "sparkasse", Step: "choose"},
 			shows: []string{"sparkasse"},
+		},
+		{
+			name: "an OFX statement in the folder is listed, and auto finds it as one", file: exportCSV,
+			setup:  func(t *testing.T, m *Model) { onlyFile(t, m, "statement.ofx", statementOFX) },
+			script: "i enter",
+			want:   observed{Choice: "auto", Detected: "ofx", Used: "ofx", Step: "review"},
+			shows:  []string{"profile ofx", "2 new"},
+		},
+		{
+			name: "so is a QIF file", file: exportCSV,
+			setup:  func(t *testing.T, m *Model) { onlyFile(t, m, "konto.QIF", "!Type:Bank\nD10/4'26\nT-23.47\nPREWE\n^\n") },
+			script: "i enter",
+			want:   observed{Choice: "auto", Detected: "qif", Used: "qif", Step: "review"},
+			shows:  []string{"profile qif", "1 new"},
 		},
 		{
 			name: "auto, once used, is still what is offered next time", file: exportCSV, script: "i enter esc esc i",
@@ -649,8 +714,8 @@ func Test_Update_import_browsingAFolder(t *testing.T) {
 		{
 			name:      "an empty folder says so, and enter does not try to read the folder",
 			scriptFor: func(f map[string]string) string { return "i raw:" + f["empty"] + " enter" },
-			want:      observed{Mode: "import", Err: "choose a CSV file: paste its path, or pick one from the list"},
-			shows:     []string{"No CSV files in"},
+			want:      observed{Mode: "import", Err: "choose an export (CSV, OFX or QIF): paste its path, or pick one from the list"},
+			shows:     []string{"No CSV, OFX or QIF files in"},
 		},
 		{
 			name:      "a folder lists only its CSV files",

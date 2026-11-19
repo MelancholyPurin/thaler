@@ -82,7 +82,8 @@ category = "Expenses:BankFees"
 
 # ---------------------------------------------------------------------------
 # Custom CSV profile, only needed for banks other than the built-in
-# `sparkasse` profile. Use it with: thaler cli import --profile mybank FILE ...
+# `sparkasse` profile. Found from the file ("auto"), or chosen with:
+# thaler cli import --profile mybank FILE ...
 # In the interface the profile is found from the file's header ("auto"): this one
 # is chosen for a file that has its date and amount columns.
 # Header names are matched ignoring case; ä/ö/ü/ß count as ae/oe/ue/ss.
@@ -106,3 +107,13 @@ category = "Expenses:BankFees"
 # booking_text = ["Type"]
 # amount = ["Amount"]
 # currency = ["Currency"]
+#
+# OFX and QIF files need no profile: the built-in "ofx" and "qif" read them, and
+# "auto" recognises them. A QIF file's dates have no fixed order; if your bank
+# writes them day first with slashes (04/10/26), give it a profile of its own:
+#
+# [[profile]]
+# name = "mybank-qif"
+# format = "qif"                  # "csv" (default), "ofx" or "qif"
+# date_formats = ["DD/MM/YY"]
+# decimal_separator = ","         # if its amounts have a decimal comma

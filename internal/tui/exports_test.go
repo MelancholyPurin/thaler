@@ -333,7 +333,7 @@ func Test_Update_exports_schedule(t *testing.T) {
 	}
 }
 
-func namesOf(files []csvFile) []string {
+func namesOf(files []bankFile) []string {
 	var out []string
 	for _, f := range files {
 		out = append(out, f.name)
