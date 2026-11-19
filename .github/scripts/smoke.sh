@@ -107,6 +107,22 @@ th "$new" "$accts" cli account list | grep -q "Assets:Archive.*closed" || fail "
 th "$new" "$accts" cli check >/dev/null || fail "the ledger check fails after renaming and closing an account"
 ok "renames and closes an account, keeping its history"
 
+# OFX and QIF files, invented, are recognised from what they hold and read; a second
+# import of each adds nothing.
+formats="$work/formats/thaler.db"
+mkdir -p "$work/formats"
+printf 'OFXHEADER:100\nDATA:OFXSGML\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>EUR<BANKTRANLIST>\n<STMTTRN><TRNTYPE>POS<DTPOSTED>20261004<TRNAMT>-23.47<FITID>1<NAME>Smoke Shop</STMTTRN>\n</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n' >"$work/formats/statement.ofx"
+printf "!Type:Bank\nD10/5'26\nT-4.90\nPSmoke Fee\n^\n" >"$work/formats/konto.qif"
+th "$new" "$formats" cli account add Assets:Card -c EUR >/dev/null
+for file in statement.ofx konto.qif; do
+	th "$new" "$formats" cli import --account Assets:Card "$work/formats/$file" | grep -q "^Imported 1 new" || fail "$file was not imported"
+	th "$new" "$formats" cli import --account Assets:Card "$work/formats/$file" | grep -q "^Imported 0 new" || fail "$file was imported twice"
+done
+th "$new" "$formats" cli list | grep -q "Smoke Shop" || fail "the OFX transaction is not listed"
+th "$new" "$formats" cli list | grep -q "Smoke Fee" || fail "the QIF transaction is not listed"
+th "$new" "$formats" cli check >/dev/null || fail "the ledger check fails after importing OFX and QIF"
+ok "imports an OFX statement and a QIF file, each once"
+
 th "$new" "$db" cli backup >/dev/null
 plain="$(ls "$work"/main/backups/thaler-*.db | head -n 1)"
 th "$new" "$db" cli add -a Assets:Bank --amount=-1 -t Expenses:Smoke -d 2026-10-03 >/dev/null
