@@ -109,37 +109,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 			}
 
 			if dryRun {
-				lines := make([]column, 0, len(res.Rows))
-				for _, r := range res.Rows {
-					status := "new"
-					if r.Duplicate {
-						status = "dup"
-					}
-					category := r.Category
-					if r.Transfer != nil {
-						category = fmt.Sprintf("⇄ #%d %s", r.Transfer.ID, r.Transfer.Account)
-					}
-					if r.Adopts != nil {
-						category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, r.Adopts.Payee)
-					}
-					lines = append(lines, column{
-						label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(category, 28), truncate(r.Row.Payee, 40)),
-						amount: signed(r.Row.Amount),
-					})
-				}
-				printColumns(out, "", lines)
-				fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
-					res.Inserted, res.Duplicates, parsed.Skipped)
-				fmt.Fprintf(out, "The file was read as %s, its columns separated by %s.\n", parsed.Encoding, delimiterName(parsed.Delimiter))
-				if res.Adopted > 0 {
-					fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
-				}
-				if len(res.Settled) > 0 {
-					fmt.Fprintf(out, "%d row(s) are the bank's booking of a scheduled transaction and would answer it (see thaler cli schedule due).\n", len(res.Settled))
-				}
-				if res.Transfers > 0 {
-					fmt.Fprintf(out, "%d new row(s) would be paired as the other half of a transfer with a transaction on another account.\n", res.Transfers)
-				}
+				printDryRun(out, res, parsed)
 				return nil
 			}
 
@@ -171,6 +141,41 @@ Use --dry-run first to see what would happen without writing anything.`,
 	cmd.Flags().BoolVar(&ignoreErrors, "ignore-errors", false, "import the readable rows even if some rows are broken")
 	_ = cmd.MarkFlagRequired("account")
 	return cmd
+}
+
+// printDryRun lists what an import would do with each row, and what it would add up to.
+func printDryRun(out io.Writer, res core.ImportResult, parsed *importer.ParseResult) {
+	lines := make([]column, 0, len(res.Rows))
+	for _, r := range res.Rows {
+		status := "new"
+		if r.Duplicate {
+			status = "dup"
+		}
+		category := r.Category
+		if r.Transfer != nil {
+			category = fmt.Sprintf("⇄ #%d %s", r.Transfer.ID, r.Transfer.Account)
+		}
+		if r.Adopts != nil {
+			category = fmt.Sprintf("↔ #%d %s", r.Adopts.ID, r.Adopts.Payee)
+		}
+		lines = append(lines, column{
+			label:  fmt.Sprintf("%-3s  %s  %-28s  %s", status, r.Row.Date.Format(ledger.DateLayout), truncate(category, 28), truncate(r.Row.Payee, 40)),
+			amount: signed(r.Row.Amount),
+		})
+	}
+	printColumns(out, "", lines)
+	fmt.Fprintf(out, "\nDry run: %d new, %d already imported, %d pending row(s) ignored. Nothing was written.\n",
+		res.Inserted, res.Duplicates, parsed.Skipped)
+	fmt.Fprintf(out, "The file was read as %s, its columns separated by %s.\n", parsed.Encoding, delimiterName(parsed.Delimiter))
+	if res.Adopted > 0 {
+		fmt.Fprintf(out, "%d row(s) match a transaction you entered by hand and would take it over instead of being added (marked ↔).\n", res.Adopted)
+	}
+	if len(res.Settled) > 0 {
+		fmt.Fprintf(out, "%d row(s) are the bank's booking of a scheduled transaction and would answer it (see thaler cli schedule due).\n", len(res.Settled))
+	}
+	if res.Transfers > 0 {
+		fmt.Fprintf(out, "%d new row(s) would be paired as the other half of a transfer with a transaction on another account.\n", res.Transfers)
+	}
 }
 
 // delimiterName is how the dry run names the character between columns.
