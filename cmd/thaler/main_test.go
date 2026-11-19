@@ -360,6 +360,36 @@ func Test_import(t *testing.T) {
 				"The file was read as utf-16le, its columns separated by tabs.\n",
 		},
 		{
+			name: "an OFX statement is found as one and read", setup: [][]string{addBank},
+			files: map[string]string{"statement.ofx": "OFXHEADER:100\nDATA:OFXSGML\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>EUR<BANKTRANLIST>\n" +
+				"<STMTTRN><TRNTYPE>POS<DTPOSTED>20261004<TRNAMT>-23.47<FITID>1<NAME>REWE Markt</STMTTRN>\n" +
+				"<STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20261001<TRNAMT>2450.00<FITID>2<NAME>Muster GmbH</STMTTRN>\n" +
+				"</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>\n"},
+			args: importFile("statement.ofx", "Assets:Bank", "--dry-run"),
+			want: "new  2026-10-04  Expenses:Uncategorized        REWE Markt     -23.47 EUR\n" +
+				"new  2026-10-01  Income:Uncategorized          Muster GmbH  +2450.00 EUR\n\n" +
+				"Dry run: 2 new, 0 already imported, 0 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as OFX, as utf-8.\n",
+		},
+		{
+			name: "a QIF file is found as one and imported", setup: [][]string{addBank},
+			files: map[string]string{"konto.qif": "!Type:Bank\nD10/4'26\nT-23.47\nPREWE Markt\n^\n"},
+			args:  importFile("konto.qif", "Assets:Bank"),
+			want: "Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+		{
+			name: "a file no profile fits", setup: [][]string{addBank}, files: map[string]string{"other.csv": "Date,Amount\n2026-10-04,-1\n"},
+			args:    importFile("other.csv", "Assets:Bank"),
+			wantErr: "no import profile fits other.csv; choose one with --profile (available: ofx, qif, sparkasse)",
+		},
+		{
+			name: "a profile named is used, even for a file of another format", setup: [][]string{addBank}, files: map[string]string{"konto.qif": "!Type:Bank\nD10/4'26\nT-23.47\n^\n"},
+			args:    importFile("konto.qif", "Assets:Bank", "--profile", "ofx"),
+			wantErr: "this is not an OFX file: it has no <OFX>",
+		},
+		{
 			name: "the other half of a transfer: previewed", files: transferFiles,
 			setup: [][]string{addBank, addSavings, importFile("bank.csv", "Assets:Bank")},
 			args:  importFile("savings.csv", "Assets:Savings", "--dry-run"),
@@ -394,7 +424,7 @@ func Test_import(t *testing.T) {
 		},
 		{name: "an account that does not exist", files: zeroFiles, args: importFile("export.csv", "Assets:Nope"), wantErr: "account does not exist: Assets:Nope"},
 		{name: "a file that does not exist", setup: [][]string{addBank}, args: importFile("nope.csv", "Assets:Bank"), wantErr: "open {dir}/nope.csv: no such file or directory"},
-		{name: "a profile that does not exist", files: zeroFiles, setup: [][]string{addBank}, args: importFile("export.csv", "Assets:Bank", "--profile", "nope"), wantErr: `unknown import profile "nope" (available: sparkasse)`},
+		{name: "a profile that does not exist", files: zeroFiles, setup: [][]string{addBank}, args: importFile("export.csv", "Assets:Bank", "--profile", "nope"), wantErr: `unknown import profile "nope" (available: ofx, qif, sparkasse)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
