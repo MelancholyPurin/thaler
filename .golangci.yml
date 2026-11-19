@@ -12,6 +12,7 @@ linters:
     - gosec           # this program handles financial data
     - intrange        # for i := range n
     - misspell
+    - nestif          # deeply nested ifs (see settings)
     - nilerr          # returning nil after checking err != nil
     - nolintlint      # a //nolint must say why, and must still be needed
     - unconvert
@@ -24,6 +25,9 @@ linters:
     gosec:
       excludes:
         - G104 # unchecked errors: errcheck already covers them, with the Close exceptions below
+    nestif:
+      # ENG-10 flattened what was deeper; a few branchy blocks of 5 and 6 are left as they read best.
+      min-complexity: 7
     nolintlint:
       require-explanation: true
       require-specific: true

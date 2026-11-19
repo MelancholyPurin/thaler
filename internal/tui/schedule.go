@@ -111,51 +111,8 @@ func (m *Model) openSchedule(edit bool) tea.Cmd {
 	f.every, f.start, f.end, f.tolerance, f.to = newInput("1"), newInput(m.loc.Date(m.now())), newInput(""), newInput(""), newInput("")
 	f.received.Placeholder = m.loc.T("transfer_received_placeholder", nil)
 
-	if edit {
-		if m.sched.cursor >= len(m.schedules) {
-			return nil
-		}
-		s := m.schedules[m.sched.cursor].Schedule
-		if !s.Transfer {
-			if _, _, ok := (core.TxView{Postings: s.Postings}).Legs(); !ok {
-				m.setStatus(m.loc.T("schedule_cannot_edit", nil), true)
-				return nil
-			}
-		}
-		old, err := s.NewSchedule()
-		if err != nil {
-			m.setStatus(m.errText(err), true)
-			return nil
-		}
-		f.editing, f.old = s.ID, old
-		f.name.SetValue(s.Name)
-		f.period = s.Unit
-		f.every.SetValue(strconv.Itoa(s.Every))
-		f.start.SetValue(m.loc.StoredDate(s.Start))
-		if s.End != "" {
-			f.end.SetValue(m.loc.StoredDate(s.End))
-		}
-		if s.Tolerance > 0 {
-			f.tolerance.SetValue(strconv.Itoa(s.Tolerance))
-		}
-		if s.Transfer {
-			f.from = m.accountIndex(s.Postings[0].Account)
-			f.amount.SetValue(strings.TrimPrefix(m.loc.Amount(s.Postings[0].Amount), "-"))
-			f.received.SetValue(m.loc.Amount(s.Postings[1].Amount))
-			f.keep = s.Postings[1].Account
-		} else {
-			src, cat, _ := (core.TxView{Postings: s.Postings}).Legs()
-			f.from = m.accountIndex(src.Account)
-			text := m.loc.Amount(src.Amount)
-			if src.Amount.Minor > 0 {
-				text = "+" + text
-			} else {
-				text = strings.TrimPrefix(text, "-")
-			}
-			f.amount.SetValue(text)
-			f.keep = cat.Account
-		}
-		f.to.SetValue(f.keep)
+	if edit && !m.fillScheduleForEdit(f) {
+		return nil
 	}
 	for _, in := range []*textinput.Model{&f.name, &f.amount, &f.received, &f.every, &f.start, &f.end, &f.tolerance, &f.to} {
 		in.Width = m.scheduleInputWidth()
@@ -164,6 +121,48 @@ func (m *Model) openSchedule(edit bool) tea.Cmd {
 	m.mode = modeSchedule
 	m.refreshScheduleTargets(f)
 	return m.focusScheduleField(sfName)
+}
+
+// fillScheduleForEdit fills the form with the schedule selected on the Forecast. It is
+// false when there is none, or when it is one the form cannot write again as it was.
+func (m *Model) fillScheduleForEdit(f *scheduleForm) bool {
+	if m.sched.cursor >= len(m.schedules) {
+		return false
+	}
+	s := m.schedules[m.sched.cursor].Schedule
+	src, cat, simple := (core.TxView{Postings: s.Postings}).Legs()
+	if !s.Transfer && !simple {
+		m.setStatus(m.loc.T("schedule_cannot_edit", nil), true)
+		return false
+	}
+	old, err := s.NewSchedule()
+	if err != nil {
+		m.setStatus(m.errText(err), true)
+		return false
+	}
+	f.editing, f.old = s.ID, old
+	f.name.SetValue(s.Name)
+	f.period = s.Unit
+	f.every.SetValue(strconv.Itoa(s.Every))
+	f.start.SetValue(m.loc.StoredDate(s.Start))
+	if s.End != "" {
+		f.end.SetValue(m.loc.StoredDate(s.End))
+	}
+	if s.Tolerance > 0 {
+		f.tolerance.SetValue(strconv.Itoa(s.Tolerance))
+	}
+	if s.Transfer {
+		f.from = m.accountIndex(s.Postings[0].Account)
+		f.amount.SetValue(strings.TrimPrefix(m.loc.Amount(s.Postings[0].Amount), "-"))
+		f.received.SetValue(m.loc.Amount(s.Postings[1].Amount))
+		f.keep = s.Postings[1].Account
+	} else {
+		f.from = m.accountIndex(src.Account)
+		f.amount.SetValue(m.signedText(src.Amount))
+		f.keep = cat.Account
+	}
+	f.to.SetValue(f.keep)
+	return true
 }
 
 // refreshScheduleTargets ranks what the schedule can go to for what has been typed:
@@ -406,32 +405,15 @@ func (m *Model) saveSchedule() {
 	}
 
 	ns := core.NewSchedule{Name: clean(f.name.Value()), Every: every, Unit: f.period, Start: start, End: end, Description: f.old.Description}
+	var msg string
 	if transfer {
-		in := amount
-		if m.scheduleCross(f) {
-			if in, err = ledger.ParseAmount(strings.TrimLeft(strings.TrimSpace(f.received.Value()), "+-−"), dst.Currency, 0); err != nil {
-				fail(m.loc.T("error_received", map[string]any{"Error": m.errText(err)}))
-				return
-			}
-		}
-		ns.Transfer = true
-		ns.Postings = []ledger.Posting{{Account: src.Name, Amount: amount.Neg()}, {Account: dst.Name, Amount: in}}
+		msg = m.scheduleTransfer(f, &ns, src, dst, amount)
 	} else {
-		if t := strings.TrimSpace(f.tolerance.Value()); t != "" {
-			if ns.Tolerance, err = strconv.Atoi(t); err != nil {
-				fail(m.loc.T("error_tolerance", nil))
-				return
-			}
-		}
-		if !income {
-			amount = amount.Neg()
-		}
-		ns.Postings = []ledger.Posting{{Account: src.Name, Amount: amount}, {Account: target, Amount: amount.Neg()}}
-		// What the booked transactions are called: the schedule's name, until it was given another payee.
-		ns.Payee = ns.Name
-		if f.editing != 0 && f.old.Payee != "" && f.old.Payee != f.old.Name {
-			ns.Payee = f.old.Payee
-		}
+		msg = m.scheduleBooking(f, &ns, src, target, amount, income)
+	}
+	if msg != "" {
+		fail(msg)
+		return
 	}
 
 	id := f.editing
@@ -465,6 +447,42 @@ func (m *Model) saveSchedule() {
 	}
 	m.selectSchedule(id)
 	m.setStatus(m.statusLine([]string{m.loc.T("schedule_saved", map[string]any{"Name": ns.Name}), m.loc.T("hint_z_undoes", nil)}), false)
+}
+
+// scheduleTransfer makes the schedule a transfer from src to dst of amount, or of what
+// is typed as received when the currencies differ. It returns what is wrong, if anything.
+func (m *Model) scheduleTransfer(f *scheduleForm, ns *core.NewSchedule, src, dst core.Account, amount ledger.Money) string {
+	in := amount
+	if m.scheduleCross(f) {
+		var err error
+		if in, err = ledger.ParseAmount(strings.TrimLeft(strings.TrimSpace(f.received.Value()), "+-−"), dst.Currency, 0); err != nil {
+			return m.loc.T("error_received", map[string]any{"Error": m.errText(err)})
+		}
+	}
+	ns.Transfer = true
+	ns.Postings = []ledger.Posting{{Account: src.Name, Amount: amount.Neg()}, {Account: dst.Name, Amount: in}}
+	return ""
+}
+
+// scheduleBooking makes the schedule income or spending of amount on src, booked to
+// target, with the tolerance typed. It returns what is wrong, if anything.
+func (m *Model) scheduleBooking(f *scheduleForm, ns *core.NewSchedule, src core.Account, target string, amount ledger.Money, income bool) string {
+	if t := strings.TrimSpace(f.tolerance.Value()); t != "" {
+		var err error
+		if ns.Tolerance, err = strconv.Atoi(t); err != nil {
+			return m.loc.T("error_tolerance", nil)
+		}
+	}
+	if !income {
+		amount = amount.Neg()
+	}
+	ns.Postings = []ledger.Posting{{Account: src.Name, Amount: amount}, {Account: target, Amount: amount.Neg()}}
+	// What the booked transactions are called: the schedule's name, until it was given another payee.
+	ns.Payee = ns.Name
+	if f.editing != 0 && f.old.Payee != "" && f.old.Payee != f.old.Name {
+		ns.Payee = f.old.Payee
+	}
+	return ""
 }
 
 // selectSchedule puts the cursor on schedule id, if it is listed.

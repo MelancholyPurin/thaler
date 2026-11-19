@@ -361,7 +361,7 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 - [ ] `ENG-7` Guardrails around a push: run the lint locally before it, fail the check when coverage drops under a floor, and branch protection requiring `result`, squash merge only, branches deleted after merge
 - [ ] `ENG-8` Fuzz the amount, CSV and config parsers
 - ~~`ENG-9` Fail the check when coverage drops under a floor~~ (folded into `ENG-7`)
-- [ ] `ENG-10` Split `(*Local).Import` and flatten the deeply nested code the linter flagged
+- [x] `ENG-10` Split `(*Local).Import` and flatten the deeply nested code the linter flagged (the import code moved from `service.go` to `import.go`, and `Import` is now a few named steps: the account it goes into, the rows in its currency, the categories chosen, a transaction for each row, then either the preview of a dry run or an `importWriter` that stores, adopts and pairs each planned row, with unit tests for the steps that need no database; the three deepest nested blocks of the interface (filling the edit form, filling and saving the schedule form) and a test helper are flat now; `nestif` is part of the lint, at 7, so nothing as deep comes back; no behaviour changed)
 - ~~`ENG-11` Branch protection requiring `result`, squash merge only, branches deleted after merge~~ (folded into `ENG-7`)
 - [x] `ENG-12` Run the database migrations with `golang-migrate`: one version number, a test that every migration file is registered in order, the copy before an upgrade and the refusal of a newer database kept, and databases written by the current runner converted
 

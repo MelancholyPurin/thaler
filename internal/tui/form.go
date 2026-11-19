@@ -88,51 +88,50 @@ func (m *Model) openForm(edit bool, focus formField) tea.Cmd {
 	f.description.CharLimit = 0 // an imported purpose can be long, and must not be cut when it is edited
 
 	if edit {
-		r, ok := m.selected()
-		if !ok {
-			return nil
+		if cmd, ok := m.fillFormForEdit(f, focus); !ok {
+			return cmd
 		}
-		if m.isSplit(r) { // a split is edited in its own popup
-			if focus == fieldPayee {
-				return m.openSplit(splitPayee)
-			}
-			return m.openSplit(splitAmount)
-		}
-		if r.tx.TransferWith != 0 && focus == fieldAmount { // both halves, in the transfer popup
-			return m.openTransferEdit(r.tx.ID)
-		}
-		if !r.simple {
-			m.setStatus(m.loc.T("cannot_edit_here", nil), true)
-			return nil
-		}
-		if m.isClosed(r.source.Account) { // its money is frozen until the account is reopened
-			m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": r.source.Account})), true)
-			return nil
-		}
-		f.editing, f.old = r.tx.ID, r.tx
-		for i, e := range m.accounts {
-			if e.account.Name == r.source.Account {
-				f.account = i
-			}
-		}
-		amount := r.source.Amount
-		text := m.loc.Amount(amount)
-		if amount.Minor > 0 {
-			text = "+" + text
-		} else {
-			text = strings.TrimPrefix(text, "-")
-		}
-		f.amount.SetValue(text)
-		f.payee.SetValue(r.tx.Payee)
-		f.date.SetValue(m.loc.StoredDate(r.tx.Date))
-		f.description.SetValue(r.tx.Description)
-		f.keepCat = r.category.Account
 	}
 	m.sizeForm(f)
 	m.form = f
 	m.mode = modeForm
 	m.refreshForm()
 	return m.focusField(focus)
+}
+
+// fillFormForEdit fills the form with the selected transaction. ok is false when the
+// form is not the place to edit it: a split or a transfer opens its own popup (cmd), and
+// anything else that cannot be edited here says why on the status line.
+func (m *Model) fillFormForEdit(f *form, focus formField) (cmd tea.Cmd, ok bool) {
+	r, ok := m.selected()
+	if !ok {
+		return nil, false
+	}
+	if m.isSplit(r) { // a split is edited in its own popup
+		if focus == fieldPayee {
+			return m.openSplit(splitPayee), false
+		}
+		return m.openSplit(splitAmount), false
+	}
+	if r.tx.TransferWith != 0 && focus == fieldAmount { // both halves, in the transfer popup
+		return m.openTransferEdit(r.tx.ID), false
+	}
+	if !r.simple {
+		m.setStatus(m.loc.T("cannot_edit_here", nil), true)
+		return nil, false
+	}
+	if m.isClosed(r.source.Account) { // its money is frozen until the account is reopened
+		m.setStatus(m.errText(coded.New("account_closed", map[string]any{"Name": r.source.Account})), true)
+		return nil, false
+	}
+	f.editing, f.old = r.tx.ID, r.tx
+	f.account = m.accountIndex(r.source.Account)
+	f.amount.SetValue(m.signedText(r.source.Amount))
+	f.payee.SetValue(r.tx.Payee)
+	f.date.SetValue(m.loc.StoredDate(r.tx.Date))
+	f.description.SetValue(r.tx.Description)
+	f.keepCat = r.category.Account
+	return nil, true
 }
 
 func (m *Model) defaultAccount() int {
