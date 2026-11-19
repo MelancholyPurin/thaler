@@ -122,7 +122,7 @@ Turning bank exports into transactions without duplicating or double-counting an
 - [ ] `IMP-9` Run against real exports and fix what the sample file did not cover
 - [x] `IMP-10` Detect encoding and delimiter instead of assuming them
 - [ ] `IMP-11` The CAMT.053 XML statement format
-- [ ] `IMP-12` OFX and QIF files
+- [x] `IMP-12` OFX and QIF files (built-in profiles `ofx` and `qif`, and `format = "qif"` or `"ofx"` for a profile of yours; `auto` recognises both from their first lines, ahead of any CSV profile. OFX versions 1 (SGML) and 2 (XML): a row per `<STMTTRN>` with the booking day of `DTPOSTED`, `TRNAMT` in the currency of `CURDEF` (or of the transaction's own `<CURRENCY>`, which the import then rejects for an account in another one), `NAME` or the `NAME` of `<PAYEE>`, `MEMO`, and `TRNTYPE` as the booking text; a file with several statements is refused. QIF of a bank, cash or credit card account: `D`, `T` (or `U`), `P`, `M`, and `N` as the booking text; lists of categories and the account's own record are passed over, an investment account is refused; the date order is the first of the profile's formats that reads every date of the file. A record that cannot be read is listed like a CSV row. The interface lists `.ofx`, `.qfx` and `.qif` files beside the CSV ones, and the folder watcher notices them; `thaler cli import` now defaults to `--profile auto`)
 
 ### BUD: Budget domain
 
