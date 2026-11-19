@@ -11,7 +11,8 @@ import (
 // and an export can be large.
 const detectBytes = 64 << 10
 
-// Detect says which profile reads a file, going by its header alone: a profile
+// Detect says which profile reads a file, going by its start alone. An OFX or a QIF
+// file says what it is there, and the profile of its format fits it best. A CSV profile
 // fits when the file has the columns it needs for the date and the amount, and
 // the one that finds the most of the columns it names wins, so a profile that
 // names every column of a bank's export beats one that names two. Of profiles
@@ -69,6 +70,9 @@ func (p Profile) headerScore(raw []byte) int {
 	if err != nil {
 		return 0
 	}
+	if cp.format != FormatCSV {
+		return formatScore(raw, cp)
+	}
 	tab, err := openTable(raw, p, cp)
 	if err != nil { // including a file with no header
 		return 0
@@ -89,3 +93,20 @@ func (p Profile) headerScore(raw []byte) int {
 	}
 	return score
 }
+
+// formatScore is how well an OFX or QIF profile fits the file: better than any CSV
+// profile when the file is of its format, which says it at its start, else not at all.
+func formatScore(raw []byte, cp compiled) int {
+	text, _, err := decodeToUTF8(raw, cp.encoding)
+	if err != nil {
+		return 0
+	}
+	if (cp.format == FormatOFX && isOFX(text)) || (cp.format == FormatQIF && isQIF(text)) {
+		return formatFits
+	}
+	return 0
+}
+
+// formatFits is the score of a file of a profile's format: more than a CSV profile can
+// reach, which counts at most its eight columns.
+const formatFits = 100

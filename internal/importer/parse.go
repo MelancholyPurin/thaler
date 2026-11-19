@@ -39,11 +39,13 @@ type ParseResult struct {
 	// Encoding and Delimiter are how the file was read: the profile's, or what was
 	// found when the profile says "auto". Encoding is one of the Encoding constants.
 	Encoding  string
-	Delimiter rune
+	Delimiter rune   // 0 for a file that is not CSV
+	Format    string // FormatCSV, FormatOFX or FormatQIF
 }
 
-// Parse reads a CSV export according to profile p. fallback is the currency
-// used when the file has no currency column or the cell is empty.
+// Parse reads an export according to profile p: a CSV file, or an OFX or QIF file.
+// fallback is the currency used when the file does not say one: a CSV file with no
+// currency column or an empty cell, an OFX statement without one, any QIF file.
 func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, error) {
 	cp, err := p.compile()
 	if err != nil {
@@ -52,6 +54,16 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
+	}
+	if cp.format != FormatCSV {
+		text, encoding, err := decodeToUTF8(raw, cp.encoding)
+		if err != nil {
+			return nil, err
+		}
+		if cp.format == FormatOFX {
+			return parseOFX(text, encoding, fallback)
+		}
+		return parseQIF(text, encoding, cp, fallback)
 	}
 	tab, err := openTable(raw, p, cp)
 	if err != nil {
@@ -80,7 +92,7 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 	}
 	skipNeedle := strings.ToLower(strings.TrimSpace(p.SkipContains))
 
-	res := &ParseResult{Encoding: tab.encoding, Delimiter: tab.delim}
+	res := &ParseResult{Encoding: tab.encoding, Delimiter: tab.delim, Format: FormatCSV}
 	for {
 		rec, err := cr.Read()
 		if errors.Is(err, io.EOF) {

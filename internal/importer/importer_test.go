@@ -130,14 +130,14 @@ func Test_Parse(t *testing.T) {
 			input:    readSample,
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ';'}, // the pending REWE booking
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ';', Format: FormatCSV}, // the pending REWE booking
 		},
 		{
 			name:     "the same sample as a windows-1252 file",
 			input:    func(t *testing.T) string { return cp1252(t, readSample(t)) },
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingWindows1252, Delimiter: ';'},
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingWindows1252, Delimiter: ';', Format: FormatCSV},
 		},
 		{
 			name:     "an explicit utf-8 profile refuses windows-1252 bytes instead of guessing",
@@ -151,7 +151,7 @@ func Test_Parse(t *testing.T) {
 			input:    text("\ufeff" + `"Buchungstag";"Beguenstigter/Zahlungspflichtiger";"Betrag"` + "\n" + `"01.02.26";"Test";"1,50"` + "\n"),
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Payee: "Test", Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';'},
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Payee: "Test", Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';', Format: FormatCSV},
 		},
 		{
 			name: "bad rows are reported and do not stop the others; the currency column wins and is upper-cased",
@@ -171,7 +171,7 @@ func Test_Parse(t *testing.T) {
 					{Line: 3, Err: errors.New(`unrecognised date "31.02.26"`)},
 					{Line: 4, Err: errors.New(`invalid amount "abc"`)},
 				},
-				Encoding: EncodingUTF8, Delimiter: ';',
+				Encoding: EncodingUTF8, Delimiter: ';', Format: FormatCSV,
 			},
 		},
 		{
@@ -181,7 +181,7 @@ func Test_Parse(t *testing.T) {
 			fallback: "USD",
 			want: ParseResult{
 				Rows:    []Row{{Line: 2, Date: day("2026-03-04"), Payee: "Coffee", Amount: ledger.Money{Minor: -350, Currency: "USD"}}},
-				Skipped: 1, Encoding: EncodingUTF8, Delimiter: ',',
+				Skipped: 1, Encoding: EncodingUTF8, Delimiter: ',', Format: FormatCSV,
 			},
 		},
 		{
@@ -189,49 +189,49 @@ func Test_Parse(t *testing.T) {
 			input:    func(t *testing.T) string { return strings.ReplaceAll(readSample(t), ";", ",") },
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ','},
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF8, Delimiter: ',', Format: FormatCSV},
 		},
 		{
 			name:     "a copy saved as Unicode text: UTF-16 with tabs",
 			input:    func(t *testing.T) string { return utf16Text(strings.ReplaceAll(readSample(t), ";", "\t"), false, true) },
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16LE, Delimiter: '\t'},
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16LE, Delimiter: '\t', Format: FormatCSV},
 		},
 		{
 			name:     "big-endian UTF-16 without a byte order mark",
 			input:    func(t *testing.T) string { return utf16Text(readSample(t), true, false) },
 			profile:  Sparkasse,
 			fallback: "EUR",
-			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16BE, Delimiter: ';'},
+			want:     ParseResult{Rows: sampleRows(), Skipped: 1, Encoding: EncodingUTF16BE, Delimiter: ';', Format: FormatCSV},
 		},
 		{
 			name:     "a delimiter inside a column name does not lead astray",
 			input:    text("Buchungstag;Betrag (EUR, gebucht);Text, frei\n01.02.26;1,50;a\n"),
 			profile:  Profile{Name: "p", DateFormats: []string{"DD.MM.YY"}, DecimalSep: ",", Columns: Columns{Date: []string{"Buchungstag"}, Amount: []string{"Betrag (EUR, gebucht)"}}},
 			fallback: "EUR",
-			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';'},
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-02-01"), Amount: eur(150)}}, Encoding: EncodingUTF8, Delimiter: ';', Format: FormatCSV},
 		},
 		{
 			name:     "the delimiter that finds the date and the amount wins over one that splits more",
 			input:    text("Buchungstag;a;b;c\tBuchungstag\tBetrag\n"),
 			profile:  Profile{Name: "p", Columns: Columns{Date: []string{"Buchungstag"}, Amount: []string{"Betrag"}}},
 			fallback: "EUR",
-			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: '\t'},
+			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: '\t', Format: FormatCSV},
 		},
 		{
 			name:     "of two that read the header equally well, the first of Delimiters wins",
 			input:    text("X;Y,Z\n"),
 			profile:  Profile{Name: "p", Columns: Columns{Date: []string{"X", "X;Y"}, Amount: []string{"Y,Z", "Z"}}},
 			fallback: "EUR",
-			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: ';'},
+			want:     ParseResult{Encoding: EncodingUTF8, Delimiter: ';', Format: FormatCSV},
 		},
 		{
 			name:     "\"auto\" written out is the same",
 			input:    text("Date|Amount\n2026-03-04|-3.50\n"),
 			profile:  Profile{Name: "p", Delimiter: "AUTO", Columns: Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}},
 			fallback: "EUR",
-			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-03-04"), Amount: eur(-350)}}, Encoding: EncodingUTF8, Delimiter: '|'},
+			want:     ParseResult{Rows: []Row{{Line: 2, Date: day("2026-03-04"), Amount: eur(-350)}}, Encoding: EncodingUTF8, Delimiter: '|', Format: FormatCSV},
 		},
 		{
 			name:     "a delimiter that is set is kept, even when another would fit",
@@ -312,8 +312,8 @@ func Test_FindProfile(t *testing.T) {
 		{name: "built-in", find: "sparkasse", want: Sparkasse},
 		{name: "built-in, padded and upper-cased", find: "  SPARKASSE ", want: Sparkasse},
 		{name: "custom shadows built-in", find: "sparkasse", custom: []Profile{shadow}, want: shadow},
-		{name: "unknown lists what exists", find: "nope", custom: []Profile{mybank}, wantErr: `unknown import profile "nope" (available: mybank, sparkasse)`},
-		{name: "unknown without custom profiles", find: "nope", wantErr: `unknown import profile "nope" (available: sparkasse)`},
+		{name: "unknown lists what exists", find: "nope", custom: []Profile{mybank}, wantErr: `unknown import profile "nope" (available: mybank, ofx, qif, sparkasse)`},
+		{name: "unknown without custom profiles", find: "nope", wantErr: `unknown import profile "nope" (available: ofx, qif, sparkasse)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -339,9 +339,9 @@ func Test_ProfileNames(t *testing.T) {
 		custom []Profile
 		want   []string
 	}{
-		{name: "built-in only", want: []string{"sparkasse"}},
-		{name: "custom ones are added, lower-cased and sorted", custom: []Profile{{Name: "Zeta"}, {Name: "alpha"}}, want: []string{"alpha", "sparkasse", "zeta"}},
-		{name: "a custom profile with a built-in name is listed once", custom: []Profile{{Name: "Sparkasse"}}, want: []string{"sparkasse"}},
+		{name: "built-in only", want: []string{"ofx", "qif", "sparkasse"}},
+		{name: "custom ones are added, lower-cased and sorted", custom: []Profile{{Name: "Zeta"}, {Name: "alpha"}}, want: []string{"alpha", "ofx", "qif", "sparkasse", "zeta"}},
+		{name: "a custom profile with a built-in name is listed once", custom: []Profile{{Name: "Sparkasse"}}, want: []string{"ofx", "qif", "sparkasse"}},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
