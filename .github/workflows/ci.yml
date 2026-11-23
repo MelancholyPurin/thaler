@@ -39,8 +39,9 @@ jobs:
         run: make i18n-check
 
   # Linux and macOS, because Thaler runs on both and they differ in details that
-  # matter to it (paths, file modes, how SQLite locks files). `go test` is what
-  # `make test` runs. The smoke test runs the built binary (see .github/scripts/smoke.sh).
+  # matter to it (paths, file modes, how SQLite locks files). The tests fail the job
+  # when the total coverage is under COVERAGE_FLOOR (see the Makefile). The smoke
+  # test runs the built binary (see .github/scripts/smoke.sh).
   test:
     name: test (${{ matrix.os }})
     needs: changes
@@ -55,8 +56,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: test
-        run: go test -shuffle=on ./...
+      - name: test, with the coverage floor
+        run: make check-coverage
       - name: smoke test
         run: make smoke
 
