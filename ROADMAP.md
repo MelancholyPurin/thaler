@@ -368,7 +368,7 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 ### DOC: Documentation
 
 - [x] `DOC-1` Install, usage, formats and design notes
-- [ ] `DOC-2` Contributor documentation: the conventions (test style, branch per feature, never commit financial data), and the layers and why they are cut where they are
+- [x] `DOC-2` Contributor documentation: the conventions (test style, branch per feature, never commit financial data), and the layers and why they are cut where they are (`CONTRIBUTING.md`, linked from the README: what to install, how a change is made from story to squashed pull request, the definition of done, the conventions in short, each pointing to its rule in `.claude/rules`, which stay the source and win where the two differ, and the layers with the reason for each cut)
 - [ ] `DOC-3` How to report a vulnerability, and what Thaler does and does not protect
 - ~~`DOC-4` The layers and why they are cut where they are~~ (folded into `DOC-2`)
 - [ ] `DOC-5` A walkthrough of the first month with real data

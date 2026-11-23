@@ -2,7 +2,7 @@
 
 Thaler is a local-first personal finance planner: Go, SQLite, a Bubble Tea TUI as the main interface, a Cobra CLI under `thaler cli`. A server, a Next.js web app and a PWA come later. It is AGPL-3.0. The README says what exists; [ROADMAP.md](ROADMAP.md) says what comes next.
 
-The maintainer's rules live in [`.claude/rules/`](.claude/rules), one topic per file, and are loaded with this file. Read the one that applies before you start. When a new rule comes up, add it to the file for its topic, or start a new file, rather than growing this one.
+The maintainer's rules live in [`.claude/rules/`](.claude/rules), one topic per file, and are loaded with this file. Read the one that applies before you start. When a new rule comes up, add it to the file for its topic, or start a new file, rather than growing this one. [CONTRIBUTING.md](CONTRIBUTING.md) sums the rules up for people and links to them: when a rule changes what its line there says, change that line too.
 
 | File | What it covers |
 | --- | --- |
