@@ -561,6 +561,7 @@
   "backup_halfway": "{{.Path}} was saved while an upgrade of it was stopped halfway (migration {{.Version}}), and nothing was changed",
   "database_path_invalid": "database path \"{{.Path}}\" must not contain '?' or '#'",
   "opening": "opening {{.Path}}",
+  "database_private": "making {{.Path}} readable by you alone",
   "corrupt_rate": "corrupt exchange rate \"{{.Rate}}\" for {{.Base}}/{{.Quote}} on {{.Date}}",
   "restore_reopen_failed": "the database cannot be opened again either",
   "restore_in_place_unopenable": "the backup is in place but cannot be opened",
