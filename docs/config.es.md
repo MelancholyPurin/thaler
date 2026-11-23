@@ -1,4 +1,4 @@
-<!-- translated from docs/config.md at 0195b7a4892c -->
+<!-- translated from docs/config.md at d1a4d9b623f7 -->
 # config.toml
 
 [English](config.md) · Español · [Deutsch](config.de.md)
@@ -57,14 +57,14 @@ category = "Expenses:Groceries"
 
 ## Perfiles de banco: `[[profile]]`
 
-Un perfil dice cómo leer el extracto de un banco. Thaler trae tres: `sparkasse` (los extractos CSV-CAMT y CSV-MT940 de la banca en línea de la Sparkasse), `ofx` y `qif`. Un perfil tuyo solo hace falta para el CSV de otro banco, o para un archivo QIF cuyas fechas un perfil incluido lee al revés.
+Un perfil dice cómo leer el extracto de un banco. Thaler trae cuatro: `sparkasse` (los extractos CSV-CAMT y CSV-MT940 de la banca en línea de la Sparkasse), `ofx`, `qif` y `camt` (extractos CAMT.053). Un perfil tuyo solo hace falta para el CSV de otro banco, o para un archivo QIF cuyas fechas un perfil incluido lee al revés.
 
-`thaler cli import --profile NAME` elige un perfil; sin esa opción, y siempre en la interfaz, se encuentra a partir del archivo (`auto`): un archivo OFX o QIF por cómo empieza, un archivo CSV por su cabecera. De los perfiles CSV cuyas columnas de fecha e importe tiene la cabecera, gana el que encuentra más de sus columnas, y entre iguales van primero los tuyos, en el orden en que están escritos. Un perfil tuyo con el nombre de uno incluido lo sustituye.
+`thaler cli import --profile NAME` elige un perfil; sin esa opción, y siempre en la interfaz, se encuentra a partir del archivo (`auto`): un archivo OFX, QIF o CAMT.053 por cómo empieza, un archivo CSV por su cabecera. De los perfiles CSV cuyas columnas de fecha e importe tiene la cabecera, gana el que encuentra más de sus columnas, y entre iguales van primero los tuyos, en el orden en que están escritos. Un perfil tuyo con el nombre de uno incluido lo sustituye.
 
 | Clave | Admite | Sin ella | Qué hace |
 | --- | --- | --- | --- |
 | `profile.name` | un nombre | obligatoria | Cómo lo llama `--profile`, sin distinguir mayúsculas, y con qué perfil dice una importación que leyó el archivo. |
-| `profile.format` | `"csv"`, `"ofx"` o `"qif"` | `"csv"` | El tipo de archivo. Un archivo OFX no necesita nada más; un archivo QIF admite `date_formats` y `decimal_separator`; las columnas, el delimitador, la codificación y la regla de omisión son solo para CSV. |
+| `profile.format` | `"csv"`, `"ofx"`, `"qif"` o `"camt"` | `"csv"` | El tipo de archivo. Un archivo OFX o CAMT.053 no necesita nada más; un archivo QIF admite `date_formats` y `decimal_separator`; las columnas, el delimitador, la codificación y la regla de omisión son solo para CSV. |
 | `profile.delimiter` | un carácter, o `"auto"` | `"auto"` | Lo que separa las columnas. `"auto"` prueba `;`, `,`, tabulador y `\|` y se queda con el que divide la cabecera en las columnas de fecha e importe. |
 | `profile.encoding` | `"auto"`, `"utf-8"`, `"utf-16"`, `"utf-16le"`, `"utf-16be"` o `"windows-1252"` (también `"latin1"`, `"iso-8859-1"`) | `"auto"` | La codificación de caracteres. `"auto"` lee UTF-16 o UTF-8 cuando los bytes lo indican, y Windows-1252 en otro caso, que los bancos alemanes todavía usan. |
 | `profile.decimal_separator` | `","` o `"."` | se deduce para cada importe | El separador decimal de los importes. Fíjalo cuando importes como `1.234` podrían leerse de las dos formas. |
