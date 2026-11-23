@@ -38,6 +38,12 @@ func writeExport(t *testing.T, m *Model, name, content string) string {
 	return filepath.Join(dir, name)
 }
 
+// statementCAMT is a CAMT.053 statement of two entries, made up for the tests.
+const statementCAMT = "<?xml version=\"1.0\"?>\n<Document xmlns=\"urn:iso:std:iso:20022:tech:xsd:camt.053.001.02\"><BkToCstmrStmt><Stmt><Acct><Id><IBAN>DE02120300000000202051</IBAN></Id><Ccy>EUR</Ccy></Acct>\n" +
+	"<Ntry><Amt Ccy=\"EUR\">23.47</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-04</Dt></BookgDt><NtryDtls><TxDtls><RltdPties><Cdtr><Nm>REWE Markt</Nm></Cdtr></RltdPties></TxDtls></NtryDtls></Ntry>\n" +
+	"<Ntry><Amt Ccy=\"EUR\">2450.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-01</Dt></BookgDt><NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Muster GmbH</Nm></Dbtr></RltdPties></TxDtls></NtryDtls></Ntry>\n" +
+	"</Stmt></BkToCstmrStmt></Document>\n"
+
 // statementOFX is an OFX statement of two transactions, made up for the tests.
 const statementOFX = "OFXHEADER:100\nDATA:OFXSGML\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>EUR<BANKTRANLIST>\n" +
 	"<STMTTRN><TRNTYPE>POS<DTPOSTED>20261004<TRNAMT>-23.47<FITID>1<NAME>REWE Markt</STMTTRN>\n" +
@@ -70,6 +76,10 @@ func Test_isExport(t *testing.T) {
 		{name: "statement.ofx", want: true},
 		{name: "statement.QFX", want: true},
 		{name: "konto.qif", want: true},
+		{name: "20261031-umsatz-camt53.xml", want: true},
+		{name: "CAMT053_Konto.XML", want: true},
+		{name: "settings.xml"},
+		{name: "camt.053.txt"},
 		{name: "statement.pdf"},
 		{name: "notes.txt"},
 		{name: "csv"},
@@ -187,7 +197,7 @@ func Test_Update_import(t *testing.T) {
 		},
 		{
 			name: "with no file to pick, enter asks for one", file: "", script: "i enter",
-			want: observed{Flow: Flow{Mode: "import", Err: "choose an export (CSV, OFX or QIF): paste its path, or pick one from the list"}},
+			want: observed{Flow: Flow{Mode: "import", Err: "choose an export (CSV, OFX, QIF or CAMT): paste its path, or pick one from the list"}},
 		},
 		{
 			name: "a path that does not exist", file: "", script: "i raw:/no/such/file.csv enter",
@@ -415,7 +425,7 @@ func Test_Update_import_profile(t *testing.T) {
 			shows: []string{"auto: none fits", "No profile fits this file"},
 		},
 		{
-			name: "choosing one by hand is not second-guessed", file: exportCSV, setup: func(t *testing.T, m *Model) { withIng(m) }, script: "i tab tab right enter",
+			name: "choosing one by hand is not second-guessed", file: exportCSV, setup: func(t *testing.T, m *Model) { withIng(m) }, script: "i tab tab right right enter",
 			want: observed{Choice: "ing", Detected: "sparkasse", Step: "choose", Err: `profile "Ing" does not match this file: need a date column (Date) and an amount column (Amount), but the header is: Buchungstag;Verwendungszweck;Beguenstigter/Zahlungspflichtiger;Betrag;Waehrung;Info`},
 		},
 		{
@@ -434,6 +444,13 @@ func Test_Update_import_profile(t *testing.T) {
 			script: "i enter",
 			want:   observed{Choice: "auto", Detected: "ofx", Used: "ofx", Step: "review"},
 			shows:  []string{"profile ofx", "2 new"},
+		},
+		{
+			name: "so is a CAMT.053 statement named as banks name it", file: exportCSV,
+			setup:  func(t *testing.T, m *Model) { onlyFile(t, m, "20261031-umsatz-camt53.xml", statementCAMT) },
+			script: "i enter",
+			want:   observed{Choice: "auto", Detected: "camt", Used: "camt", Step: "review"},
+			shows:  []string{"profile camt", "2 new"},
 		},
 		{
 			name: "so is a QIF file", file: exportCSV,
@@ -714,8 +731,8 @@ func Test_Update_import_browsingAFolder(t *testing.T) {
 		{
 			name:      "an empty folder says so, and enter does not try to read the folder",
 			scriptFor: func(f map[string]string) string { return "i raw:" + f["empty"] + " enter" },
-			want:      observed{Mode: "import", Err: "choose an export (CSV, OFX or QIF): paste its path, or pick one from the list"},
-			shows:     []string{"No CSV, OFX or QIF files in"},
+			want:      observed{Mode: "import", Err: "choose an export (CSV, OFX, QIF or CAMT): paste its path, or pick one from the list"},
+			shows:     []string{"No CSV, OFX, QIF or CAMT files in"},
 		},
 		{
 			name:      "a folder lists only its CSV files",
