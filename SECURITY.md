@@ -28,7 +28,7 @@ Only the latest release is supported: a fix goes into a new release, not into ol
 
 **Files from outside are treated as untrusted.** Bank exports (CSV, OFX, QIF) and `config.toml` are read strictly: a file that does not make sense is refused with a reason, not half read, and an unknown key in the config is an error. The parsers are fuzzed (`make fuzz`) for crashes and for reading a value other than the one written.
 
-**The build.** Every tool is pinned to a version. govulncheck scans the dependencies and the standard library on every change and once a week, and Dependabot proposes updates weekly. The release archives come with a `checksums.txt`.
+**The build.** Every tool is pinned to a version. govulncheck scans the dependencies and the standard library on every change and once a week, and Dependabot proposes updates weekly. The release archives come with a `checksums.txt`, signed from `v0.3.0` on by the Release workflow with cosign, keyless through Sigstore: the signature shows that the checksums, and so every archive, were built by `.github/workflows/release.yml` of this repository from `main` or a release branch. The README shows how to check it.
 
 ## What it does not protect
 
@@ -38,5 +38,5 @@ Only the latest release is supported: a fix goes into a new release, not into ol
 - **A passphrase is as strong as you make it.** An encrypted backup can be attacked offline, without limit on attempts, by whoever holds the file; a short passphrase will fall. A passphrase file is as secret as that file. A lost passphrase cannot be recovered, and neither can the backup.
 - **Exports are plain text.** A CSV you export, or print to the terminal, is readable by whatever reads it next.
 - **What is on screen and in your shell.** Amounts show on screen; a command such as `thaler cli add --amount …` is kept in your shell's history.
-- **The release archives are not signed.** The checksums show that a download is complete and matches the release page, not who built it; that rests on GitHub and on this repository.
+- **The signature vouches for the workflow, not for the code.** It shows which workflow built a release, not that the code it built is sound: someone who could push to `main` or change the workflow could get a release signed. That rests on the repository's protection (`protect-main.sh`) and on GitHub. Releases before `v0.3.0` are not signed, and the binaries are not signed or notarized by Apple.
 - **One person, one machine.** There is no login and no access control between people: anyone who can use your account can use your Thaler. The self-hosted server planned in `M-SERVER` will have accounts and private ledgers, and this page will say what it protects when it exists.

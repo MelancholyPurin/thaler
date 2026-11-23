@@ -1,4 +1,4 @@
-<!-- translated from README.md at c4ae2e7c68a8 -->
+<!-- translated from README.md at 6286c25e25cb -->
 # thaler
 
 [English](README.md) · [Español](README.es.md) · Deutsch
@@ -17,16 +17,19 @@ Ein Planer für die privaten Finanzen, der lokal arbeitet. Eine Go-Binärdatei, 
 
 Thaler läuft im Terminal unter **macOS und Linux**, Intel und ARM. Es ist eine einzige Datei und braucht weder einen C-Compiler noch andere Bibliotheken. Windows wird nicht unterstützt; die später geplante Webanwendung läuft in jedem Browser. Lade entweder ein Release herunter oder baue es aus dem Quellcode, wofür du **Go 1.27 oder neuer** brauchst. Ein Homebrew-Paket ist geplant (`PLT-7` in der [Roadmap](ROADMAP.md)).
 
-**Ein Release.** Jedes Release auf der [Release-Seite](https://github.com/melancholypurin/thaler/releases) hat ein Archiv pro System (`thaler_<Version>_darwin_arm64.tar.gz` für einen Mac mit Apple-Chip, `darwin_amd64` für einen Intel-Mac, `linux_amd64` und `linux_arm64`) und `checksums.txt`. Prüfe das heruntergeladene, entpacke es und lege `thaler` in deinen `PATH`:
+**Ein Release.** Jedes Release auf der [Release-Seite](https://github.com/melancholypurin/thaler/releases) hat ein Archiv pro System (`thaler_<Version>_darwin_arm64.tar.gz` für einen Mac mit Apple-Chip, `darwin_amd64` für einen Intel-Mac, `linux_amd64` und `linux_arm64`) und `checksums.txt` mit seiner Signatur, `checksums.txt.sigstore.json`. Prüfe, dass die Prüfsummen vom Release-Workflow dieses Repositorys signiert wurden, prüfe das heruntergeladene Archiv gegen sie, entpacke es und lege `thaler` in deinen `PATH`:
 
 ```sh
-grep thaler_0.1.0_linux_amd64.tar.gz checksums.txt | sha256sum -c      # unter macOS: shasum -a 256 -c
-tar -xzf thaler_0.1.0_linux_amd64.tar.gz
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/MelancholyPurin/thaler/\.github/workflows/release\.yml@refs/heads/(main|release/[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+grep thaler_0.3.0_linux_amd64.tar.gz checksums.txt | sha256sum -c      # unter macOS: shasum -a 256 -c
+tar -xzf thaler_0.3.0_linux_amd64.tar.gz
 mkdir -p ~/.local/bin && mv thaler ~/.local/bin/                        # ~/.local/bin muss im PATH sein
 thaler --version
 ```
 
-Die Binärdateien sind nicht signiert und nicht notarisiert. Lädst du eine auf dem Mac im Browser herunter, weigert sich macOS beim ersten Mal, sie zu öffnen; `xattr -d com.apple.quarantine thaler` behebt das (ein Download mit `curl` wird gar nicht markiert).
+Der erste Befehl braucht [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) (`brew install cosign`). Er gibt `Verified OK` aus, wenn die Prüfsummen vom Release-Workflow von `MelancholyPurin/thaler` signiert wurden, gestartet von `main` oder einem Release-Branch: Die Signatur kommt ohne Schlüssel aus, sie entsteht über [Sigstore](https://www.sigstore.dev) mit der Identität, die GitHub diesem Workflow gibt, und steht im öffentlichen Log von Sigstore, es gibt also keinen Schlüssel, dem man vertrauen oder den man verlieren könnte. Releases sind ab `v0.3.0` signiert; `v0.1.0` und `v0.2.0` haben nur die Prüfsummen. Die Binärdateien selbst sind nicht von Apple signiert oder notarisiert. Lädst du eine auf dem Mac im Browser herunter, weigert sich macOS beim ersten Mal, sie zu öffnen; `xattr -d com.apple.quarantine thaler` behebt das (ein Download mit `curl` wird gar nicht markiert).
 
 **Aus dem Quellcode.** Dieselben Schritte für Go und Thaler, in zwei Teilen:
 

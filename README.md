@@ -16,16 +16,19 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 
 Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. Either download a release, or build it from source, which needs **Go 1.27 or newer**. A Homebrew package is planned (`PLT-7` in the [roadmap](ROADMAP.md)).
 
-**A release.** Each release on the [releases page](https://github.com/melancholypurin/thaler/releases) has an archive per system (`thaler_<version>_darwin_arm64.tar.gz` for a Mac with Apple silicon, `darwin_amd64` for an Intel Mac, `linux_amd64` and `linux_arm64`) and `checksums.txt`. Check the one you downloaded, unpack it, and put `thaler` on your `PATH`:
+**A release.** Each release on the [releases page](https://github.com/melancholypurin/thaler/releases) has an archive per system (`thaler_<version>_darwin_arm64.tar.gz` for a Mac with Apple silicon, `darwin_amd64` for an Intel Mac, `linux_amd64` and `linux_arm64`) and `checksums.txt` with its signature, `checksums.txt.sigstore.json`. Check that the checksums were signed by this repository's release workflow, check the archive you downloaded against them, unpack it, and put `thaler` on your `PATH`:
 
 ```sh
-grep thaler_0.1.0_linux_amd64.tar.gz checksums.txt | sha256sum -c      # on macOS: shasum -a 256 -c
-tar -xzf thaler_0.1.0_linux_amd64.tar.gz
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/MelancholyPurin/thaler/\.github/workflows/release\.yml@refs/heads/(main|release/[0-9]+\.[0-9]+)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+grep thaler_0.3.0_linux_amd64.tar.gz checksums.txt | sha256sum -c      # on macOS: shasum -a 256 -c
+tar -xzf thaler_0.3.0_linux_amd64.tar.gz
 mkdir -p ~/.local/bin && mv thaler ~/.local/bin/                        # ~/.local/bin has to be on the PATH
 thaler --version
 ```
 
-The binaries are not signed or notarized. If you download one in a browser on a Mac, macOS refuses to open it the first time; `xattr -d com.apple.quarantine thaler` clears that (a download with `curl` is not marked at all).
+The first command needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) (`brew install cosign`). It prints `Verified OK` when the checksums were signed by the Release workflow of `MelancholyPurin/thaler`, run from `main` or a release branch: the signature is keyless, made through [Sigstore](https://www.sigstore.dev) with the identity GitHub gives that workflow, and recorded in Sigstore's public log, so there is no key to trust or to lose. Releases are signed from `v0.3.0`; `v0.1.0` and `v0.2.0` have only the checksums. The binaries themselves are not signed or notarized by Apple. If you download one in a browser on a Mac, macOS refuses to open it the first time; `xattr -d com.apple.quarantine thaler` clears that (a download with `curl` is not marked at all).
 
 **From source.** The same steps for Go and Thaler, in two parts:
 

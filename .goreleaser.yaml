@@ -1,5 +1,5 @@
 # GoReleaser builds and publishes a release: the archives for macOS and Linux, their
-# checksums, and the GitHub release. The release workflow runs it (see
+# checksums, the signature of the checksums, and the GitHub release. The release workflow runs it (see
 # .github/workflows/release.yml and the release train in ROADMAP.md); `make
 # release-check` checks this file and builds the archives into dist/ without
 # publishing anything. Its version is pinned in the Makefile.
@@ -31,6 +31,21 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+
+# The checksums are signed with cosign, keyless (REL-11): in the Release workflow,
+# cosign proves who it is to Sigstore with GitHub's OIDC token, and the bundle it
+# writes holds the signature and a certificate naming the workflow and branch. One
+# signature covers every archive, since checksums.txt names them all. Signing needs
+# that token, so `make release-check` skips it unless SIGN=1 (the workflow's dry run
+# signs). cosign is pinned in the Makefile and put on the PATH there;
+# .github/scripts/verify-release.sh checks the result.
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: [sign-blob, "--bundle=${signature}", --yes, "${artifact}"]
+    output: true
 
 # The notes come from cmd/releasenotes (REL-5) and are passed in with
 # --release-notes, so GoReleaser writes no changelog of its own.
