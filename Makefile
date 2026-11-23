@@ -17,7 +17,7 @@ COVERAGE_FLOOR ?= 89
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts lint tidy-check vuln fmt check check-coverage hooks clean
+.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts translations-check lint tidy-check vuln fmt check check-coverage hooks clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -73,6 +73,9 @@ fuzz: ## Fuzz the amount, import and config parsers, FUZZTIME each (default 1m);
 test-scripts: ## Test the scripts CI uses (.github/scripts)
 	@for t in .github/scripts/*_test.sh; do $$t || exit 1; done
 
+translations-check: ## Fail when a translated page (README.es.md, docs/config.de.md, …) is behind its English; it says what changed
+	@.github/scripts/translations.sh
+
 lint: ## Check formatting and run golangci-lint (see .golangci.yml), the same checks as CI
 	@unformatted="$$(gofmt -l .)"; \
 	if [ -n "$$unformatted" ]; then \
@@ -91,7 +94,7 @@ vuln: ## Scan the dependencies and the standard library for known vulnerabilitie
 fmt: ## Format all Go files in place
 	gofmt -w .
 
-check: lint tidy-check test-scripts check-coverage smoke ## Most of what CI runs: lint, go.mod check, tests with the coverage floor, smoke test (also try test-race and vuln)
+check: lint tidy-check test-scripts translations-check check-coverage smoke ## Most of what CI runs: lint, go.mod check, translations, tests with the coverage floor, smoke test (also try test-race and vuln)
 
 check-coverage: ## Run the tests in a random order with coverage per package, and fail when the total is under COVERAGE_FLOOR
 	$(GO) test -shuffle=on -coverprofile=$(COVERFILE) ./...

@@ -22,6 +22,7 @@ answer() { # answer VALUE REASON
 # Files that cannot change what the Go checks see.
 skippable() {
 	case "$1" in
+	docs/config*.md) return 1 ;; # a Go test checks that it, and its translations, document every key
 	*.md | LICENSE | .gitignore | .github/dependabot.yml | docs/*) return 0 ;;
 	esac
 	return 1

@@ -38,6 +38,16 @@ jobs:
       - name: message catalogs
         run: make i18n-check
 
+  # The Spanish and German pages must be translated from the English as it is now.
+  # It runs for every change, documentation only too, since that is when the English
+  # changes; it needs only git and is done in seconds.
+  translations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: the translations are up to date
+        run: make translations-check
+
   # Linux and macOS, because Thaler runs on both and they differ in details that
   # matter to it (paths, file modes, how SQLite locks files). The tests fail the job
   # when the total coverage is under COVERAGE_FLOOR (see the Makefile). The smoke
@@ -78,14 +88,14 @@ jobs:
   # One check that stands for all the others. Require this one in branch protection,
   # so jobs can be added, renamed or split without touching the repository settings.
   #
-  # It passes when every Go job passed, or, for a change to documentation only,
-  # when every Go job was skipped because the `changes` job said they were not
-  # needed. A job that was skipped when it was needed, one that failed and one that
+  # It passes when the translations are up to date and every Go job passed, or,
+  # for a change to documentation only, when every Go job was skipped because the
+  # `changes` job said they were not needed. A job that was skipped when it was needed, one that failed and one that
   # was cancelled all make it fail.
   result:
     name: Report Result
     if: always() # a failed job must make this fail, not skip it
-    needs: [changes, lint, test, race]
+    needs: [changes, translations, lint, test, race]
     runs-on: ubuntu-latest
     steps:
       - name: every job that was needed passed
@@ -96,5 +106,6 @@ jobs:
           echo "$NEEDS" | jq -e '
             (.changes.outputs.go == "true") as $needed
             | .changes.result == "success"
+              and .translations.result == "success"
               and all([.lint, .test, .race][]; .result == (if $needed then "success" else "skipped" end))
           ' > /dev/null
