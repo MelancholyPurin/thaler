@@ -72,6 +72,13 @@ func Test_Detect(t *testing.T) {
 		{name: "an OFX statement, version 2", file: ofxV2, want: found{"ofx", true}},
 		{name: "an OFX statement as UTF-16", file: utf16Text(ofxV2, false, true), want: found{"ofx", true}},
 		{name: "a QIF file", file: qifBank, want: found{"qif", true}},
+		{name: "a CAMT.053 statement, version 2", file: camtV2, want: found{"camt", true}},
+		{name: "a CAMT.053 statement with prefixes", file: camtV8, want: found{"camt", true}},
+		{name: "a CAMT.053 statement as UTF-16", file: utf16Text(camtV2, false, true), want: found{"camt", true}},
+		{name: "a CAMT.053 statement in Windows-1252", file: cp1252(t, strings.Replace(camtV2, "REWE Markt", "Bäckerei", 1)), want: found{"camt", true}},
+		{name: "a CSV profile of yours does not fit a CAMT statement", file: camtV2, custom: []Profile{ing}, want: found{"camt", true}},
+		{name: "an account report, camt.052, is no statement", file: "<Document><BkToCstmrAcctRpt></BkToCstmrAcctRpt></Document>", want: found{}},
+		{name: "XML of something else", file: `<?xml version="1.0"?><settings><theme>dark</theme></settings>`, want: found{}},
 		{name: "a QIF file after blank lines", file: "\n\n" + qifBank, want: found{"qif", true}},
 		{
 			name: "a QIF profile of yours fits as well as the built-in one and comes first", file: qifBank,

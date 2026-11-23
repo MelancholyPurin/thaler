@@ -110,12 +110,12 @@ category = "Expenses:BankFees"
 # amount = ["Amount"]
 # currency = ["Currency"]
 #
-# OFX and QIF files need no profile: the built-in "ofx" and "qif" read them, and
-# "auto" recognises them. A QIF file's dates have no fixed order; if your bank
+# OFX, QIF and CAMT.053 files need no profile: the built-in "ofx", "qif" and "camt"
+# read them, and "auto" recognises them. A QIF file's dates have no fixed order; if your bank
 # writes them day first with slashes (04/10/26), give it a profile of its own:
 #
 # [[profile]]
 # name = "mybank-qif"
-# format = "qif"                  # "csv" (default), "ofx" or "qif"
+# format = "qif"                  # "csv" (default), "ofx", "qif" or "camt"
 # date_formats = ["DD/MM/YY"]
 # decimal_separator = ","         # if its amounts have a decimal comma

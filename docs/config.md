@@ -56,14 +56,14 @@ category = "Expenses:Groceries"
 
 ## Bank profiles: `[[profile]]`
 
-A profile says how to read one bank's export. Thaler has three built in: `sparkasse` (the CSV-CAMT and CSV-MT940 exports of Sparkasse online banking), `ofx` and `qif`. A profile of yours is needed only for another bank's CSV, or for a QIF file whose dates a built-in profile reads the wrong way round.
+A profile says how to read one bank's export. Thaler has four built in: `sparkasse` (the CSV-CAMT and CSV-MT940 exports of Sparkasse online banking), `ofx`, `qif` and `camt` (CAMT.053 statements). A profile of yours is needed only for another bank's CSV, or for a QIF file whose dates a built-in profile reads the wrong way round.
 
-`thaler cli import --profile NAME` chooses a profile; without it, and always in the interface, it is found from the file (`auto`): an OFX or QIF file by what it starts with, a CSV file by its header. Of the CSV profiles whose date and amount columns the header has, the one that finds the most of its columns wins, and of equals yours come first, in the order written. A profile of yours with the name of a built-in one replaces it.
+`thaler cli import --profile NAME` chooses a profile; without it, and always in the interface, it is found from the file (`auto`): an OFX, QIF or CAMT.053 file by what it starts with, a CSV file by its header. Of the CSV profiles whose date and amount columns the header has, the one that finds the most of its columns wins, and of equals yours come first, in the order written. A profile of yours with the name of a built-in one replaces it.
 
 | Key | Takes | Without it | What it does |
 | --- | --- | --- | --- |
 | `profile.name` | a name | required | What `--profile` calls it, ignoring case, and what an import reports it read the file with. |
-| `profile.format` | `"csv"`, `"ofx"` or `"qif"` | `"csv"` | The kind of file. An OFX file needs nothing else; a QIF file takes `date_formats` and `decimal_separator`; the columns, the delimiter, the encoding and the skip rule are for CSV alone. |
+| `profile.format` | `"csv"`, `"ofx"`, `"qif"` or `"camt"` | `"csv"` | The kind of file. An OFX or CAMT.053 file needs nothing else; a QIF file takes `date_formats` and `decimal_separator`; the columns, the delimiter, the encoding and the skip rule are for CSV alone. |
 | `profile.delimiter` | one character, or `"auto"` | `"auto"` | What separates the columns. `"auto"` tries `;`, `,`, tab and `\|` and keeps the one that splits the header into the date and amount columns. |
 | `profile.encoding` | `"auto"`, `"utf-8"`, `"utf-16"`, `"utf-16le"`, `"utf-16be"` or `"windows-1252"` (also `"latin1"`, `"iso-8859-1"`) | `"auto"` | The character encoding. `"auto"` reads UTF-16 or UTF-8 when the bytes say so, and Windows-1252 otherwise, which German banks still use. |
 | `profile.decimal_separator` | `","` or `"."` | worked out for each amount | The decimal separator of the amounts. Set it when amounts such as `1.234` could be read either way. |

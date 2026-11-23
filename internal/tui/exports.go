@@ -10,7 +10,7 @@ import (
 )
 
 // While the interface runs it looks at the import folder every few seconds and says,
-// in the bottom bar, when a bank export (CSV, OFX or QIF) has arrived that was not
+// in the bottom bar, when a bank export (CSV, OFX, QIF or CAMT) has arrived that was not
 // there before: the export that was just downloaded. Only names, sizes and times are read, never the
 // content, and `watch_import_dir = false` in config.toml stops it. What was in the
 // folder when the interface started, or when the folder changed, is not new.

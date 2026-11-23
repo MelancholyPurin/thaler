@@ -165,12 +165,18 @@ func (f *importFlow) profileName() (name string, auto bool) {
 }
 
 // exportExtensions are the files a bank export may be: CSV, OFX (also .qfx, Quicken's
-// name for it) and QIF.
+// name for it) and QIF. A CAMT.053 statement is an .xml file, and so are many files
+// that are not exports, so an .xml file is one only when its name says camt (as the
+// banks name them: 20261031-umsatz-camt53.xml); only the name is read, as the folder
+// watcher promises. Another one can still be imported by pasting its path.
 var exportExtensions = []string{".csv", ".ofx", ".qfx", ".qif"}
 
 // isExport says whether the file name is one of a bank export.
 func isExport(name string) bool {
 	ext := filepath.Ext(name)
+	if strings.EqualFold(ext, ".xml") {
+		return strings.Contains(strings.ToLower(filepath.Base(name)), "camt")
+	}
 	for _, e := range exportExtensions {
 		if strings.EqualFold(ext, e) {
 			return true

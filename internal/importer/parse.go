@@ -40,12 +40,13 @@ type ParseResult struct {
 	// found when the profile says "auto". Encoding is one of the Encoding constants.
 	Encoding  string
 	Delimiter rune   // 0 for a file that is not CSV
-	Format    string // FormatCSV, FormatOFX or FormatQIF
+	Format    string // FormatCSV, FormatOFX, FormatQIF or FormatCAMT
 }
 
-// Parse reads an export according to profile p: a CSV file, or an OFX or QIF file.
-// fallback is the currency used when the file does not say one: a CSV file with no
-// currency column or an empty cell, an OFX statement without one, any QIF file.
+// Parse reads an export according to profile p: a CSV file, or an OFX, QIF or
+// CAMT.053 file. fallback is the currency used when the file does not say one: a CSV
+// file with no currency column or an empty cell, an OFX or CAMT statement without
+// one, any QIF file.
 func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, error) {
 	cp, err := p.compile()
 	if err != nil {
@@ -60,8 +61,11 @@ func Parse(r io.Reader, p Profile, fallback ledger.Currency) (*ParseResult, erro
 		if err != nil {
 			return nil, err
 		}
-		if cp.format == FormatOFX {
+		switch cp.format {
+		case FormatOFX:
 			return parseOFX(text, encoding, fallback)
+		case FormatCAMT:
+			return parseCAMT(text, encoding, fallback)
 		}
 		return parseQIF(text, encoding, cp, fallback)
 	}

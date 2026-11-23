@@ -1,4 +1,4 @@
-<!-- translated from docs/config.md at 0195b7a4892c -->
+<!-- translated from docs/config.md at d1a4d9b623f7 -->
 # config.toml
 
 [English](config.md) · [Español](config.es.md) · Deutsch
@@ -57,14 +57,14 @@ category = "Expenses:Groceries"
 
 ## Bankprofile: `[[profile]]`
 
-Ein Profil sagt, wie der Export einer Bank zu lesen ist. Thaler bringt drei mit: `sparkasse` (die Exporte CSV-CAMT und CSV-MT940 aus dem Online-Banking der Sparkasse), `ofx` und `qif`. Ein eigenes Profil brauchst du nur für das CSV einer anderen Bank oder für eine QIF-Datei, deren Daten ein eingebautes Profil verkehrt herum liest.
+Ein Profil sagt, wie der Export einer Bank zu lesen ist. Thaler bringt vier mit: `sparkasse` (die Exporte CSV-CAMT und CSV-MT940 aus dem Online-Banking der Sparkasse), `ofx`, `qif` und `camt` (CAMT.053-Auszüge). Ein eigenes Profil brauchst du nur für das CSV einer anderen Bank oder für eine QIF-Datei, deren Daten ein eingebautes Profil verkehrt herum liest.
 
-`thaler cli import --profile NAME` wählt ein Profil; ohne die Option, und in der Oberfläche immer, wird es aus der Datei ermittelt (`auto`): eine OFX- oder QIF-Datei an ihrem Anfang, eine CSV-Datei an ihrer Kopfzeile. Unter den CSV-Profilen, deren Datums- und Betragsspalten die Kopfzeile hat, gewinnt das, das die meisten seiner Spalten findet, und unter gleich guten kommen deine zuerst, in der geschriebenen Reihenfolge. Ein eigenes Profil mit dem Namen eines eingebauten ersetzt dieses.
+`thaler cli import --profile NAME` wählt ein Profil; ohne die Option, und in der Oberfläche immer, wird es aus der Datei ermittelt (`auto`): eine OFX-, QIF- oder CAMT.053-Datei an ihrem Anfang, eine CSV-Datei an ihrer Kopfzeile. Unter den CSV-Profilen, deren Datums- und Betragsspalten die Kopfzeile hat, gewinnt das, das die meisten seiner Spalten findet, und unter gleich guten kommen deine zuerst, in der geschriebenen Reihenfolge. Ein eigenes Profil mit dem Namen eines eingebauten ersetzt dieses.
 
 | Schlüssel | Nimmt | Ohne ihn | Was er bewirkt |
 | --- | --- | --- | --- |
 | `profile.name` | ein Name | erforderlich | Wie `--profile` es nennt, ohne Rücksicht auf Groß- und Kleinschreibung, und womit ein Import sagt, dass er die Datei gelesen hat. |
-| `profile.format` | `"csv"`, `"ofx"` oder `"qif"` | `"csv"` | Die Art der Datei. Eine OFX-Datei braucht sonst nichts; eine QIF-Datei nimmt `date_formats` und `decimal_separator`; die Spalten, das Trennzeichen, die Kodierung und die Ausschlussregel gelten nur für CSV. |
+| `profile.format` | `"csv"`, `"ofx"`, `"qif"` oder `"camt"` | `"csv"` | Die Art der Datei. Eine OFX- oder CAMT.053-Datei braucht sonst nichts; eine QIF-Datei nimmt `date_formats` und `decimal_separator`; die Spalten, das Trennzeichen, die Kodierung und die Ausschlussregel gelten nur für CSV. |
 | `profile.delimiter` | ein Zeichen oder `"auto"` | `"auto"` | Was die Spalten trennt. `"auto"` probiert `;`, `,`, Tabulator und `\|` und behält das, das die Kopfzeile in die Datums- und Betragsspalte teilt. |
 | `profile.encoding` | `"auto"`, `"utf-8"`, `"utf-16"`, `"utf-16le"`, `"utf-16be"` oder `"windows-1252"` (auch `"latin1"`, `"iso-8859-1"`) | `"auto"` | Die Zeichenkodierung. `"auto"` liest UTF-16 oder UTF-8, wenn die Bytes es sagen, und sonst Windows-1252, das deutsche Banken noch verwenden. |
 | `profile.decimal_separator` | `","` oder `"."` | für jeden Betrag ermittelt | Das Dezimaltrennzeichen der Beträge. Setze es, wenn Beträge wie `1.234` sich auf beide Arten lesen ließen. |

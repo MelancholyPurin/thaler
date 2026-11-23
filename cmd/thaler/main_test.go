@@ -372,6 +372,21 @@ func Test_import(t *testing.T) {
 				"The file was read as OFX, as utf-8.\n",
 		},
 		{
+			name: "a CAMT.053 statement is found as one and read", setup: [][]string{addBank},
+			files: map[string]string{"camt.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02"><BkToCstmrStmt><Stmt><Acct><Id><IBAN>DE02120300000000202051</IBAN></Id><Ccy>EUR</Ccy></Acct>
+<Ntry><Amt Ccy="EUR">23.47</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-04</Dt></BookgDt><NtryDtls><TxDtls><RltdPties><Cdtr><Nm>REWE Markt</Nm></Cdtr></RltdPties></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="EUR">2450.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-10-01</Dt></BookgDt><NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Muster GmbH</Nm></Dbtr></RltdPties></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="EUR">9.99</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>PDNG</Sts></Ntry>
+</Stmt></BkToCstmrStmt></Document>
+`},
+			args: importFile("camt.xml", "Assets:Bank", "--dry-run"),
+			want: "new  2026-10-04  Expenses:Uncategorized        REWE Markt     -23.47 EUR\n" +
+				"new  2026-10-01  Income:Uncategorized          Muster GmbH  +2450.00 EUR\n\n" +
+				"Dry run: 2 new, 0 already imported, 1 pending row(s) ignored. Nothing was written.\n" +
+				"The file was read as CAMT, as utf-8.\n",
+		},
+		{
 			name: "a QIF file is found as one and imported", setup: [][]string{addBank},
 			files: map[string]string{"konto.qif": "!Type:Bank\nD10/4'26\nT-23.47\nPREWE Markt\n^\n"},
 			args:  importFile("konto.qif", "Assets:Bank"),
@@ -382,7 +397,7 @@ func Test_import(t *testing.T) {
 		{
 			name: "a file no profile fits", setup: [][]string{addBank}, files: map[string]string{"other.csv": "Date,Amount\n2026-10-04,-1\n"},
 			args:    importFile("other.csv", "Assets:Bank"),
-			wantErr: "no import profile fits other.csv; choose one with --profile (available: ofx, qif, sparkasse)",
+			wantErr: "no import profile fits other.csv; choose one with --profile (available: camt, ofx, qif, sparkasse)",
 		},
 		{
 			name: "a profile named is used, even for a file of another format", setup: [][]string{addBank}, files: map[string]string{"konto.qif": "!Type:Bank\nD10/4'26\nT-23.47\n^\n"},
@@ -424,7 +439,7 @@ func Test_import(t *testing.T) {
 		},
 		{name: "an account that does not exist", files: zeroFiles, args: importFile("export.csv", "Assets:Nope"), wantErr: "account does not exist: Assets:Nope"},
 		{name: "a file that does not exist", setup: [][]string{addBank}, args: importFile("nope.csv", "Assets:Bank"), wantErr: "open {dir}/nope.csv: no such file or directory"},
-		{name: "a profile that does not exist", files: zeroFiles, setup: [][]string{addBank}, args: importFile("export.csv", "Assets:Bank", "--profile", "nope"), wantErr: `unknown import profile "nope" (available: ofx, qif, sparkasse)`},
+		{name: "a profile that does not exist", files: zeroFiles, setup: [][]string{addBank}, args: importFile("export.csv", "Assets:Bank", "--profile", "nope"), wantErr: `unknown import profile "nope" (available: camt, ofx, qif, sparkasse)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
