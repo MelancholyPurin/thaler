@@ -267,7 +267,7 @@ func Test_Parse_qif(t *testing.T) {
 		{name: "an investment account", input: "!Type:Invst\nD10/04/26\nNBuy\n^\n", profile: QIF, wantErr: "this QIF file is of an investment account, which Thaler does not import"},
 		{name: "a CSV file", input: "Date;Amount\n", profile: QIF, wantErr: "this is not a QIF file: it does not start with a line such as !Type:Bank"},
 		{name: "an empty file", input: "", profile: QIF, wantErr: "this is not a QIF file: it does not start with a line such as !Type:Bank"},
-		{name: "a profile of a format there is not", input: qifBank, profile: Profile{Name: "x", Format: "mt940"}, wantErr: `profile "x": format "mt940" is none of csv, ofx and qif`},
+		{name: "a profile of a format there is not", input: qifBank, profile: Profile{Name: "x", Format: "mt940"}, wantErr: `profile "x": format "mt940" is none of csv, ofx, qif and camt`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {

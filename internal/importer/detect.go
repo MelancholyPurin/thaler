@@ -11,8 +11,8 @@ import (
 // and an export can be large.
 const detectBytes = 64 << 10
 
-// Detect says which profile reads a file, going by its start alone. An OFX or a QIF
-// file says what it is there, and the profile of its format fits it best. A CSV profile
+// Detect says which profile reads a file, going by its start alone. An OFX, QIF or
+// CAMT file says what it is there, and the profile of its format fits it best. A CSV profile
 // fits when the file has the columns it needs for the date and the amount, and
 // the one that finds the most of the columns it names wins, so a profile that
 // names every column of a bank's export beats one that names two. Of profiles
@@ -94,14 +94,14 @@ func (p Profile) headerScore(raw []byte) int {
 	return score
 }
 
-// formatScore is how well an OFX or QIF profile fits the file: better than any CSV
+// formatScore is how well an OFX, QIF or CAMT profile fits the file: better than any CSV
 // profile when the file is of its format, which says it at its start, else not at all.
 func formatScore(raw []byte, cp compiled) int {
 	text, _, err := decodeToUTF8(raw, cp.encoding)
 	if err != nil {
 		return 0
 	}
-	if (cp.format == FormatOFX && isOFX(text)) || (cp.format == FormatQIF && isQIF(text)) {
+	if (cp.format == FormatOFX && isOFX(text)) || (cp.format == FormatQIF && isQIF(text)) || (cp.format == FormatCAMT && isCAMT(text)) {
 		return formatFits
 	}
 	return 0

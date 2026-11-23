@@ -1,4 +1,4 @@
-// Package importer turns bank exports (CSV, OFX and QIF) into ledger rows. It depends only on
+// Package importer turns bank exports (CSV, OFX, QIF and CAMT.053) into ledger rows. It depends only on
 // the standard library and the ledger package; reading config files and
 // writing to the database happen elsewhere.
 package importer
@@ -23,12 +23,12 @@ type Columns struct {
 	Currency    []string `toml:"currency"`
 }
 
-// Profile describes one bank's export: the layout of its CSV, or that it is an OFX
-// or a QIF file.
+// Profile describes one bank's export: the layout of its CSV, or that it is an OFX,
+// a QIF or a CAMT.053 file.
 type Profile struct {
 	Name string `toml:"name"`
-	// Format is "csv" (the default), "ofx" or "qif". An OFX file needs nothing else
-	// from the profile; a QIF file takes DateFormats and DecimalSep. Columns,
+	// Format is "csv" (the default), "ofx", "qif" or "camt". An OFX or CAMT file
+	// needs nothing else from the profile; a QIF file takes DateFormats and DecimalSep. Columns,
 	// Delimiter and the skip rule are for CSV alone.
 	Format string `toml:"format"`
 	// Delimiter is a single character, or "auto" (the default): found from the
@@ -77,9 +77,10 @@ var Sparkasse = Profile{
 
 // The formats of a profile.
 const (
-	FormatCSV = "csv"
-	FormatOFX = "ofx"
-	FormatQIF = "qif"
+	FormatCSV  = "csv"
+	FormatOFX  = "ofx"
+	FormatQIF  = "qif"
+	FormatCAMT = "camt"
 )
 
 // OFX is the built-in profile for OFX statements (also QFX, Quicken's name for them):
@@ -99,7 +100,12 @@ var QIF = Profile{
 	DateFormats: []string{"DD.MM.YYYY", "DD.MM.YY", "YYYY-MM-DD", "MM/DD/YYYY", "MM/DD/YY", "DD/MM/YYYY", "DD/MM/YY"},
 }
 
-var builtin = map[string]Profile{"sparkasse": Sparkasse, FormatOFX: OFX, FormatQIF: QIF}
+// CAMT is the built-in profile for CAMT.053 statements (ISO 20022, camt.053.001.02 and
+// later): each booked entry is a row, with its booking day, amount and currency, the
+// other side and its IBAN, the remittance text and the bank's additional information.
+var CAMT = Profile{Name: FormatCAMT, Format: FormatCAMT, Encoding: "auto"}
+
+var builtin = map[string]Profile{"sparkasse": Sparkasse, FormatOFX: OFX, FormatQIF: QIF, FormatCAMT: CAMT}
 
 // FindProfile looks a profile up by name (case-insensitive). Custom profiles
 // from the config file take precedence over built-in ones.
@@ -139,7 +145,7 @@ func ProfileNames(custom []Profile) []string {
 var Delimiters = []rune{';', ',', '\t', '|'}
 
 type compiled struct {
-	format   string // FormatCSV, FormatOFX or FormatQIF
+	format   string // FormatCSV, FormatOFX, FormatQIF or FormatCAMT
 	delim    rune   // 0: found from the header
 	encoding string
 	sep      byte
@@ -151,7 +157,7 @@ func (p Profile) compile() (compiled, error) {
 	switch c.format {
 	case "":
 		c.format = FormatCSV
-	case FormatCSV, FormatOFX, FormatQIF:
+	case FormatCSV, FormatOFX, FormatQIF, FormatCAMT:
 	default:
 		return c, coded.New("profile_format", map[string]any{"Name": p.Name, "Format": p.Format})
 	}

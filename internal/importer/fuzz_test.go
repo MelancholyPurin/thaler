@@ -15,7 +15,7 @@ import (
 // profiles of the kinds a person writes, with a point, a comma or neither fixed as the
 // decimal separator.
 var fuzzProfiles = []Profile{
-	Sparkasse, OFX, QIF,
+	Sparkasse, OFX, QIF, CAMT,
 	{Name: "point", Delimiter: ",", DecimalSep: ".", Columns: Columns{Date: []string{"Date"}, Payee: []string{"Name"}, Amount: []string{"Amount"}, Currency: []string{"Currency"}}},
 	{Name: "comma", DecimalSep: ",", DateFormats: []string{"DD.MM.YY"}, Columns: Columns{Date: []string{"Datum"}, Amount: []string{"Betrag"}}, SkipColumn: "Status", SkipContains: "offen"},
 	{Name: "guess", Columns: Columns{Date: []string{"Date"}, Amount: []string{"Amount"}}},
@@ -44,13 +44,16 @@ func Fuzz_Parse(f *testing.F) {
 		{file: ofxV1, profile: 1},
 		{file: ofxV2, profile: 1},
 		{file: qifBank, profile: 2},
-		{file: "Date,Name,Amount,Currency\n2026-10-04,REWE,-23.47,eur\n2026-10-05,\"A, B\",1.234.567,EUR\n", profile: 3},
-		{file: "Datum;Betrag;Status\n04.10.26;-23,47;\n05.10.26;-1,00;offen\n", profile: 4},
-		{file: "Date|Amount\n2026-10-04|-1\n\n2026-10-05|\"2\n", profile: 5},
-		{file: "!Type:Bank\nD04.10.2026\nT-1.234,56\n^\n", profile: 6},
+		{file: "Date,Name,Amount,Currency\n2026-10-04,REWE,-23.47,eur\n2026-10-05,\"A, B\",1.234.567,EUR\n", profile: 4},
+		{file: "Datum;Betrag;Status\n04.10.26;-23,47;\n05.10.26;-1,00;offen\n", profile: 5},
+		{file: "Date|Amount\n2026-10-04|-1\n\n2026-10-05|\"2\n", profile: 6},
+		{file: "!Type:Bank\nD04.10.2026\nT-1.234,56\n^\n", profile: 7},
 		{file: "", profile: 0},
 		{file: "\xff\xfe\x00", profile: 1},
 		{file: "<OFX><STMTTRN><DTPOSTED>2026<TRNAMT>1</STMTTRN>", profile: 1},
+		{file: camtV2, profile: 3},
+		{file: camtV8, profile: 3},
+		{file: "<Document><BkToCstmrStmt><Stmt><Ntry><Amt>1</Amt><CdtDbtInd>DBIT</CdtDbtInd><ValDt><DtTm>2026-10-04", profile: 3},
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s.file), s.profile)
@@ -62,14 +65,14 @@ func Fuzz_Parse(f *testing.F) {
 		// when
 		got, err := Parse(bytes.NewReader(file), p, "EUR")
 		again, errAgain := Parse(bytes.NewReader(file), p, "EUR")
-		detected, found := Detect(bytes.NewReader(file), fuzzProfiles[3:])
+		detected, found := Detect(bytes.NewReader(file), fuzzProfiles[4:])
 
 		// then
 		if diff := cmp.Diff(errText(err), errText(errAgain)); diff != "" {
 			t.Fatalf("the same bytes failed differently (-first +again):\n%s", diff)
 		}
 		if found {
-			if _, err := FindProfile(detected, fuzzProfiles[3:]); err != nil {
+			if _, err := FindProfile(detected, fuzzProfiles[4:]); err != nil {
 				t.Fatalf("Detect named %q, which FindProfile does not know: %v", detected, err)
 			}
 		}

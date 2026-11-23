@@ -312,8 +312,8 @@ func Test_FindProfile(t *testing.T) {
 		{name: "built-in", find: "sparkasse", want: Sparkasse},
 		{name: "built-in, padded and upper-cased", find: "  SPARKASSE ", want: Sparkasse},
 		{name: "custom shadows built-in", find: "sparkasse", custom: []Profile{shadow}, want: shadow},
-		{name: "unknown lists what exists", find: "nope", custom: []Profile{mybank}, wantErr: `unknown import profile "nope" (available: mybank, ofx, qif, sparkasse)`},
-		{name: "unknown without custom profiles", find: "nope", wantErr: `unknown import profile "nope" (available: ofx, qif, sparkasse)`},
+		{name: "unknown lists what exists", find: "nope", custom: []Profile{mybank}, wantErr: `unknown import profile "nope" (available: camt, mybank, ofx, qif, sparkasse)`},
+		{name: "unknown without custom profiles", find: "nope", wantErr: `unknown import profile "nope" (available: camt, ofx, qif, sparkasse)`},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -339,9 +339,9 @@ func Test_ProfileNames(t *testing.T) {
 		custom []Profile
 		want   []string
 	}{
-		{name: "built-in only", want: []string{"ofx", "qif", "sparkasse"}},
-		{name: "custom ones are added, lower-cased and sorted", custom: []Profile{{Name: "Zeta"}, {Name: "alpha"}}, want: []string{"alpha", "ofx", "qif", "sparkasse", "zeta"}},
-		{name: "a custom profile with a built-in name is listed once", custom: []Profile{{Name: "Sparkasse"}}, want: []string{"ofx", "qif", "sparkasse"}},
+		{name: "built-in only", want: []string{"camt", "ofx", "qif", "sparkasse"}},
+		{name: "custom ones are added, lower-cased and sorted", custom: []Profile{{Name: "Zeta"}, {Name: "alpha"}}, want: []string{"alpha", "camt", "ofx", "qif", "sparkasse", "zeta"}},
+		{name: "a custom profile with a built-in name is listed once", custom: []Profile{{Name: "Sparkasse"}}, want: []string{"camt", "ofx", "qif", "sparkasse"}},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
