@@ -176,6 +176,7 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 - [x] `SAF-9` A reminder when the last backup is older than a number of days you set
 - [x] `SAF-10` Show that an encrypted backup is being made instead of freezing
 - [x] `SAF-11` Keep the last N backups and offer to prune the rest
+- [ ] `SAF-12` Make the database file private to you (`0600`, and its `-wal` and `-shm` files), when it is created and when an existing one is opened, wherever `--db` puts it: today SQLite creates it with the permissions of any new file, so only the private data folder keeps others out (found writing `DOC-3`)
 
 ### LOC: Localization foundation
 
@@ -368,8 +369,8 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 ### DOC: Documentation
 
 - [x] `DOC-1` Install, usage, formats and design notes
-- [ ] `DOC-2` Contributor documentation: the conventions (test style, branch per feature, never commit financial data), and the layers and why they are cut where they are
-- [ ] `DOC-3` How to report a vulnerability, and what Thaler does and does not protect
+- [x] `DOC-2` Contributor documentation: the conventions (test style, branch per feature, never commit financial data), and the layers and why they are cut where they are (`CONTRIBUTING.md`, linked from the README: what to install, how a change is made from story to squashed pull request, the definition of done, the conventions in short, each pointing to its rule in `.claude/rules`, which stay the source and win where the two differ, and the layers with the reason for each cut)
+- [x] `DOC-3` How to report a vulnerability, and what Thaler does and does not protect (`SECURITY.md`: privately through GitHub's private vulnerability reporting, which `protect-main.sh` turns on, an answer within a week, a fix released at once and an advisory, only the latest release supported; what is protected (no network, private files, age backups, nothing lost by itself, strict parsing, pinned and scanned dependencies) and what is not (the live database is not encrypted, anything running as you, plain backups, weak passphrases, exports, shell history, unsigned archives, no access control); writing it found that the database file is not private outside the default folder, now `SAF-12`)
 - ~~`DOC-4` The layers and why they are cut where they are~~ (folded into `DOC-2`)
 - [ ] `DOC-5` A walkthrough of the first month with real data
 - [ ] `DOC-6` Every `config.toml` key
