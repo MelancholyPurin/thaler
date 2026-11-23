@@ -89,7 +89,7 @@ func Load(path string, mustExist bool) (*Config, error) {
 		}
 		return nil, fmt.Errorf("%w: %w", coded.New("reading_file", map[string]any{"Path": path}), err)
 	}
-	if unknown := md.Undecoded(); len(unknown) > 0 {
+	if unknown := append(md.Undecoded(), miscased(md.Keys())...); len(unknown) > 0 {
 		return nil, coded.New("config_unknown_keys", map[string]any{"Path": path, "Count": len(unknown), "Keys": joinKeys(unknown)})
 	}
 	if _, ok := i18n.Parse(c.Language); c.Language != "" && !ok {
@@ -108,6 +108,27 @@ func Load(path string, mustExist bool) (*Config, error) {
 		return nil, fmt.Errorf("%w: %w", coded.New("error_in_file", map[string]any{"Path": path}), err)
 	}
 	return &c, nil
+}
+
+// miscased lists the keys that only match one of Thaler's in a case-insensitive way:
+// the TOML decoder fills a field from Rule or LANGUAGE as from rule or language, and a
+// file with both [[rule]] and [[rulE]] would be read one way or the other at random.
+// Every key Thaler knows is lower case; the names of features are left to
+// checkFeatures.
+func miscased(keys []toml.Key) []toml.Key {
+	var out []toml.Key
+	for _, k := range keys {
+		for i, part := range k {
+			if i == 1 && k[0] == "features" {
+				continue
+			}
+			if part != strings.ToLower(part) {
+				out = append(out, k)
+				break
+			}
+		}
+	}
+	return out
 }
 
 const newFileHeader = "# Created by Thaler. The sample below is switched off: remove the leading # from a line to use it.\n#\n"

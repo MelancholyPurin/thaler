@@ -509,3 +509,49 @@ func Test_rules_fileMode(t *testing.T) {
 		})
 	}
 }
+
+// A file with a rule table that is [[rule]] only by case ([[rUle]]) read one way or the
+// other at random, which once made MoveRule run past the end of the rules (found by
+// Fuzz_rules). Every change to the rules of such a file is refused, and the file stays.
+func Test_rules_miscased(t *testing.T) {
+	miscased := strings.Replace(rulesFile, "# bakeries: the spelling varies\n[[rule]]", "# bakeries: the spelling varies\n[[rUle]]", 1)
+	refused := "reading_file(Path=PATH): config_key_case(Count=3, Keys=rUle, rUle.regex, rUle.category)"
+	tcs := []struct {
+		name   string
+		change func(path string) error
+	}{
+		{name: "delete", change: func(path string) error { _, err := DeleteRule(path, 0); return err }},
+		{name: "move down", change: func(path string) error { _, err := MoveRule(path, 0, 1); return err }},
+		{name: "move up", change: func(path string) error { _, err := MoveRule(path, 2, -1); return err }},
+		{name: "edit", change: func(path string) error {
+			_, err := EditRule(path, 1, importer.Rule{Contains: "x", Category: "Expenses:X"})
+			return err
+		}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			path := filepath.Join(t.TempDir(), "config.toml")
+			writeFile(t, path, miscased)
+
+			// when
+			err := tc.change(path)
+
+			// then
+			gotErr := ""
+			if err != nil {
+				gotErr = strings.ReplaceAll(err.Error(), path, "PATH")
+			}
+			if diff := cmp.Diff(refused, gotErr); diff != "" {
+				t.Errorf("error mismatch (-want +got):\n%s", diff)
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(miscased, string(body)); diff != "" {
+				t.Errorf("file mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

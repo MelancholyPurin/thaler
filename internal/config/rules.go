@@ -67,8 +67,14 @@ func decodeRules(body []byte) ([]importer.Rule, error) {
 	var c struct {
 		Rules []importer.Rule `toml:"rule"`
 	}
-	if _, err := toml.Decode(string(body), &c); err != nil {
+	md, err := toml.Decode(string(body), &c)
+	if err != nil {
 		return nil, err
+	}
+	// A key that is one of Thaler's only by case ([[rUle]]) would make the rules come out
+	// one way or another from one reading to the next.
+	if odd := miscased(md.Keys()); len(odd) > 0 {
+		return nil, coded.New("config_key_case", map[string]any{"Count": len(odd), "Keys": joinKeys(odd)})
 	}
 	return c.Rules, nil
 }

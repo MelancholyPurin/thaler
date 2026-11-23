@@ -92,6 +92,13 @@ amount = ["Amount"]
 		{name: "no file, and none is needed", file: nil},
 		{name: "no file, but one was asked for", file: nil, mustExist: true, wantErr: "reading {path}: open {path}: no such file or directory"},
 		{name: "a typo in a key is not ignored", file: ptr("import_folder = \"/tmp\"\n"), wantErr: "{path}: unknown key: import_folder"},
+		{name: "a key in capitals is a typo too", file: ptr("Language = \"de\"\n"), wantErr: "{path}: unknown key: Language"},
+		{
+			name:    "so is a table that is another's only by case, which was read one way or the other",
+			file:    ptr("[[rule]]\ncontains = \"REWE\"\ncategory = \"Expenses:Groceries\"\n\n[[rulE]]\nregex = \"b(ä|ae)ckerei\"\ncategory = \"Expenses:Groceries\"\n"),
+			wantErr: "{path}: unknown keys: rulE, rulE.regex, rulE.category",
+		},
+		{name: "and a key of a profile's columns", file: ptr("[[profile]]\nname = \"x\"\n[profile.columns]\nDate = [\"D\"]\n"), wantErr: "{path}: unknown key: profile.columns.Date"},
 		{name: "a syntax error", file: ptr("rule = ["), wantErr: "reading {path}: toml: line 1 (last key \"rule\"): unexpected EOF; expected value"},
 	}
 	for _, tc := range tcs {
