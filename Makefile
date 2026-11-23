@@ -14,7 +14,7 @@ COVERFILE ?= coverage.out
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts lint tidy-check vuln fmt check check-coverage clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -55,6 +55,17 @@ test: ## Run the tests, in a random order (a failure prints the seed to repeat i
 
 test-race: ## Run the tests with the race detector (needs a C compiler)
 	$(GO) test -race -shuffle=on -timeout 30m ./...
+
+# Each fuzz test, as package:name. `go test` runs their seeds, and the inputs that
+# once failed (testdata/fuzz), with the other tests; `make fuzz` searches for more.
+FUZZ_TARGETS = ./internal/ledger:Fuzz_ParseAmount ./internal/importer:Fuzz_Parse ./internal/config:Fuzz_Load ./internal/config:Fuzz_rules
+FUZZTIME ?= 1m
+
+fuzz: ## Fuzz the amount, import and config parsers, FUZZTIME each (default 1m); an input that fails is kept in the package's testdata/fuzz
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		echo "fuzz $${t#*:} in $${t%%:*} for $(FUZZTIME)"; \
+		$(GO) test -run '^$$' -fuzz "^$${t#*:}\$$" -fuzztime $(FUZZTIME) -fuzzminimizetime 5s "$${t%%:*}"; \
+	done
 
 test-scripts: ## Test the scripts CI uses (.github/scripts)
 	@for t in .github/scripts/*_test.sh; do $$t || exit 1; done

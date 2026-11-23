@@ -1,6 +1,7 @@
 # Thaler's configuration: ~/.config/thaler/config.toml, or the file given with --config.
 # Copy this example there to start. In the TUI, press C to open the config in your editor.
-# Unknown keys are rejected, so a typo cannot silently disable a rule.
+# Unknown keys are rejected, so a typo cannot silently disable a rule. Keys are
+# lower case: `Rule` or `Language` is a typo too.
 
 # The language of Thaler's messages: "en", "es" or "de". Without this key the
 # environment decides (LC_ALL, LC_MESSAGES, then LANG, as in de_DE.UTF-8), and a

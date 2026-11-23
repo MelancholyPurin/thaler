@@ -493,6 +493,10 @@
     "one": "{{.Path}}: unbekannter Schlüssel: {{.Keys}}",
     "other": "{{.Path}}: unbekannte Schlüssel: {{.Keys}}"
   },
+  "config_key_case": {
+    "one": "unbekannter Schlüssel: {{.Keys}} (Schlüssel werden kleingeschrieben)",
+    "other": "unbekannte Schlüssel: {{.Keys}} (Schlüssel werden kleingeschrieben)"
+  },
   "config_language": "{{.Path}}: language ist \"{{.Value}}\": verwende eine von {{.Languages}}",
   "config_reminder_days": "{{.Path}}: backup_reminder_days ist {{.Value}}: gib eine Anzahl Tage an, oder 0 für keine Erinnerung",
   "config_keep_backups": "{{.Path}}: keep_backups ist {{.Value}}: gib an, wie viele Backups behalten werden, oder 0 für alle",

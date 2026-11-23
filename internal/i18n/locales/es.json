@@ -493,6 +493,10 @@
     "one": "{{.Path}}: clave desconocida: {{.Keys}}",
     "other": "{{.Path}}: claves desconocidas: {{.Keys}}"
   },
+  "config_key_case": {
+    "one": "clave desconocida: {{.Keys}} (las claves van en minúsculas)",
+    "other": "claves desconocidas: {{.Keys}} (las claves van en minúsculas)"
+  },
   "config_language": "{{.Path}}: language es \"{{.Value}}\": usa uno de {{.Languages}}",
   "config_reminder_days": "{{.Path}}: backup_reminder_days es {{.Value}}: usa un número de días, o 0 para no avisar",
   "config_keep_backups": "{{.Path}}: keep_backups es {{.Value}}: usa el número de copias que conservar, o 0 para conservarlas todas",

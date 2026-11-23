@@ -1,0 +1,6 @@
+go test fuzz v1
+string("# my settings\nkeep_backups = 3\n\n# ---- rules ----\n\n# the supermarket\n[[rule]]\ncontains = \"REWE\"\ncategory = \"Expenses:Groceries\"\n\n# bakeries: the spelling varies\n[[rUle]]\nregex = \"b(ä|ae)ckerei\"\ncategory = \"Expenses:Groceries\"\n\n# end of the rules above\n[[rule]]\ncontains = \"Gehalt\"\ncategory = \"Income:Salary\"\n")
+byte('\t')
+byte('\x00')
+string("\xfa\xfa\xfa\xfa\xf0\x12\n\n\n\xfa")
+string("Expenses:Groderies")
