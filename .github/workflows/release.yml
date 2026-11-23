@@ -6,8 +6,12 @@ name: Release
 # release, v0.3.1, is run from the branch release/0.3 and releases its newest commit.
 #
 # It checks the commit, writes the release notes, and then either stops (a dry run:
-# the archives are built and kept as an artifact, nothing is published) or tags the
-# commit and publishes it with GoReleaser. The notes and the line for the roadmap's
+# the archives are built, their checksums signed and checked, and kept as an artifact;
+# nothing is published) or tags the commit and publishes it with GoReleaser. The
+# checksums are signed keyless with cosign (REL-11): the certificate names this
+# workflow and the branch it ran from, which is what a download is checked against.
+# A dry run's signature is recorded in Sigstore's public log like a release's; it
+# names a snapshot version and nothing else. The notes and the line for the roadmap's
 # Releases table are in the run's summary; committing them is a pull request of
 # yours (docs/releases/<version>.md and the table).
 on:
@@ -31,6 +35,7 @@ concurrency:
 permissions:
   contents: write # to push the tag and create the GitHub release
   actions: read # to look up the CI run of the commit
+  id-token: write # for cosign to sign the checksums as this workflow (keyless, through Sigstore)
 
 jobs:
   release:
@@ -140,9 +145,12 @@ jobs:
             cat "$RUNNER_TEMP/row.md"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-      - name: dry run, build the archives
+      - name: dry run, build the archives and sign the checksums
         if: ${{ !inputs.publish }}
-        run: make release-check
+        run: make release-check SIGN=1
+      - name: dry run, the signature and the archives check out as a download would
+        if: ${{ !inputs.publish }}
+        run: make release-verify
       - name: keep the dry run
         if: ${{ !inputs.publish }}
         uses: actions/upload-artifact@v7
@@ -151,6 +159,7 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/checksums.txt
+            dist/checksums.txt.sigstore.json
             ${{ runner.temp }}/notes.md
       - name: tag
         if: ${{ inputs.publish }}
@@ -166,3 +175,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: make release NOTES="$RUNNER_TEMP/notes.md"
+      - name: what was published checks out as a download would
+        if: ${{ inputs.publish }}
+        run: make release-verify
