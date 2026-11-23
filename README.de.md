@@ -1,4 +1,4 @@
-<!-- translated from README.md at 6286c25e25cb -->
+<!-- translated from README.md at 71200e69effe -->
 # thaler
 
 [English](README.md) · [Español](README.es.md) · Deutsch
@@ -15,7 +15,16 @@ Ein Planer für die privaten Finanzen, der lokal arbeitet. Eine Go-Binärdatei, 
 
 ## Installation
 
-Thaler läuft im Terminal unter **macOS und Linux**, Intel und ARM. Es ist eine einzige Datei und braucht weder einen C-Compiler noch andere Bibliotheken. Windows wird nicht unterstützt; die später geplante Webanwendung läuft in jedem Browser. Lade entweder ein Release herunter oder baue es aus dem Quellcode, wofür du **Go 1.27 oder neuer** brauchst. Ein Homebrew-Paket ist geplant (`PLT-7` in der [Roadmap](ROADMAP.md)).
+Thaler läuft im Terminal unter **macOS und Linux**, Intel und ARM. Es ist eine einzige Datei und braucht weder einen C-Compiler noch andere Bibliotheken. Windows wird nicht unterstützt; die später geplante Webanwendung läuft in jedem Browser. Installiere es mit Homebrew, lade ein Release herunter oder baue es aus dem Quellcode, wofür du **Go 1.27 oder neuer** brauchst.
+
+**Homebrew**, unter macOS oder Linux:
+
+```sh
+brew install melancholypurin/tap/thaler
+brew trust melancholypurin/tap            # optional: dann aktualisiert auch ein einfaches `brew upgrade` Thaler
+```
+
+Homebrew lädt das Archiv des Releases für deinen Rechner herunter und prüft es gegen die Prüfsummen des Releases. Thaler liegt in einem eigenen Tap, deshalb installiert Homebrew es, wenn du es wie oben vollständig nennst, und aktualisiert es mit `brew upgrade melancholypurin/tap/thaler` oder, sobald du dem Tap vertraust, mit jedem `brew upgrade`. Das Paket gibt es ab `v0.3.0`.
 
 **Ein Release.** Jedes Release auf der [Release-Seite](https://github.com/melancholypurin/thaler/releases) hat ein Archiv pro System (`thaler_<Version>_darwin_arm64.tar.gz` für einen Mac mit Apple-Chip, `darwin_amd64` für einen Intel-Mac, `linux_amd64` und `linux_arm64`) und `checksums.txt` mit seiner Signatur, `checksums.txt.sigstore.json`. Prüfe, dass die Prüfsummen vom Release-Workflow dieses Repositorys signiert wurden, prüfe das heruntergeladene Archiv gegen sie, entpacke es und lege `thaler` in deinen `PATH`:
 

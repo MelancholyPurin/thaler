@@ -47,6 +47,37 @@ signs:
     args: [sign-blob, "--bundle=${signature}", --yes, "${artifact}"]
     output: true
 
+# The Homebrew package (PLT-7): a cask in the tap MelancholyPurin/homebrew-tap, so
+# `brew install melancholypurin/tap/thaler` installs the archive of the release for
+# the machine, on macOS and Linux, after checking it against the same sha256 as
+# checksums.txt. Publishing commits the cask to the tap with HOMEBREW_TAP_TOKEN (a
+# token that can write to that repository only; GITHUB_TOKEN cannot); `make
+# release-check` writes it to dist/homebrew/ without one. A pre-release (v0.3.0-rc.1)
+# is not put in the tap.
+homebrew_casks:
+  - name: thaler
+    ids: [thaler]
+    repository:
+      owner: MelancholyPurin
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    directory: Casks
+    commit_msg_template: "thaler {{ .Tag }}"
+    homepage: https://github.com/MelancholyPurin/thaler
+    description: Local-first personal finance planner for the terminal
+    license: AGPL-3.0-only
+    skip_upload: auto
+    binaries: [thaler]
+    hooks:
+      post:
+        # Homebrew marks what a cask downloads as quarantined, and macOS refuses to
+        # run a binary that is so marked and not notarized by Apple (the README's
+        # xattr step, done here). Homebrew has checked the sha256 first.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/thaler"]
+          end
+
 # The notes come from cmd/releasenotes (REL-5) and are passed in with
 # --release-notes, so GoReleaser writes no changelog of its own.
 changelog:
