@@ -14,7 +14,16 @@ A local-first personal finance planner. One Go binary, one SQLite file, no serve
 
 ## Install
 
-Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. Either download a release, or build it from source, which needs **Go 1.27 or newer**. A Homebrew package is planned (`PLT-7` in the [roadmap](ROADMAP.md)).
+Thaler runs in a terminal on **macOS and Linux**, Intel and ARM. It is one file and needs no C compiler or other library. Windows is not supported; the web application planned for later will run in any browser. Install it with Homebrew, download a release, or build it from source, which needs **Go 1.27 or newer**.
+
+**Homebrew**, on macOS or Linux:
+
+```sh
+brew install melancholypurin/tap/thaler
+brew trust melancholypurin/tap            # optional: lets a plain `brew upgrade` update Thaler too
+```
+
+Homebrew downloads the archive of the release for your machine and checks it against the release's checksums. Thaler is in its own tap, so Homebrew installs it when you name it in full as above, and upgrades it with `brew upgrade melancholypurin/tap/thaler`, or with every `brew upgrade` once you have trusted the tap. The package is there from `v0.3.0`.
 
 **A release.** Each release on the [releases page](https://github.com/melancholypurin/thaler/releases) has an archive per system (`thaler_<version>_darwin_arm64.tar.gz` for a Mac with Apple silicon, `darwin_amd64` for an Intel Mac, `linux_amd64` and `linux_arm64`) and `checksums.txt` with its signature, `checksums.txt.sigstore.json`. Check that the checksums were signed by this repository's release workflow, check the archive you downloaded against them, unpack it, and put `thaler` on your `PATH`:
 

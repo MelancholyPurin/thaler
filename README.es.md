@@ -1,4 +1,4 @@
-<!-- translated from README.md at 6286c25e25cb -->
+<!-- translated from README.md at 71200e69effe -->
 # thaler
 
 [English](README.md) · Español · [Deutsch](README.de.md)
@@ -15,7 +15,16 @@ Un planificador de finanzas personales que funciona en local. Un único binario 
 
 ## Instalación
 
-Thaler funciona en un terminal en **macOS y Linux**, Intel y ARM. Es un solo archivo y no necesita compilador de C ni otras bibliotecas. Windows no está soportado; la aplicación web prevista para más adelante funcionará en cualquier navegador. Puedes descargar una versión publicada o compilarlo desde el código fuente, para lo que hace falta **Go 1.27 o posterior**. Hay un paquete de Homebrew previsto (`PLT-7` en la [hoja de ruta](ROADMAP.md)).
+Thaler funciona en un terminal en **macOS y Linux**, Intel y ARM. Es un solo archivo y no necesita compilador de C ni otras bibliotecas. Windows no está soportado; la aplicación web prevista para más adelante funcionará en cualquier navegador. Puedes instalarlo con Homebrew, descargar una versión publicada o compilarlo desde el código fuente, para lo que hace falta **Go 1.27 o posterior**.
+
+**Homebrew**, en macOS o Linux:
+
+```sh
+brew install melancholypurin/tap/thaler
+brew trust melancholypurin/tap            # opcional: así un simple `brew upgrade` también actualiza Thaler
+```
+
+Homebrew descarga el archivo comprimido de la versión para tu equipo y lo comprueba con las sumas de verificación de la versión. Thaler está en su propio tap, así que Homebrew lo instala cuando lo nombras completo como arriba, y lo actualiza con `brew upgrade melancholypurin/tap/thaler`, o con cada `brew upgrade` una vez que confías en el tap. El paquete existe desde `v0.3.0`.
 
 **Una versión publicada.** Cada versión de la [página de versiones](https://github.com/melancholypurin/thaler/releases) tiene un archivo comprimido por sistema (`thaler_<versión>_darwin_arm64.tar.gz` para un Mac con chip de Apple, `darwin_amd64` para un Mac con Intel, `linux_amd64` y `linux_arm64`) y `checksums.txt` con su firma, `checksums.txt.sigstore.json`. Comprueba que las sumas de verificación las firmó el flujo de publicación de este repositorio, comprueba con ellas el archivo que descargaste, descomprímelo y pon `thaler` en tu `PATH`:
 
