@@ -66,6 +66,9 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, err
 		}
+		if err := makePrivate(path); err != nil {
+			return nil, fmt.Errorf("%w: %w", coded.New("database_private", map[string]any{"Path": path}), err)
+		}
 		dsn = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 	}
 	db, err := sql.Open("sqlite", dsn)
@@ -83,6 +86,30 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+// makePrivate makes the database at path readable by you alone, before SQLite opens
+// it: it holds your finances, and a folder chosen with --db may be open to others. A
+// new one is created so, and one that others can read loses their permissions, nothing
+// else. SQLite gives its -wal and -shm files the permissions of the database, so they
+// follow (Test_Open_private checks all three). A file that cannot be changed (someone
+// else's) is refused rather than opened readable by others.
+func makePrivate(path string) error {
+	f, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	info, err := f.Stat()
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if perm := info.Mode().Perm(); perm&0o077 != 0 {
+		return os.Chmod(path, perm&^0o077)
+	}
+	return nil
 }
 
 func (r *repository) close() error { return r.db.Close() }
