@@ -561,6 +561,7 @@
   "backup_halfway": "{{.Path}} se guardó con una actualización detenida a medias (migración {{.Version}}), y no se cambió nada",
   "database_path_invalid": "la ruta de la base de datos \"{{.Path}}\" no debe contener '?' ni '#'",
   "opening": "al abrir {{.Path}}",
+  "database_private": "al hacer {{.Path}} legible solo para ti",
   "corrupt_rate": "tipo de cambio dañado \"{{.Rate}}\" para {{.Base}}/{{.Quote}} el {{.Date}}",
   "restore_reopen_failed": "tampoco se puede volver a abrir la base de datos",
   "restore_in_place_unopenable": "la copia está en su sitio pero no se puede abrir",
