@@ -11,10 +11,13 @@ BIN       ?= thaler
 # What `thaler --version` prints: the nearest tag, else the commit, and -dirty when files changed.
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 COVERFILE ?= coverage.out
+# The total test coverage `make check` and CI require, in percent. It was 90.9% when it
+# was set (ENG-7); lower it only on purpose, and say why in the pull request.
+COVERAGE_FLOOR ?= 89
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts lint tidy-check vuln fmt check check-coverage clean
+.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts lint tidy-check vuln fmt check check-coverage hooks clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -88,12 +91,14 @@ vuln: ## Scan the dependencies and the standard library for known vulnerabilitie
 fmt: ## Format all Go files in place
 	gofmt -w .
 
-check: lint tidy-check test-scripts test smoke ## Most of what CI runs: lint, go.mod check, tests, smoke test (also try test-race and vuln)
+check: lint tidy-check test-scripts check-coverage smoke ## Most of what CI runs: lint, go.mod check, tests with the coverage floor, smoke test (also try test-race and vuln)
 
-check-coverage: ## Run the tests and print coverage per package and in total
-	$(GO) test -coverprofile=$(COVERFILE) ./...
-	@echo
-	@$(GO) tool cover -func=$(COVERFILE) | tail -n 1
+check-coverage: ## Run the tests in a random order with coverage per package, and fail when the total is under COVERAGE_FLOOR
+	$(GO) test -shuffle=on -coverprofile=$(COVERFILE) ./...
+	@$(GO) tool cover -func=$(COVERFILE) | .github/scripts/coverage-floor.sh $(COVERAGE_FLOOR)
+
+hooks: ## Run the lint and the go.mod check before every git push (.githooks/pre-push; git push --no-verify skips it)
+	git config core.hooksPath .githooks
 
 clean: ## Remove build output, the release archives and the coverage profile
 	rm -rf $(BIN) $(COVERFILE) dist

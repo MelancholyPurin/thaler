@@ -18,4 +18,4 @@ The maintainer's rules live in [`.claude/rules/`](.claude/rules), one topic per 
 
 ## Commands
 
-`make` lists the targets. The ones you need: `make check` (gofmt, golangci-lint, `go mod tidy` check, script tests, tests in random order: most of what CI runs), `make test-race`, `make vuln`, `make build`.
+`make` lists the targets. The ones you need: `make check` (gofmt, golangci-lint, `go mod tidy` check, script tests, tests in random order with the coverage floor: most of what CI runs), `make test-race`, `make vuln`, `make build`.
