@@ -7,6 +7,10 @@ GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lin
 GOVULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0
 # Pinned like the others; it builds and publishes the release (see .goreleaser.yaml). The first run builds it.
 GORELEASER ?= $(GO) run github.com/goreleaser/goreleaser/v2@v2.19.0
+# Pinned too; signs the release checksums (REL-11). GoReleaser runs it by name, so it is
+# installed into bin/cosign-<version>/ and put first on the PATH (the first run builds it, about a minute).
+COSIGN_VERSION ?= v3.1.4
+COSIGN_DIR := $(abspath bin/cosign-$(COSIGN_VERSION))
 BIN       ?= thaler
 # What `thaler --version` prints: the nearest tag, else the commit, and -dirty when files changed.
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
@@ -17,7 +21,7 @@ COVERAGE_FLOOR ?= 89
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
-.PHONY: help build smoke release-check release i18n-todo i18n-check test test-race fuzz test-scripts translations-check lint tidy-check vuln fmt check check-coverage hooks clean
+.PHONY: help build smoke release-check release release-verify i18n-todo i18n-check test test-race fuzz test-scripts translations-check lint tidy-check vuln fmt check check-coverage hooks clean
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  make %-15s %s\n", $$1, $$2 }'
@@ -39,13 +43,19 @@ smoke: ## Run a built binary through the paths that must not break; FROM=<tag or
 		.github/scripts/smoke.sh "$$dir/thaler"; \
 	fi
 
-release-check: ## Check .goreleaser.yaml and build the release archives into dist/ without publishing anything
+release-check: $(if $(SIGN),$(COSIGN_DIR)/cosign) ## Check .goreleaser.yaml and build the release archives into dist/ without publishing anything; SIGN=1 also signs the checksums (needs GitHub's OIDC token, so only in the Release workflow)
 	$(GORELEASER) check
-	$(GORELEASER) release --snapshot --clean
+	PATH="$(COSIGN_DIR):$$PATH" $(GORELEASER) release --snapshot --clean $(if $(SIGN),,--skip=sign)
 
-release: ## Publish the release of the tag at HEAD with the notes in NOTES (the Release workflow does this; needs GITHUB_TOKEN)
+release: $(COSIGN_DIR)/cosign ## Publish the release of the tag at HEAD with the notes in NOTES, its checksums signed (the Release workflow does this; needs GITHUB_TOKEN and GitHub's OIDC token)
 	@test -n "$(NOTES)" || { echo "usage: make release NOTES=notes.md"; exit 2; }
-	$(GORELEASER) release --clean --release-notes $(NOTES)
+	PATH="$(COSIGN_DIR):$$PATH" $(GORELEASER) release --clean --release-notes $(NOTES)
+
+release-verify: $(COSIGN_DIR)/cosign ## Check that dist/ (or DIR) is signed by the Release workflow and its archives match the checksums, as a download would be checked
+	@COSIGN="$(COSIGN_DIR)/cosign" .github/scripts/verify-release.sh $(or $(DIR),dist)
+
+$(COSIGN_DIR)/cosign:
+	GOBIN="$(COSIGN_DIR)" $(GO) install github.com/sigstore/cosign/v3/cmd/cosign@$(COSIGN_VERSION)
 
 i18n-todo: ## List the messages a language still has to translate, as JSON to fill in, with the English on standard error (make i18n-todo LOCALE=es)
 	@$(GO) run ./cmd/i18ntodo $(LOCALE)
@@ -103,5 +113,5 @@ check-coverage: ## Run the tests in a random order with coverage per package, an
 hooks: ## Run the lint and the go.mod check before every git push (.githooks/pre-push; git push --no-verify skips it)
 	git config core.hooksPath .githooks
 
-clean: ## Remove build output, the release archives and the coverage profile
-	rm -rf $(BIN) $(COVERFILE) dist
+clean: ## Remove build output, the release archives, the coverage profile and the installed cosign
+	rm -rf $(BIN) $(COVERFILE) dist bin

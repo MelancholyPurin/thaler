@@ -4,7 +4,7 @@ Thaler is built one story at a time, from [ROADMAP.md](ROADMAP.md), by one maint
 
 ## Before you start
 
-You need Go (the version in `go.mod`), `make` and git. `tmux` lets `make smoke` drive the interface, and a C compiler lets `make test-race` run; both are optional locally and run in CI. The linter, govulncheck and GoReleaser are pinned in the `Makefile` and run through `go run`, so nothing else is installed; the first run of each builds it, about a minute.
+You need Go (the version in `go.mod`), `make` and git. `tmux` lets `make smoke` drive the interface, and a C compiler lets `make test-race` run; both are optional locally and run in CI. The linter, govulncheck, GoReleaser and cosign are pinned in the `Makefile` and run through `go run` (cosign is built into `bin/`, since GoReleaser runs it by name), so nothing else is installed; the first run of each builds it, about a minute.
 
 ```sh
 make            # lists the targets
@@ -55,7 +55,8 @@ A story is done when ([definition-of-done.md](.claude/rules/definition-of-done.m
 | `make translations-check` | fails when a Spanish or German page is behind its English (see Translating). |
 | `make hooks` | runs `make lint` and `make tidy-check` before every `git push`; `git push --no-verify` skips it once. |
 | `make build` | builds `./thaler` with its version from git. |
-| `make release-check` | checks `.goreleaser.yaml` and builds the macOS and Linux archives into `dist/` without publishing. |
+| `make release-check` | checks `.goreleaser.yaml` and builds the macOS and Linux archives into `dist/` without publishing; it skips the signing, which needs the Release workflow's identity. |
+| `make release-verify` | checks a release in `dist/` (or `DIR`) the way a download is checked: `checksums.txt` signed by the Release workflow, every archive matching it. |
 | `make release-notes` | the release notes of the commits in a range, grouped by epic from the `[ID]` in their titles (see the release train in the roadmap). |
 
 **CI** first looks at which files a change touches (`.github/scripts/changed-paths.sh`, through the reusable workflow `changes.yml`). When only documentation and similar files changed (Markdown, `LICENSE`, `.gitignore`, `docs/`, `dependabot.yml`; not `docs/config*.md`, which a Go test checks) the Go jobs are skipped; any other file, including everything compiled in or configuring the build, runs them: lint with the `go.mod` check, the tests on Linux and macOS with the smoke test, and the race detector, in parallel. The translations check runs for every change. The last job, `Report Result`, passes when the translations are up to date and every Go job passed, or was rightly skipped, and fails in every other case; branch protection requires that one, so jobs can change without touching the settings. `make test-scripts` tests the scripts CI uses. govulncheck runs on every push, on every pull request that is not documentation only, and once a week, since advisories appear without any change here. Dependabot opens a weekly pull request for the Go dependencies and one for the GitHub Actions; the tools pinned in the `Makefile` are bumped by hand.
