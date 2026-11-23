@@ -9,6 +9,7 @@
 #   - main takes changes only through a pull request whose check "Report Result" (the
 #     gate of ci.yml) passed, for admins too; no force push, no deleting it. No review
 #     is required: there is one maintainer, who cannot approve their own pull request.
+#   - Vulnerabilities can be reported privately (the Security tab), as SECURITY.md says.
 #
 # Usage: protect-main.sh [OWNER/REPO]    (default: the repository of this clone)
 # Running it again sets the same settings again.
@@ -33,4 +34,6 @@ gh api --method PUT "repos/$repo/branches/main/protection" --input - >/dev/null 
 }
 JSON
 
-echo "$repo: squash merge only, branches deleted after merge; main needs a pull request with Report Result passed"
+gh api --method PUT "repos/$repo/private-vulnerability-reporting" >/dev/null
+
+echo "$repo: private vulnerability reporting on; squash merge only, branches deleted after merge; main needs a pull request with Report Result passed"

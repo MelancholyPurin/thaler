@@ -39,6 +39,8 @@ A story is done when ([definition-of-done.md](.claude/rules/definition-of-done.m
 
 ## Conventions
 
+**A vulnerability is reported privately**, never in an issue: see [SECURITY.md](SECURITY.md), which also says what Thaler protects. A change that weakens one of those protections says so in its pull request, and changes that page.
+
 **Your data never goes in the repository** ([data-and-privacy.md](.claude/rules/data-and-privacy.md)). No real transactions, accounts or amounts in code, tests, fixtures, docs or commit messages; `.gitignore` excludes databases, CSV files and `config.toml`, and the one CSV fixture is invented. Try things on a throwaway database, never on the one you use.
 
 **Nothing destructive happens by itself.** A restore keeps the database it replaces, an upgrade copies the database first, pruning lists and then asks. A new feature that removes or overwrites follows the same shape: check, keep the old one, ask, then act.
