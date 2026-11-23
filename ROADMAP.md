@@ -176,7 +176,7 @@ Nothing that happens, including a bad migration or a bad import, should be able 
 - [x] `SAF-9` A reminder when the last backup is older than a number of days you set
 - [x] `SAF-10` Show that an encrypted backup is being made instead of freezing
 - [x] `SAF-11` Keep the last N backups and offer to prune the rest
-- [ ] `SAF-12` Make the database file private to you (`0600`, and its `-wal` and `-shm` files), when it is created and when an existing one is opened, wherever `--db` puts it: today SQLite creates it with the permissions of any new file, so only the private data folder keeps others out (found writing `DOC-3`)
+- [x] `SAF-12` Make the database file private to you (`0600`, and its `-wal` and `-shm` files), when it is created and when an existing one is opened, wherever `--db` puts it: today SQLite creates it with the permissions of any new file, so only the private data folder keeps others out (found writing `DOC-3`; the database is created `0600` before SQLite opens it, and one that others can read loses their permissions when it is opened, nothing else; SQLite gives its `-wal` and `-shm` files the database's permissions, which the test checks rather than code repeating it; a file whose permissions cannot be changed is refused with `database_private`)
 
 ### LOC: Localization foundation
 

@@ -94,6 +94,17 @@ snapshot "$new" "$db" >"$work/before"
 th "$new" "$db" cli check >/dev/null || fail "the ledger check fails on a fresh database"
 ok "creates accounts, imports, adds, transfers; the ledger check passes"
 
+# The database holds your finances: readable by you alone, even in a folder open to
+# others, and made so when one that others can read is opened.
+shared="$work/shared"
+mkdir -p "$shared" && chmod 755 "$shared"
+(umask 022 && th "$new" "$shared/thaler.db" cli account add Assets:Bank -c EUR >/dev/null)
+[ "$(ls -l "$shared/thaler.db" | cut -c1-10)" = "-rw-------" ] || fail "a new database is not private: $(ls -l "$shared/thaler.db")"
+chmod 644 "$shared/thaler.db"
+th "$new" "$shared/thaler.db" cli balance >/dev/null
+[ "$(ls -l "$shared/thaler.db" | cut -c1-10)" = "-rw-------" ] || fail "a database others could read was not made private: $(ls -l "$shared/thaler.db")"
+ok "the database is readable by you alone, wherever it is"
+
 # An account is renamed and set aside without losing what was booked on it.
 accts="$work/accounts/thaler.db"
 mkdir -p "$work/accounts"
