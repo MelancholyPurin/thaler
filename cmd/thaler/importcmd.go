@@ -34,9 +34,9 @@ func (a *app) importCmd() *cobra.Command {
 	var dryRun, ignoreErrors bool
 	cmd := &cobra.Command{
 		Use:   "import FILE",
-		Short: "Import a bank export (CSV, OFX or QIF) into an account",
+		Short: "Import a bank export (CSV, OFX, QIF or CAMT.053) into an account",
 		Long: `Import an export from your bank into one account: a CSV file, an OFX
-statement (also .qfx) or a QIF file. --profile auto (the default) finds how to
+statement (also .qfx), a QIF file or a CAMT.053 statement (XML). --profile auto (the default) finds how to
 read it from the file itself; name a profile to choose one.
 
 Every row becomes a transaction between the account and a category chosen by
@@ -139,7 +139,7 @@ Use --dry-run first to see what would happen without writing anything.`,
 		},
 	}
 	cmd.Flags().StringVarP(&account, "account", "a", "", "account to import into, e.g. Assets:Sparkasse (required)")
-	cmd.Flags().StringVar(&profileName, "profile", "auto", "how to read the file: \"auto\" finds it from the file; built-in \"sparkasse\" (CSV), \"ofx\" and \"qif\", or a profile defined in config.toml")
+	cmd.Flags().StringVar(&profileName, "profile", "auto", "how to read the file: \"auto\" finds it from the file; built-in \"sparkasse\" (CSV), \"ofx\", \"qif\" and \"camt\", or a profile defined in config.toml")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be imported without writing anything")
 	cmd.Flags().BoolVar(&ignoreErrors, "ignore-errors", false, "import the readable rows even if some rows are broken")
 	_ = cmd.MarkFlagRequired("account")
