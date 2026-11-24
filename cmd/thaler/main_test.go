@@ -18,6 +18,19 @@ import (
 	"github.com/melancholypurin/thaler/internal/core"
 )
 
+// dbDir is a folder of the test's own for a database, removed when the test ends. Not
+// t.TempDir(): its name comes from the test's, which can hold a # (a repeated
+// subtest, #01), and Open refuses a database path with a # or a ? in it.
+func dbDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "thaler-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 // cheapScrypt makes encrypting fast for the rest of the test: it matters here
 // that a backup can be opened again, not how slow guessing a passphrase is.
 func cheapScrypt(t *testing.T) {
@@ -64,7 +77,7 @@ type cliEnv struct {
 func newCLIEnv(t *testing.T, files map[string]string, setup ...[]string) *cliEnv {
 	t.Helper()
 	cheapScrypt(t)
-	e := &cliEnv{t: t, db: filepath.Join(t.TempDir(), "t.db"), dir: t.TempDir()}
+	e := &cliEnv{t: t, db: filepath.Join(dbDir(t), "t.db"), dir: t.TempDir()}
 	e.cfg = filepath.Join(e.dir, "config.toml")
 	files = mergeFiles(map[string]string{"config.toml": ""}, files) // an empty config unless the test brings one
 	for name, content := range files {
@@ -169,6 +182,27 @@ const (
 	savingsTransferCSV = csvHeader + `"05.10.26";"UMBUCHUNG";"Sparen";"Umbuchung";"500,00";"EUR";"Umsatz gebucht"` + "\n"
 	reweCSV            = csvHeader + `"05.10.26";"KARTENZAHLUNG";"Einkauf";"REWE Markt";"-23,47";"EUR";"Umsatz gebucht"` + "\n"
 )
+
+const (
+	// badRowCSV has a row whose amount cannot be read, and one that can.
+	badRowCSV = csvHeader +
+		`"02.10.26";"KARTENZAHLUNG";"Einkauf";"Shop";"abc";"EUR";"Umsatz gebucht"` + "\n" +
+		`"03.10.26";"KARTENZAHLUNG";"Einkauf";"Shop";"-1,00";"EUR";"Umsatz gebucht"` + "\n"
+	// dollarRowCSV has a row in dollars, which an account in euros does not take, and one in euros.
+	dollarRowCSV = csvHeader +
+		`"02.10.26";"KARTENZAHLUNG";"Einkauf";"Shop";"-2,00";"USD";"Umsatz gebucht"` + "\n" +
+		`"03.10.26";"KARTENZAHLUNG";"Einkauf";"Shop";"-1,00";"EUR";"Umsatz gebucht"` + "\n"
+)
+
+// manyBadRowsCSV is an export of n rows, none of whose amounts can be read: bad1, bad2, ...
+func manyBadRowsCSV(n int) string {
+	var b strings.Builder
+	b.WriteString(csvHeader)
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, "\"02.10.26\";\"X\";\"\";\"Shop\";\"bad%d\";\"EUR\";\"Umsatz gebucht\"\n", i)
+	}
+	return b.String()
+}
 
 var (
 	addRewe = []string{"cli", "add", "-a", "Assets:Bank", "--amount=-23.47", "-t", "Expenses:Groceries", "-p", "REWE", "-d", "2026-10-03"}
@@ -436,6 +470,57 @@ func Test_import(t *testing.T) {
 			args:  importFile("bank.csv", "Assets:Bank"),
 			want: "Imported 0 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
 				"1 row(s) matched a transaction you entered by hand; it now stands for the bank row and nothing was added twice.\n",
+		},
+		{
+			name: "a row that cannot be read stops the import, and says which", setup: [][]string{addBank}, files: map[string]string{"bad.csv": badRowCSV},
+			args: importFile("bad.csv", "Assets:Bank"),
+			want: "1 row(s) could not be used:\n" +
+				"  line 2: invalid amount \"abc\"\n",
+			wantErr: "nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows",
+		},
+		{
+			name: "with --ignore-errors the other rows are imported, and the one is still named", setup: [][]string{addBank}, files: map[string]string{"bad.csv": badRowCSV},
+			args: importFile("bad.csv", "Assets:Bank", "--ignore-errors"),
+			want: "1 row(s) could not be used:\n" +
+				"  line 2: invalid amount \"abc\"\n" +
+				"Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+		{
+			name: "a row in another currency than the account's is refused by the import", setup: [][]string{addBank}, files: map[string]string{"usd.csv": dollarRowCSV},
+			args: importFile("usd.csv", "Assets:Bank"),
+			want: "1 row(s) could not be used:\n" +
+				"  line 2: currency USD does not match Assets:Bank (EUR)\n",
+			wantErr: "nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows",
+		},
+		{
+			name: "and with --ignore-errors the other rows go in", setup: [][]string{addBank}, files: map[string]string{"usd.csv": dollarRowCSV},
+			args: importFile("usd.csv", "Assets:Bank", "--ignore-errors"),
+			want: "1 row(s) could not be used:\n" +
+				"  line 2: currency USD does not match Assets:Bank (EUR)\n" +
+				"Imported 1 new transaction(s) into Assets:Bank; 0 already present (skipped); 0 pending row(s) ignored.\n" +
+				"Created new account Expenses:Uncategorized\n" +
+				"1 row(s) in this file matched no rule and are uncategorized; review them with: thaler cli list -a Expenses:Uncategorized\n",
+		},
+		{
+			name: "more than ten rows that cannot be read: the first ten, and how many more", setup: [][]string{addBank}, files: map[string]string{"many.csv": manyBadRowsCSV(12)},
+			args: importFile("many.csv", "Assets:Bank"),
+			want: "12 row(s) could not be used:\n" +
+				"  line 2: invalid amount \"bad1\"\n  line 3: invalid amount \"bad2\"\n  line 4: invalid amount \"bad3\"\n  line 5: invalid amount \"bad4\"\n" +
+				"  line 6: invalid amount \"bad5\"\n  line 7: invalid amount \"bad6\"\n  line 8: invalid amount \"bad7\"\n  line 9: invalid amount \"bad8\"\n" +
+				"  line 10: invalid amount \"bad9\"\n  line 11: invalid amount \"bad10\"\n" +
+				"  ... and 2 more\n",
+			wantErr: "nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows",
+		},
+		{
+			name: "exactly ten are all listed", setup: [][]string{addBank}, files: map[string]string{"many.csv": manyBadRowsCSV(10)},
+			args: importFile("many.csv", "Assets:Bank"),
+			want: "10 row(s) could not be used:\n" +
+				"  line 2: invalid amount \"bad1\"\n  line 3: invalid amount \"bad2\"\n  line 4: invalid amount \"bad3\"\n  line 5: invalid amount \"bad4\"\n" +
+				"  line 6: invalid amount \"bad5\"\n  line 7: invalid amount \"bad6\"\n  line 8: invalid amount \"bad7\"\n  line 9: invalid amount \"bad8\"\n" +
+				"  line 10: invalid amount \"bad9\"\n  line 11: invalid amount \"bad10\"\n",
+			wantErr: "nothing imported; fix the file or the profile, or use --ignore-errors to import the remaining rows",
 		},
 		{name: "an account that does not exist", files: zeroFiles, args: importFile("export.csv", "Assets:Nope"), wantErr: "account does not exist: Assets:Nope"},
 		{name: "a file that does not exist", setup: [][]string{addBank}, args: importFile("nope.csv", "Assets:Bank"), wantErr: "open {dir}/nope.csv: no such file or directory"},

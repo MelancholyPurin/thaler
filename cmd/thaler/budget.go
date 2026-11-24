@@ -39,7 +39,7 @@ A target belongs to one month and one category, in the base currency:
 				return err
 			}
 			month := a.monthFlag(month)
-			b, err := svc.MonthBudget(ctx, core.MonthBudgetRequest{Month: month, RateDate: todayISO()})
+			b, err := svc.MonthBudget(ctx, core.MonthBudgetRequest{Month: month, RateDate: a.today()})
 			if err != nil {
 				return err
 			}

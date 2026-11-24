@@ -332,7 +332,7 @@ func Test_swapDatabase(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			dir := t.TempDir()
+			dir := dbDir(t)
 			db := filepath.Join(dir, "t.db")
 			a := &app{dbFlag: db, notice: io.Discard}
 			t.Cleanup(a.close)
