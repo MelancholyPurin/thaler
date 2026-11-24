@@ -4,10 +4,10 @@
 
 Migrations are versioned SQL files applied by `golang-migrate`.
 
-- Append only: write only `<timestamp>_*.up.sql`files in the `dbmigrations/`dir. Never create `.down.sql`.
-- Instant DDL: `ALTER TABLE ... ADD COLUMN`msut append to the end - NEVER use `AFTER`/`FIRST` because those force a table rebuild and write lock on large tables.
-- Register timestamp: EEvery new migration's numeric timestamp must be added o the `migrationScriptTimestamps` slice in the Go `*_test.go`. `golang-migrate` silently ignores unregistered scripts. On a merge conflict in that slice, rename your SQL file toa newer timestamp to update the slice.
-- **(planned: MySQL and protobuf; today SQLite, with the column types the existing migrations use)** Column types: UUIDs = VARCHAR(36); user subjects = VARCHAR (255); protobuf enums = integer columns (`INT`/`TINYINT UNSIGNED`, matching proto numbers), no native SQL `ENUM`; nested/structured data = `JSON` columns serialized with `protojson`.
+- Append only: write only `<timestamp>_*.up.sql` files in the `dbmigrations/` dir. Never create `.down.sql`.
+- Instant DDL: `ALTER TABLE ... ADD COLUMN` must append to the end; NEVER use `AFTER`/`FIRST` because those force a table rebuild and write lock on large tables.
+- Register timestamp: Every new migration's numeric timestamp must be added to the `migrationScriptTimestamps` slice in the Go `*_test.go`. `golang-migrate` silently ignores unregistered scripts. On a merge conflict in that slice, rename your SQL file to a newer timestamp to update the slice.
+- **(planned: MySQL and protobuf; today SQLite, with the column types the existing migrations use)** Column types: UUIDs = VARCHAR(36); user subjects = VARCHAR(255); protobuf enums = integer columns (`INT`/`TINYINT UNSIGNED`, matching proto numbers), no native SQL `ENUM`; nested/structured data = `JSON` columns serialized with `protojson`.
 
 ## In this repo
 
