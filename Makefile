@@ -4,9 +4,9 @@ GO        ?= go
 # Pinned, and run through `go run` so nothing has to be installed (the first run builds it, about a minute).
 GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 # Also pinned and run through `go run`; needs the network, since it reads the vulnerability database.
-GOVULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0
+GOVULNCHECK ?= $(GO) run golang.org/x/vuln/cmd/govulncheck@v1.10.0
 # Pinned like the others; it builds and publishes the release (see .goreleaser.yaml). The first run builds it.
-GORELEASER ?= $(GO) run github.com/goreleaser/goreleaser/v2@v2.19.0
+GORELEASER ?= $(GO) run github.com/goreleaser/goreleaser/v2@v2.20.1
 # Pinned too; signs the release checksums (REL-11). GoReleaser runs it by name, so it is
 # installed into bin/cosign-<version>/ and put first on the PATH (the first run builds it, about a minute).
 COSIGN_VERSION ?= v3.1.4

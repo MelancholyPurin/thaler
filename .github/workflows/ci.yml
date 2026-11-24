@@ -28,7 +28,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # The same Go as release.yml builds with: the newest patch of the minor
+          # version in go.mod. Change the three workflows together when it moves on.
+          go-version: "1.27"
       - name: lint
         run: make lint
       - name: go.mod is tidy
@@ -65,7 +67,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # The same Go as release.yml builds with: the newest patch of the minor
+          # version in go.mod. Change the three workflows together when it moves on.
+          go-version: "1.27"
       - name: test, with the coverage floor
         run: make check-coverage
       - name: smoke test
@@ -81,7 +85,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          # The same Go as release.yml builds with: the newest patch of the minor
+          # version in go.mod. Change the three workflows together when it moves on.
+          go-version: "1.27"
       - name: test with the race detector
         run: make test-race
 

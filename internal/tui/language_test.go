@@ -491,7 +491,7 @@ func Test_View_translated(t *testing.T) {
 		{name: "German, the transfer", tag: language.German, keys: "x", shows: []string{"Überweisungen zwischen deinen Konten", "Erhalten", "Von", "Nach"}, hides: []string{"Transfer between"}},
 		{name: "Spanish, the help", tag: language.Spanish, keys: "?", shows: []string{"Teclas", "pantallas: Libro, Presupuesto"}, hides: []string{"screens:"}},
 		{name: "Spanish, the help, further down", tag: language.Spanish, keys: "? pgdown", shows: []string{"c, luego tab", "en el panel de Cuentas: renombrar"}, hides: []string{"then tab", "undo the last change"}},
-		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "Ansichten: Transaktionen, Budget"}, hides: []string{"screens:"}},
+		{name: "German, the help", tag: language.German, keys: "?", shows: []string{"Tasten", "Ansichten: Geldbuch, Budget"}, hides: []string{"screens:"}},
 		{name: "German, the help, further down", tag: language.German, keys: "? pgdown", shows: []string{"c, dann tab", "im Kontenfenster: Konto umbenennen"}, hides: []string{"then tab", "undo the last change"}},
 		{name: "Spanish, the language popup", tag: language.Spanish, keys: "ctrl+l", shows: []string{"Idioma", "✓ Español", "Se guarda en config.toml"}, hides: []string{"Saved in"}},
 		{name: "German, the language popup", tag: language.German, keys: "ctrl+l", shows: []string{"Sprache", "✓ Deutsch", "In config.toml gespeichert"}, hides: []string{"Saved in"}},

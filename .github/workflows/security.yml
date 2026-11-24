@@ -25,9 +25,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          # The newest toolchain, not the minimum in go.mod: a vulnerability in the
-          # standard library is only fixed in a newer patch release, and that is what
-          # people building Thaler get.
-          go-version: stable
+          # The Go the release is built with (release.yml): the newest patch of the
+          # minor version in go.mod, not the 1.27.0 it names, since a vulnerability
+          # in the standard library is fixed in a patch release. Scanning with the
+          # newest minor version instead would miss what the release ships with.
+          go-version: "1.27"
       - name: govulncheck
         run: make vuln

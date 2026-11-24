@@ -350,20 +350,22 @@ A release leaves on a fixed schedule and carries whatever is complete. Work that
 
 | Release | Date | Stories |
 | --- | --- | --- |
+| `v0.1.0` | 2026-11-01 | `SAF-6`, `SAF-7`, `SAF-8`, `SAF-9`, `SAF-11`, `SAF-10`, `PLT-1`, `PLT-6`, `REL-1`, `REL-4`, `REL-5`, `REL-6`, `REL-9`, `ENG-12`, and everything merged before commit titles carried story IDs (see `docs/releases/v0.1.0.md`) |
+| `v0.2.0` | 2026-11-08 | `LOC-1`, `LOC-3`, `LOC-8`, `LOC-5`, `LOC-6`, `LOC-7`, `LOC-10`, `TLC-1`, `TLC-2`, `TLC-5`, `TLC-4`, `TLC-7` |
 
 ### ENG: Build, test and delivery
 
 - [x] `ENG-1` One command for build, test, lint, coverage and checks
 - [x] `ENG-2` Golangci-lint, pinned, same locally and in CI
 - [x] `ENG-3` Table-driven tests with given-when-then and `cmp.Diff` everywhere
-- [x] `ENG-4` Lint, test and race detector as parallel jobs, a `go.mod` check, shuffled tests, and a single `result` check
+- [x] `ENG-4` Lint, test and race detector as parallel jobs, a `go.mod` check, shuffled tests, and a single `result` check (now named `Report Result`)
 - [x] `ENG-5` Govulncheck on every change and weekly
 - [x] `ENG-6` Weekly dependency updates
 - [x] `ENG-7` Guardrails around a push: run the lint locally before it, fail the check when coverage drops under a floor, and branch protection requiring `result`, squash merge only, branches deleted after merge (`make hooks` turns on `.githooks/pre-push`, which runs `make lint` and `make tidy-check` before a push that is not only deleting branches; `make check-coverage` fails under `COVERAGE_FLOOR`, 89%, set when the total was 90.9%, and `make check` and the `test` jobs of CI run the tests through it; `.github/scripts/protect-main.sh`, run by the maintainer, makes squash the only merge, titled with the pull request's title, deletes branches after the merge, and protects `main`: a pull request with `Report Result` passed, for admins too, a linear history, no force push or deletion; the floor and the hook have script tests)
 - [x] `ENG-8` Fuzz the amount, CSV and config parsers (`Fuzz_ParseAmount`: an amount accepted is the number written, under the separator given or one of the two when it is guessed, checked with `big.Rat` rather than the parser's own code, and reads back the same from its plain form; `Fuzz_Parse`: every profile, the CSV ones, OFX and QIF, on any bytes: no panic, the same result twice, each row on a line of the file with a day and a currency, each problem on a line, and `Detect` naming only profiles there are; `Fuzz_Load`, and `Fuzz_rules`, which deletes, moves and rewrites rules in any config file: a refused change leaves the file as it was, a change made gives exactly the rules meant and keeps every other setting, and `Revert` puts the file back byte for byte; `make fuzz`, `FUZZTIME` each; the seeds and the inputs that once failed run with `go test`; what it found: `config.toml` took a key that differs from one of Thaler's only by case (`[[rulE]]`, `Language`) as that key, so a file with both `[[rule]]` and `[[rulE]]` was read one way or the other at random, and moving a rule in such a file could panic (`MoveRule` read the rules twice and got two different lists); such a key is now refused as unknown, by `Load` and by the editing of rules, which leaves the file as it is. The amount and import parsers held, and two inputs kept are mistakes the tests' own checks made, kept as seeds)
 - ~~`ENG-9` Fail the check when coverage drops under a floor~~ (folded into `ENG-7`)
 - [x] `ENG-10` Split `(*Local).Import` and flatten the deeply nested code the linter flagged (the import code moved from `service.go` to `import.go`, and `Import` is now a few named steps: the account it goes into, the rows in its currency, the categories chosen, a transaction for each row, then either the preview of a dry run or an `importWriter` that stores, adopts and pairs each planned row, with unit tests for the steps that need no database; the three deepest nested blocks of the interface (filling the edit form, filling and saving the schedule form) and a test helper are flat now; `nestif` is part of the lint, at 7, so nothing as deep comes back; no behaviour changed)
-- ~~`ENG-11` Branch protection requiring `result`, squash merge only, branches deleted after merge~~ (folded into `ENG-7`)
+- ~~`ENG-11` Branch protection requiring `result` (now `Report Result`), squash merge only, branches deleted after merge~~ (folded into `ENG-7`)
 - [x] `ENG-12` Run the database migrations with `golang-migrate`: one version number, a test that every migration file is registered in order, the copy before an upgrade and the refusal of a newer database kept, and databases written by the current runner converted
 
 ### DOC: Documentation
@@ -487,7 +489,7 @@ Vitest for the frontend, written in the same table style as the Go tests: a list
 - [ ] `WTE-6` Render each screen in English, Spanish and German; fail on a missing key or text that breaks the layout
 - [ ] `WTE-7` Automated accessibility checks in the component tests
 - [ ] `WTE-8` A coverage report and a floor
-- [ ] `WTE-9` The Vitest run is a CI job and part of the `result` gate
+- [ ] `WTE-9` The Vitest run is a CI job and part of the `Report Result` gate
 - [ ] `WTE-10` Browser tests of the main flows
 - [ ] `WTE-11` Tests for the service worker and the offline queue (for `M-PWA`)
 
