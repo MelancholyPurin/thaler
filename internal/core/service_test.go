@@ -1055,7 +1055,7 @@ func Test_SetCategories(t *testing.T) {
 			changes:   []CategoryChange{{TransactionID: 999, Category: "Expenses:Fun"}},
 			wantCats:  []string{ledger.UncategorizedExpense, ledger.UncategorizedExpense},
 			wantAccts: []string{"Assets:Bank", "Assets:Savings", ledger.UncategorizedExpense},
-			wantErr:   "transaction #999: has 0 category postings; only transactions with exactly one can be recategorized",
+			wantErr:   "transaction #999 does not exist",
 		},
 		{
 			name: "a transfer between two accounts has no category leg",

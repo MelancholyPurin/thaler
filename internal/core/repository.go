@@ -69,7 +69,7 @@ func openRepository(ctx context.Context, path string) (*repository, error) {
 		if err := makePrivate(path); err != nil {
 			return nil, fmt.Errorf("%w: %w", coded.New("database_private", map[string]any{"Path": path}), err)
 		}
-		dsn = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+		dsn = "file:" + uriPath.Replace(path) + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

@@ -365,6 +365,13 @@ func (s *Local) SetCategories(ctx context.Context, changes []CategoryChange) ([]
 	var created []string
 	err := s.repo.inTx(ctx, func(q queries) error {
 		for _, c := range changes {
+			found, err := q.transactionExists(ctx, c.TransactionID)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return coded.New("transaction_not_found", map[string]any{"ID": c.TransactionID})
+			}
 			if err := setCategory(ctx, q, c, &created); err != nil {
 				return fmt.Errorf("%w: %w", coded.New("transaction_n", map[string]any{"ID": c.TransactionID}), err)
 			}

@@ -98,6 +98,54 @@ func Test_Open(t *testing.T) {
 	}
 }
 
+// A % in a database path is part of the name, not an escape of SQLite's URI: a%41b is
+// not aAb.
+func Test_Open_percentInPath(t *testing.T) {
+	tcs := []struct {
+		name  string
+		path  string // in the test's folder
+		decoy string // a folder that exists beside it, named as the escape reads
+	}{
+		{name: "an escape in a folder name", path: "a%41b/thaler.db", decoy: "aAb"},
+		{name: "a percent sign in the file name", path: "100%.db", decoy: "unused"},
+		{name: "a percent sign that is no escape", path: "a%zz/thaler.db", decoy: "unused"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			dir := dbDir(t)
+			if err := os.Mkdir(filepath.Join(dir, tc.decoy), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, tc.path)
+
+			// when
+			st, err := Open(t.Context(), path)
+
+			// then
+			if err != nil {
+				t.Fatalf("Open(%q): %v", tc.path, err)
+			}
+			if _, err := st.AddAccount(t.Context(), "Assets:Bank", "EUR"); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("the database is not at the path it was given: %v", err)
+			}
+			decoy, err := os.ReadDir(filepath.Join(dir, tc.decoy))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(0, len(decoy)); diff != "" {
+				t.Errorf("something was written in %s (-want +got):\n%s", tc.decoy, diff)
+			}
+		})
+	}
+}
+
 // errWithDir shows a temporary folder in an error as {dir}.
 func errWithDir(err error, dir string) error {
 	if err == nil {
