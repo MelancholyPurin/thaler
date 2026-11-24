@@ -161,6 +161,92 @@ func Test_Money_Add(t *testing.T) {
 	}
 }
 
+func Test_Money_Neg(t *testing.T) {
+	tcs := []struct {
+		name string
+		m    Money
+		want Money
+	}{
+		{name: "a debit becomes a credit", m: Money{2347, "EUR"}, want: Money{-2347, "EUR"}},
+		{name: "and back", m: Money{-2347, "EUR"}, want: Money{2347, "EUR"}},
+		{name: "zero stays zero", m: Money{0, "JPY"}, want: Money{0, "JPY"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.m
+
+			// when
+			got := tc.m.Neg()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_Money_IsZero(t *testing.T) {
+	tcs := []struct {
+		name string
+		m    Money
+		want bool
+	}{
+		{name: "zero", m: Money{0, "EUR"}, want: true},
+		{name: "zero without a currency", m: Money{}, want: true},
+		{name: "one cent", m: Money{1, "EUR"}},
+		{name: "minus one cent", m: Money{-1, "EUR"}},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.m
+
+			// when
+			got := tc.m.IsZero()
+
+			// then
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_ParseCurrency(t *testing.T) {
+	tcs := []struct {
+		name    string
+		in      string
+		want    Currency
+		wantErr string
+	}{
+		{name: "a code", in: "EUR", want: "EUR"},
+		{name: "lower case is made upper", in: "usd", want: "USD"},
+		{name: "space around it", in: " mxn\n", want: "MXN"},
+		{name: "two letters", in: "EU", wantErr: "invalid_currency(Text=EU)"},
+		{name: "four letters", in: "EURO", wantErr: "invalid_currency(Text=EURO)"},
+		{name: "a digit", in: "EU1", wantErr: "invalid_currency(Text=EU1)"},
+		{name: "a letter that is not A to Z", in: "EÜR", wantErr: "invalid_currency(Text=EÜR)"},
+		{name: "the symbol", in: "€", wantErr: "invalid_currency(Text=€)"},
+		{name: "nothing", in: "", wantErr: "invalid_currency(Text=)"},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given tc.in
+
+			// when
+			got, err := ParseCurrency(tc.in)
+
+			// then
+			if diff := cmp.Diff(tc.wantErr, errText(err)); diff != "" {
+				t.Fatalf("error mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func Test_Convert(t *testing.T) {
 	tcs := []struct {
 		name string
