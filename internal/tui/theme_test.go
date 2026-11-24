@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,7 +163,7 @@ func Test_Update_theme(t *testing.T) {
 				}
 			}
 			st := openLedger(t)
-			m, err := newWithClock(context.Background(), st, Options{LoadConfig: testConfig, ConfigPath: path, ConfigTemplate: "# sample\n", Theme: tc.start}, fixedNow)
+			m, err := newWithClock(t.Context(), st, Options{LoadConfig: testConfig, ConfigPath: path, ConfigTemplate: "# sample\n", Theme: tc.start}, fixedNow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -197,19 +196,36 @@ func Test_Update_theme(t *testing.T) {
 
 // One model's theme does not carry over to the next: each starts from its own setting.
 func Test_Update_theme_perModel(t *testing.T) {
-	t.Cleanup(func() { useTheme("auto") })
-	st := openLedger(t)
-	themes := []string{"light", "", "dark", "auto"}
-	want := []string{"light", "auto", "dark", "auto"}
-	var got []string
-	for _, theme := range themes {
-		if _, err := newWithClock(context.Background(), st, Options{LoadConfig: testConfig, Theme: theme}, fixedNow); err != nil {
-			t.Fatal(err)
-		}
-		got = append(got, themeInUse)
+	tcs := []struct {
+		name   string
+		before string // the theme of the model made first
+		theme  string // the theme of the next one
+		want   string // the theme in use once the next one is made
+	}{
+		{name: "light", before: "auto", theme: "light", want: "light"},
+		{name: "unset after light is auto", before: "light", theme: "", want: "auto"},
+		{name: "dark after light", before: "light", theme: "dark", want: "dark"},
+		{name: "auto after dark", before: "dark", theme: "auto", want: "auto"},
 	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("theme in use mismatch (-want +got):\n%s", diff)
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			t.Cleanup(func() { useTheme("auto") })
+			st := openLedger(t)
+			if _, err := newWithClock(t.Context(), st, Options{LoadConfig: testConfig, Theme: tc.before}, fixedNow); err != nil {
+				t.Fatal(err)
+			}
+
+			// when
+			if _, err := newWithClock(t.Context(), st, Options{LoadConfig: testConfig, Theme: tc.theme}, fixedNow); err != nil {
+				t.Fatal(err)
+			}
+
+			// then
+			if diff := cmp.Diff(tc.want, themeInUse); diff != "" {
+				t.Errorf("theme in use mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
