@@ -35,14 +35,6 @@ Without a subcommand it lists the schedules.`,
 	return cmd
 }
 
-// today is the date "due" is counted up to: the clock of the app.
-func (a *app) today() string {
-	if a.now != nil {
-		return a.now().Format(ledger.DateLayout)
-	}
-	return todayISO()
-}
-
 // scheduleUnit reads "month" or "months", and so on.
 func scheduleUnit(s string) (core.ScheduleUnit, error) {
 	switch strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), "s") {

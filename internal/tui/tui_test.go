@@ -42,6 +42,7 @@ var migratedLedger = sync.OnceValues(func() ([]byte, error) {
 	}
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "template.db")
+	// Not a test's context: the template outlives the test that happens to ask first.
 	st, err := core.Open(context.Background(), path)
 	if err != nil {
 		return nil, err

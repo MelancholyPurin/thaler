@@ -95,7 +95,7 @@ func Test_RestoreBackup(t *testing.T) {
 	// A database as Open leaves it: in write-ahead-log mode, which is also what a
 	// database that a restore set aside looks like.
 	plain := func(t *testing.T, _, _ string) string {
-		p := filepath.Join(t.TempDir(), "backup.db")
+		p := filepath.Join(dbDir(t), "backup.db")
 		ledgerWith(t, p, "Assets:Old")
 		return p
 	}
@@ -117,7 +117,7 @@ func Test_RestoreBackup(t *testing.T) {
 	}
 	file := func(content []byte) func(*testing.T, string, string) string {
 		return func(t *testing.T, _, _ string) string {
-			p := filepath.Join(t.TempDir(), "backup.db")
+			p := filepath.Join(dbDir(t), "backup.db")
 			if err := os.WriteFile(p, content, 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -178,7 +178,7 @@ func Test_RestoreBackup(t *testing.T) {
 		{
 			name: "a SQLite database that is not Thaler's", hasLive: true,
 			source: func(t *testing.T, _, _ string) string {
-				p := filepath.Join(t.TempDir(), "other.db")
+				p := filepath.Join(dbDir(t), "other.db")
 				db, err := sql.Open("sqlite", "file:"+p)
 				if err != nil {
 					t.Fatal(err)
@@ -242,7 +242,7 @@ func Test_RestoreBackup(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			dir := t.TempDir()
+			dir := dbDir(t)
 			dbPath := filepath.Join(dir, "thaler.db")
 			switch {
 			case tc.liveBroken:
@@ -299,10 +299,10 @@ func Test_RestoreBackup_undo(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			dir := t.TempDir()
+			dir := dbDir(t)
 			dbPath := filepath.Join(dir, "thaler.db")
 			ledgerWith(t, dbPath, tc.live)
-			backup := filepath.Join(t.TempDir(), "backup.db")
+			backup := filepath.Join(dbDir(t), "backup.db")
 			ledgerWith(t, backup, tc.old)
 			first, err := RestoreBackup(t.Context(), backup, dbPath, "")
 			if err != nil {
@@ -347,7 +347,7 @@ func Test_RestoreBackup_opens(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			dir := t.TempDir()
+			dir := dbDir(t)
 			dbPath := filepath.Join(dir, "thaler.db")
 			old := oldDatabase(t, tc.setup...)
 			if _, err := RestoreBackup(t.Context(), old, dbPath, ""); err != nil {

@@ -56,7 +56,7 @@ happen when reports are produced. Any three-letter code works (EUR, USD, MXN, ..
 			fmt.Fprintln(out, "\nOther currencies in use:")
 			for _, n := range names {
 				c := ledger.Currency(n)
-				if r, ok := book.Lookup(c, base, todayISO()); ok {
+				if r, ok := book.Lookup(c, base, a.today()); ok {
 					fmt.Fprintf(out, "  1 %s = %s %s\n", c, r.FloatString(4), base)
 				} else {
 					fmt.Fprintf(out, "  %s: no exchange rate yet; add one with: thaler cli rate set %s %s <rate>\n", c, c, base)

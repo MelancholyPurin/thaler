@@ -9,13 +9,11 @@ import (
 	"github.com/melancholypurin/thaler/internal/ledger"
 )
 
-func todayISO() string { return time.Now().Format(ledger.DateLayout) }
-
 // parseDateFlag parses a --date value; an empty value means today. ISO and
 // DD.MM.YYYY are read; a slash date is ambiguous and refused.
 func (a *app) parseDateFlag(s string) (time.Time, error) {
 	if s == "" {
-		s = todayISO()
+		s = a.today()
 	}
 	return a.cli().ParseDate(s)
 }
@@ -34,6 +32,14 @@ func truncate(s string, limit int) string {
 		return s
 	}
 	return string(r[:limit-1]) + "…"
+}
+
+// today is the current day, as YYYY-MM-DD, by the clock of the app.
+func (a *app) today() string {
+	if a.now != nil {
+		return a.now().Format(ledger.DateLayout)
+	}
+	return time.Now().Format(ledger.DateLayout)
 }
 
 // thisMonth is the current month, as YYYY-MM.

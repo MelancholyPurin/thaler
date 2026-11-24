@@ -26,12 +26,15 @@ const exportCSV = exportHeader +
 	"04.10.26;Gehalt;Arbeitgeber;1.000,00;EUR;Umsatz gebucht\n" +
 	"05.10.26;;Pending Shop;-9,99;EUR;Umsatz vorgemerkt\n"
 
-// writeExport puts a CSV file in a fresh folder, points the model's downloads
-// folder at it, and returns the file's path.
+// writeExport puts a CSV file in a fresh folder, modified at fixedNow, points the
+// model's downloads folder at it, and returns the file's path.
 func writeExport(t *testing.T, m *Model, name, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, name), fixedNow(), fixedNow()); err != nil {
 		t.Fatal(err)
 	}
 	m.downloads = dir
@@ -391,7 +394,7 @@ func Test_Update_import_profile(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		past := time.Now().Add(-48 * time.Hour)
+		past := fixedNow().Add(-48 * time.Hour)
 		if err := os.Chtimes(path, past, past); err != nil {
 			t.Fatal(err)
 		}

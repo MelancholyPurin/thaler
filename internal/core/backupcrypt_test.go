@@ -12,6 +12,19 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// dbDir is a folder of the test's own for a database, removed when the test ends. Not
+// t.TempDir(): its name comes from the test's, which can hold a # (a repeated
+// subtest, #01), and Open refuses a database path with a # or a ? in it.
+func dbDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "thaler-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 // cheapScrypt makes encrypting fast for the rest of the test: it matters here
 // that a backup can be opened again, not how slow guessing a passphrase is.
 func cheapScrypt(t *testing.T) {
@@ -59,7 +72,7 @@ func Test_BackupEncrypted(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
 			cheapScrypt(t)
-			dir := t.TempDir()
+			dir := dbDir(t)
 			st, err := Open(t.Context(), filepath.Join(dir, "thaler.db"))
 			if err != nil {
 				t.Fatal(err)
