@@ -20,7 +20,7 @@ func Test_category_set(t *testing.T) {
 		{
 			name: "a transaction that does not exist", setup: [][]string{addBank},
 			args:    []string{"cli", "category", "set", "99", "Expenses:Food"},
-			wantErr: "transaction #99: has 0 category postings; only transactions with exactly one can be recategorized",
+			wantErr: "transaction #99 does not exist",
 		},
 	}
 	for _, tc := range tcs {
