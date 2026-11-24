@@ -170,7 +170,7 @@ func Test_readMigrationState(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "s.db"))
+			db, err := sql.Open("sqlite", "file:"+filepath.Join(dbDir(t), "s.db"))
 			if err != nil {
 				t.Fatal(err)
 			}

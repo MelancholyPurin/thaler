@@ -51,7 +51,7 @@ func Test_Open_private(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			path := filepath.Join(t.TempDir(), "thaler.db")
+			path := filepath.Join(dbDir(t), "thaler.db")
 			if _, ok := tc.before[""]; ok {
 				st, err := Open(t.Context(), path)
 				if err != nil {

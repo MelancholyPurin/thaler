@@ -126,7 +126,7 @@ func Test_Backup(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			dir := t.TempDir()
+			dir := dbDir(t)
 			st, err := Open(t.Context(), filepath.Join(dir, "thaler.db"))
 			if err != nil {
 				t.Fatal(err)
@@ -216,7 +216,7 @@ func Test_verifySnapshot(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			// given
-			path := filepath.Join(t.TempDir(), "snapshot.db")
+			path := filepath.Join(dbDir(t), "snapshot.db")
 			tc.prepare(t, path)
 
 			// when
@@ -246,7 +246,7 @@ func readFile(t *testing.T, path string) string {
 // of Thaler left it, and returns its path.
 func oldDatabase(t *testing.T, statements ...string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "old.db")
+	path := filepath.Join(dbDir(t), "old.db")
 	old, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
@@ -724,7 +724,7 @@ func Test_Open_backsUpBeforeMigrating(t *testing.T) {
 			if tc.statements != nil {
 				path = oldDatabase(t, tc.statements...)
 			} else {
-				path = filepath.Join(t.TempDir(), "thaler.db")
+				path = filepath.Join(dbDir(t), "thaler.db")
 			}
 			dir := filepath.Dir(path)
 			backups := filepath.Join(dir, "backups")
