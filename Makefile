@@ -47,9 +47,9 @@ release-check: $(if $(SIGN),$(COSIGN_DIR)/cosign) ## Check .goreleaser.yaml and 
 	$(GORELEASER) check
 	PATH="$(COSIGN_DIR):$$PATH" $(GORELEASER) release --snapshot --clean $(if $(SIGN),,--skip=sign)
 
-release: $(COSIGN_DIR)/cosign ## Publish the release of the tag at HEAD with the notes in NOTES, its checksums signed (the Release workflow does this; needs GITHUB_TOKEN, HOMEBREW_TAP_TOKEN and GitHub's OIDC token)
+release: $(COSIGN_DIR)/cosign ## Publish the release of the tag at HEAD with the notes in NOTES, its checksums signed (the Release workflow does this; needs GITHUB_TOKEN and GitHub's OIDC token; without HOMEBREW_TAP_TOKEN the Homebrew cask is left out)
 	@test -n "$(NOTES)" || { echo "usage: make release NOTES=notes.md"; exit 2; }
-	PATH="$(COSIGN_DIR):$$PATH" $(GORELEASER) release --clean --release-notes $(NOTES)
+	PATH="$(COSIGN_DIR):$$PATH" $(GORELEASER) release --clean --release-notes $(NOTES) $(if $(HOMEBREW_TAP_TOKEN),,--skip=homebrew)
 
 release-verify: $(COSIGN_DIR)/cosign ## Check that dist/ (or DIR) is signed by the Release workflow and its archives match the checksums, as a download would be checked
 	@COSIGN="$(COSIGN_DIR)/cosign" .github/scripts/verify-release.sh $(or $(DIR),dist)

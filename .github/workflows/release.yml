@@ -12,8 +12,8 @@ name: Release
 # workflow and the branch it ran from, which is what a download is checked against.
 # Publishing also commits the Homebrew cask to MelancholyPurin/homebrew-tap (PLT-7),
 # with the secret HOMEBREW_TAP_TOKEN: a fine-grained token that can write the contents
-# of that repository and nothing else. A run that would publish without it stops
-# before the tag.
+# of that repository and nothing else. Without it the release is published without
+# the cask, and the run's summary says so.
 # A dry run's signature is recorded in Sigstore's public log like a release's; it
 # names a snapshot version and nothing else. The notes and the line for the roadmap's
 # Releases table are in the run's summary; committing them is a pull request of
@@ -167,14 +167,15 @@ jobs:
             dist/checksums.txt.sigstore.json
             dist/homebrew/Casks/thaler.rb
             ${{ runner.temp }}/notes.md
-      - name: the Homebrew tap can be written
+      - name: whether the Homebrew cask is published
         if: ${{ inputs.publish }}
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
+          # Optional for now: make release leaves the cask out without the token.
           if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
-            echo "::error::The secret HOMEBREW_TAP_TOKEN is not set, so the Homebrew cask could not be published. See the release workflow's header."
-            exit 1
+            echo "::warning::The secret HOMEBREW_TAP_TOKEN is not set, so this release is published without the Homebrew cask. See the release workflow's header."
+            echo "Published without the Homebrew cask: the secret HOMEBREW_TAP_TOKEN is not set." >>"$GITHUB_STEP_SUMMARY"
           fi
       - name: tag
         if: ${{ inputs.publish }}
