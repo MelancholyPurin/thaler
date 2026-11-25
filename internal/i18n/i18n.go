@@ -28,6 +28,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"sync"
 
 	goi18n "github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
@@ -160,11 +161,31 @@ type Localizer struct {
 // New is the Localizer for tag; messages it does not have are in English. It panics
 // if an embedded catalog cannot be read: that is a mistake in the build, which the
 // tests of this package catch.
-func New(tag language.Tag) *Localizer { return newFromCatalogs(tag, nil) }
+func New(tag language.Tag) *Localizer {
+	if tag == PseudoTag {
+		return localizerFor(tag, pseudoBundle())
+	}
+	return localizerFor(tag, embeddedBundle())
+}
+
+// The embedded catalogs are read once, the first time a Localizer is asked for, and
+// shared by every Localizer after that: reading them is most of the cost of one (a few
+// milliseconds), and the command line makes two for each command. A bundle is not
+// changed once it is made, which is what go-i18n needs for sharing it.
+var (
+	embeddedBundle = sync.OnceValue(func() *goi18n.Bundle { return newBundle(nil, false) })
+	pseudoBundle   = sync.OnceValue(func() *goi18n.Bundle { return newBundle(nil, true) })
+)
 
 // newFromCatalogs is New, with the text of some catalogs (by language code) taken
 // from instead of the embedded files, for a test.
 func newFromCatalogs(tag language.Tag, instead map[string]string) *Localizer {
+	return localizerFor(tag, newBundle(instead, tag == PseudoTag))
+}
+
+// newBundle reads the catalogs, those in instead in place of the embedded ones, and
+// with pseudo adds the pseudo-language.
+func newBundle(instead map[string]string, pseudo bool) *goi18n.Bundle {
 	bundle := goi18n.NewBundle(language.English)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 	for _, l := range Languages {
@@ -180,11 +201,15 @@ func newFromCatalogs(tag language.Tag, instead map[string]string) *Localizer {
 			panic(fmt.Sprintf("i18n: %s: %v", name, err))
 		}
 	}
-	if tag == PseudoTag {
+	if pseudo {
 		if err := addPseudo(bundle); err != nil {
 			panic(fmt.Sprintf("i18n: %v", err))
 		}
 	}
+	return bundle
+}
+
+func localizerFor(tag language.Tag, bundle *goi18n.Bundle) *Localizer {
 	lang := languageOf(tag)
 	return &Localizer{
 		tag:     tag,

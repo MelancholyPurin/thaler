@@ -1,8 +1,12 @@
 package core
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,9 +30,41 @@ func day(s string) time.Time {
 	return d
 }
 
+// migratedLedger is an empty database with every migration applied, as the bytes of its
+// file. Running the migrations is most of what a test spends getting a ledger (tens of
+// times more under the race detector), so it is done once, the first time one is asked
+// for, and each test gets a copy. It is read-only: nothing a test does reaches it.
+var migratedLedger = sync.OnceValues(func() ([]byte, error) {
+	dir, err := os.MkdirTemp("", "thaler-template-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "template.db")
+	// Not a test's context: the template outlives the test that happens to ask first.
+	st, err := Open(context.Background(), path)
+	if err != nil {
+		return nil, err
+	}
+	if err := st.Close(); err != nil { // the close folds the log into the file
+		return nil, err
+	}
+	return os.ReadFile(path)
+})
+
+// newLocal is a ledger of its own, empty, with the migrations applied, closed when the
+// test ends.
 func newLocal(t *testing.T) *Local {
 	t.Helper()
-	st, err := Open(t.Context(), ":memory:")
+	body, err := migratedLedger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dbDir(t), "ledger.db")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
