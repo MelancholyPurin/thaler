@@ -17,7 +17,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null)
 COVERFILE ?= coverage.out
 # The total test coverage `make check` and CI require, in percent. It was 90.9% when it
 # was set (ENG-7); lower it only on purpose, and say why in the pull request.
-COVERAGE_FLOOR ?= 89
+COVERAGE_FLOOR ?= 90
 
 .DEFAULT_GOAL := help
 VERSION_DATE ?= $(shell date +%F)
